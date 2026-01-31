@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,9 @@ export function LoginForm() {
     // TODO: wire to real auth API
     await new Promise((r) => setTimeout(r, 800));
     setIsLoading(false);
+    toast.success("Logged in successfully", {
+      description: "Welcome to AMP Tiles Admin.",
+    });
     router.push("/dashboard");
   }
 

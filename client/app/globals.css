@@ -149,3 +149,18 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Sonner: close button inside toast on the right (no overlap) */
+[data-sonner-toaster] {
+  --toast-close-button-transform: none;
+  --toast-close-button-start: unset;
+  --toast-close-button-end: unset;
+}
+[data-sonner-toast] {
+  display: flex !important;
+  align-items: center;
+}
+[data-sonner-toast] [data-close-button] {
+  margin-left: auto;
+  flex-shrink: 0;
+}

@@ -3,7 +3,8 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   LayoutDashboard,
   Package,
@@ -13,6 +14,7 @@ import {
   ChevronDown,
   X,
   LogOut,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sidebarNav, type SidebarNavSection } from "@/lib/sidebar-nav";
@@ -37,6 +39,7 @@ interface SidebarProps {
 
 export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <>
@@ -95,23 +98,34 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
                 ))}
               </ul>
             </nav>
-            <div className="shrink-0 space-y-1 border-t border-amp-footer-light pt-4">
-              <div className="flex items-center gap-3 px-2 py-2 text-sm">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center bg-amp-primary/20 ring-2 ring-amp-footer-light">
-                  <span className="text-sm font-medium text-amp-primary">A</span>
-                </div>
-                <span className="truncate font-medium text-amp-footer-text">
-                  Admin
-                </span>
-              </div>
-              <Link
-                href="/login"
-                className="flex items-center gap-3 px-2 py-2 text-sm text-amp-footer-text/80 transition-colors hover:bg-amp-footer-light hover:text-amp-primary"
-                onClick={() => setOpen(false)}
+            <div className="shrink-0 space-y-3 border-t border-amp-footer-light pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-lg bg-red-500/10 px-3 py-2.5 text-left text-sm font-bold text-red-500 transition-colors hover:bg-red-500/15 hover:text-red-500"
+                onClick={() => {
+                  setOpen(false);
+                  toast.success("Logged out successfully", {
+                    description: "You have been signed out.",
+                  });
+                  router.push("/login");
+                }}
               >
-                <LogOut className="h-4 w-4 shrink-0" />
+                <LogOut className="h-5 w-5 shrink-0" />
                 Logout
-              </Link>
+              </button>
+              <div className="flex items-center gap-3 rounded-lg bg-neutral-200 px-3 py-3 dark:bg-neutral-600">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white">
+                  <User className="h-5 w-5 shrink-0" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                    Nicholas Ergemla
+                  </p>
+                  <p className="truncate text-xs font-normal text-neutral-600 dark:text-neutral-400">
+                    nicholas@steelmonk.co
+                  </p>
+                </div>
+              </div>
             </div>
           </>
         )}
