@@ -89,13 +89,13 @@ const itemVariants: Variants = {
 
 export function SummaryCards() {
   return (
-    <motion.dl 
+    <motion.div 
       className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 w-full"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
-      {summary.map((item, index) => {
+      {summary.map((item) => {
         const sanitizedName = sanitizeName(item.name);
         const gradientId = `gradient-${sanitizedName}`;
 
@@ -108,50 +108,60 @@ export function SummaryCards() {
           <motion.div
             key={item.name}
             variants={itemVariants}
-            transition={{ duration: 0.5 }}
+            transition={{ 
+              duration: 0.5,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            }}
             whileHover={{ 
-              y: -4,
-              transition: { duration: 0.2 }
+              y: -6,
+              transition: { 
+                duration: 0.2,
+                ease: "easeOut"
+              }
             }}
           >
-            <Card className="p-0 rounded-xl overflow-hidden border border-neutral-200 shadow-sm transition-all hover:shadow-md dark:border-neutral-700">
-              <CardContent className="p-4 pb-2">
-                <div>
-                  <dt className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                    {item.name}{" "}
-                    <span className="font-normal text-neutral-500 dark:text-neutral-400">
-                      ({item.code})
-                    </span>
+            <Card className="group relative h-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-white shadow-sm transition-all duration-300 hover:border-neutral-300/60 hover:shadow-lg dark:border-neutral-700/60 dark:bg-neutral-800 dark:hover:border-neutral-600/60">
+              <CardContent className="p-5 pb-4">
+                {/* Header */}
+                <div className="mb-3">
+                  <dt className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                    {item.name}
                   </dt>
-                  <div className="flex items-baseline justify-between mt-2">
-                    <dd
-                      className={cn(
-                        item.changeType === "positive"
-                          ? "text-green-600 dark:text-green-500"
-                          : "text-red-600 dark:text-red-500",
-                        "text-2xl font-semibold"
-                      )}
-                    >
-                      {item.value}
-                    </dd>
-                    <dd className="flex items-center space-x-1 text-sm">
-                      <span className="font-medium text-neutral-900 dark:text-neutral-100">
-                        {item.change}
-                      </span>
-                      <span
-                        className={cn(
-                          item.changeType === "positive"
-                            ? "text-green-600 dark:text-green-500"
-                            : "text-red-600 dark:text-red-500",
-                          "font-medium"
-                        )}
-                      >
-                        ({item.percentageChange})
-                      </span>
-                    </dd>
-                  </div>
+                  <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                    {item.code}
+                  </span>
                 </div>
 
+                {/* Value and Change */}
+                <div className="flex items-baseline justify-between">
+                  <dd
+                    className={cn(
+                      "text-3xl font-bold tracking-tight",
+                      item.changeType === "positive"
+                        ? "text-green-600 dark:text-green-500"
+                        : "text-red-600 dark:text-red-500"
+                    )}
+                  >
+                    {item.value}
+                  </dd>
+                  <dd className="flex flex-col items-end">
+                    <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                      {item.change}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-xs font-medium",
+                        item.changeType === "positive"
+                          ? "text-green-600 dark:text-green-500"
+                          : "text-red-600 dark:text-red-500"
+                      )}
+                    >
+                      {item.percentageChange}
+                    </span>
+                  </dd>
+                </div>
+
+                {/* Chart */}
                 <div className="mt-4 h-16 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart 
@@ -169,7 +179,7 @@ export function SummaryCards() {
                           <stop
                             offset="5%"
                             stopColor={color}
-                            stopOpacity={0.3}
+                            stopOpacity={0.4}
                           />
                           <stop
                             offset="95%"
@@ -182,18 +192,26 @@ export function SummaryCards() {
                         type="monotone"
                         dataKey="value"
                         stroke={color}
-                        strokeWidth={2}
+                        strokeWidth={2.5}
                         fill={`url(#${gradientId})`}
                         fillOpacity={1}
+                        className="transition-all duration-300 group-hover:stroke-3"
                       />
                     </AreaChart>
                   </ResponsiveContainer>
+                </div>
+
+                {/* Vs Last Month */}
+                <div className="mt-3 border-t border-neutral-100 pt-3 dark:border-neutral-700">
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                    vs last month
+                  </p>
                 </div>
               </CardContent>
             </Card>
           </motion.div>
         );
       })}
-    </motion.dl>
+    </motion.div>
   );
 }

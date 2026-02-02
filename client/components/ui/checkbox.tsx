@@ -4,12 +4,30 @@ import * as React from "react";
 
 export interface CheckboxProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
-  label: string;
+  label?: string;
 }
 
 const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
   ({ className = "", label, id, ...props }, ref) => {
     const inputId = id ?? React.useId();
+
+    if (!label) {
+      // Render checkbox without label wrapper
+      return (
+        <input
+          ref={ref}
+          id={inputId}
+          type="checkbox"
+          className={[
+            "size-4 rounded border-slate-300 text-amp-primary focus:ring-amp-primary/40",
+            className,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          {...props}
+        />
+      );
+    }
 
     return (
       <div className="flex items-center">

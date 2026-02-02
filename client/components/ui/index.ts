@@ -1,7 +1,6 @@
 export { Input } from "./input";
 export type { InputProps } from "./input";
-export { Button } from "./button";
-export type { ButtonProps } from "./button";
+export { Button, ButtonArrow, buttonVariants } from "./button";
 export { Checkbox } from "./checkbox";
 export type { CheckboxProps } from "./checkbox";
 export { PasswordInput } from "./password-input";
@@ -21,7 +20,7 @@ export {
   CardTitle,
   CardDescription,
   CardContent,
-  CardToolbar,
+  CardAction,
 } from "./card";
 export {
   DropdownMenu,
