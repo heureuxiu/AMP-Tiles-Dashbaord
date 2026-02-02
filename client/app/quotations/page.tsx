@@ -17,6 +17,8 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+type QuotationStatus = "draft" | "converted";
+
 // Mock quotations data
 const initialQuotations = [
   {
@@ -24,56 +26,56 @@ const initialQuotations = [
     customerName: "John Smith",
     date: "2024-01-28",
     totalAmount: 2450,
-    status: "draft" as const,
+    status: "draft" as QuotationStatus,
   },
   {
     id: "QT-2024-002",
     customerName: "Sarah Johnson",
     date: "2024-01-27",
     totalAmount: 3200,
-    status: "draft" as const,
+    status: "draft" as QuotationStatus,
   },
   {
     id: "QT-2024-003",
     customerName: "Mike Wilson",
     date: "2024-01-26",
     totalAmount: 1800,
-    status: "converted" as const,
+    status: "converted" as QuotationStatus,
   },
   {
     id: "QT-2024-004",
     customerName: "Emma Davis",
     date: "2024-01-25",
     totalAmount: 4100,
-    status: "draft" as const,
+    status: "draft" as QuotationStatus,
   },
   {
     id: "QT-2024-005",
     customerName: "David Brown",
     date: "2024-01-24",
     totalAmount: 2950,
-    status: "converted" as const,
+    status: "converted" as QuotationStatus,
   },
   {
     id: "QT-2024-006",
     customerName: "Lisa Anderson",
     date: "2024-01-23",
     totalAmount: 5600,
-    status: "draft" as const,
+    status: "draft" as QuotationStatus,
   },
   {
     id: "QT-2024-007",
     customerName: "Robert Taylor",
     date: "2024-01-22",
     totalAmount: 1250,
-    status: "converted" as const,
+    status: "converted" as QuotationStatus,
   },
   {
     id: "QT-2024-008",
     customerName: "Jennifer White",
     date: "2024-01-21",
     totalAmount: 3800,
-    status: "draft" as const,
+    status: "draft" as QuotationStatus,
   },
 ];
 
@@ -82,7 +84,7 @@ type Quotation = {
   customerName: string;
   date: string;
   totalAmount: number;
-  status: "draft" | "converted";
+  status: QuotationStatus;
 };
 
 export default function QuotationsPage() {
@@ -117,7 +119,7 @@ export default function QuotationsPage() {
 
     setQuotations(
       quotations.map((q) =>
-        q.id === quotation.id ? { ...q, status: "converted" as const } : q
+        q.id === quotation.id ? { ...q, status: "converted" as QuotationStatus } : q
       )
     );
     toast.success("Quotation converted to invoice", {

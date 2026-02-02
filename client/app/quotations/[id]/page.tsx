@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
+type QuotationStatus = "draft" | "converted";
+
 // Mock data (in real app, fetch based on ID)
 const mockQuotationData = {
   id: "QT-2024-001",
@@ -14,7 +16,7 @@ const mockQuotationData = {
   customerPhone: "+61 400 123 456",
   date: "2024-01-28",
   notes: "Customer requested delivery by end of month",
-  status: "draft" as const,
+  status: "draft" as QuotationStatus,
   items: [
     {
       id: "1",

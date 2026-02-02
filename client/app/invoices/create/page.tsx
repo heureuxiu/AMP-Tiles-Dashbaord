@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Plus, Trash2, FileText, Save, X as XIcon, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Receipt, Save, X as XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 // Mock products data
 const productsData = [
@@ -19,37 +18,7 @@ const productsData = [
   { id: "6", name: "Bianco Matt", rate: 48.00 },
 ];
 
-type QuotationStatus = "draft" | "converted";
-
-// Mock existing quotation data
-const mockQuotationData = {
-  id: "QT-2024-001",
-  customerName: "John Smith",
-  customerPhone: "+61 400 123 456",
-  date: "2024-01-28",
-  notes: "Customer requested delivery by end of month",
-  status: "draft" as QuotationStatus,
-  items: [
-    {
-      id: "1",
-      productId: "1",
-      productName: "Amaze Grey Polished",
-      quantity: 50,
-      rate: 45.50,
-      lineTotal: 2275.00,
-    },
-    {
-      id: "2",
-      productId: "4",
-      productName: "Artic Cloud Matt",
-      quantity: 30,
-      rate: 40.00,
-      lineTotal: 1200.00,
-    },
-  ],
-};
-
-type QuotationItem = {
+type InvoiceItem = {
   id: string;
   productId: string;
   productName: string;
@@ -58,26 +27,28 @@ type QuotationItem = {
   lineTotal: number;
 };
 
-export default function EditQuotationPage() {
-  const params = useParams();
+export default function CreateInvoicePage() {
   const router = useRouter();
-  const quotationId = params.id as string;
-
-  // In real app, fetch quotation data based on ID
-  const existingQuotation = mockQuotationData;
-
-  const [customerName, setCustomerName] = useState(existingQuotation.customerName);
-  const [customerPhone, setCustomerPhone] = useState(existingQuotation.customerPhone);
-  const [quotationDate, setQuotationDate] = useState(existingQuotation.date);
-  const [notes, setNotes] = useState(existingQuotation.notes);
-  const [status] = useState(existingQuotation.status);
-  const [items, setItems] = useState<QuotationItem[]>(existingQuotation.items);
-
-  const isReadOnly = status === "converted";
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [notes, setNotes] = useState("");
+  const [items, setItems] = useState<InvoiceItem[]>([
+    {
+      id: "1",
+      productId: "",
+      productName: "",
+      quantity: 0,
+      rate: 0,
+      lineTotal: 0,
+    },
+  ]);
 
   const handleAddItem = () => {
-    if (isReadOnly) return;
-    const newItem: QuotationItem = {
+    const newItem: InvoiceItem = {
       id: Date.now().toString(),
       productId: "",
       productName: "",
@@ -89,7 +60,6 @@ export default function EditQuotationPage() {
   };
 
   const handleRemoveItem = (id: string) => {
-    if (isReadOnly) return;
     if (items.length === 1) {
       toast.error("At least one item is required");
       return;
@@ -98,7 +68,6 @@ export default function EditQuotationPage() {
   };
 
   const handleProductChange = (itemId: string, productId: string) => {
-    if (isReadOnly) return;
     const product = productsData.find((p) => p.id === productId);
     if (!product) return;
 
@@ -118,7 +87,6 @@ export default function EditQuotationPage() {
   };
 
   const handleQuantityChange = (itemId: string, quantity: number) => {
-    if (isReadOnly) return;
     setItems(
       items.map((item) =>
         item.id === itemId
@@ -133,7 +101,6 @@ export default function EditQuotationPage() {
   };
 
   const handleRateChange = (itemId: string, rate: number) => {
-    if (isReadOnly) return;
     setItems(
       items.map((item) =>
         item.id === itemId
@@ -151,13 +118,8 @@ export default function EditQuotationPage() {
     return items.reduce((sum, item) => sum + item.lineTotal, 0);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSaveInvoice = (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (isReadOnly) {
-      toast.error("Cannot edit converted quotation");
-      return;
-    }
 
     if (!customerName.trim()) {
       toast.error("Customer name is required");
@@ -165,7 +127,7 @@ export default function EditQuotationPage() {
     }
 
     const validItems = items.filter(
-      (item) => item.productId && item.quantity > 0
+      (item) => item.productId && item.quantity > 0 && item.rate >= 0
     );
 
     if (validItems.length === 0) {
@@ -173,18 +135,21 @@ export default function EditQuotationPage() {
       return;
     }
 
+    // Generate invoice ID
+    const invoiceId = `INV-2024-${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`;
+
     // TODO: Save to backend
-    toast.success("Quotation updated successfully", {
-      description: `${quotationId} has been updated`,
+    toast.success("Invoice created successfully", {
+      description: `Invoice ${invoiceId} has been generated`,
     });
 
     setTimeout(() => {
-      router.push("/quotations");
+      router.push(`/invoices/${invoiceId}`);
     }, 1000);
   };
 
   const handleCancel = () => {
-    router.push("/quotations");
+    router.push("/invoices");
   };
 
   const formatCurrency = (amount: number) => {
@@ -200,54 +165,20 @@ export default function EditQuotationPage() {
   return (
     <div className="space-y-6 p-6 lg:p-8">
       {/* Top Bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => router.push("/quotations")}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-                Edit Quotation
-              </h1>
-              <Badge
-                variant="secondary"
-                className={
-                  status === "draft"
-                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                    : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
-                }
-              >
-                {status === "draft" ? "Draft" : "Converted"}
-              </Badge>
-            </div>
-            <p className="mt-1 text-neutral-600 dark:text-neutral-400">
-              {isReadOnly
-                ? "This quotation has been converted and is read-only"
-                : `Editing ${quotationId}`}
-            </p>
-          </div>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+          Create Invoice
+        </h1>
+        <p className="mt-1 text-neutral-600 dark:text-neutral-400">
+          Generate a new invoice directly
+        </p>
       </div>
 
-      {isReadOnly && (
-        <div className="rounded-xl bg-amber-50 p-4 dark:bg-amber-950/30">
-          <p className="text-sm text-amber-700 dark:text-amber-400">
-            <strong>Note:</strong> This quotation has been converted to an invoice and cannot be edited.
-            View it in read-only mode or go back to the quotations list.
-          </p>
-        </div>
-      )}
-
-      <form onSubmit={handleSave}>
+      <form onSubmit={handleSaveInvoice}>
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Form Section */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Basic Information Section */}
+            {/* Customer Information Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -259,20 +190,20 @@ export default function EditQuotationPage() {
                 <div className="flex items-center gap-3">
                   <div
                     className="flex h-10 w-10 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: "#3b82f615" }}
+                    style={{ backgroundColor: "#8b5cf615" }}
                   >
-                    <FileText
+                    <Receipt
                       className="h-5 w-5"
-                      style={{ color: "#3b82f6" }}
+                      style={{ color: "#8b5cf6" }}
                       strokeWidth={2}
                     />
                   </div>
                   <div>
                     <h3 className="font-bold text-neutral-900 dark:text-white">
-                      Basic Information
+                      Customer Information
                     </h3>
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                      Customer and quotation details
+                      Customer and invoice details
                     </p>
                   </div>
                 </div>
@@ -293,44 +224,61 @@ export default function EditQuotationPage() {
                     placeholder="Enter customer name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    disabled={isReadOnly}
                     required
                   />
                 </div>
 
-                {/* Customer Phone */}
-                <div className="grid gap-2">
-                  <label
-                    htmlFor="customerPhone"
-                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
-                  >
-                    Customer Phone{" "}
-                    <span className="text-neutral-400">(Optional)</span>
-                  </label>
-                  <Input
-                    id="customerPhone"
-                    type="tel"
-                    placeholder="Enter phone number"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    disabled={isReadOnly}
-                  />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Customer Phone */}
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="customerPhone"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Customer Phone{" "}
+                      <span className="text-neutral-400">(Optional)</span>
+                    </label>
+                    <Input
+                      id="customerPhone"
+                      type="tel"
+                      placeholder="Enter phone number"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Customer Email */}
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="customerEmail"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Customer Email{" "}
+                      <span className="text-neutral-400">(Optional)</span>
+                    </label>
+                    <Input
+                      id="customerEmail"
+                      type="email"
+                      placeholder="Enter email address"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                    />
+                  </div>
                 </div>
 
-                {/* Quotation Date */}
+                {/* Invoice Date */}
                 <div className="grid gap-2">
                   <label
-                    htmlFor="quotationDate"
+                    htmlFor="invoiceDate"
                     className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                   >
-                    Quotation Date <span className="text-red-500">*</span>
+                    Invoice Date <span className="text-red-500">*</span>
                   </label>
                   <Input
-                    id="quotationDate"
+                    id="invoiceDate"
                     type="date"
-                    value={quotationDate}
-                    onChange={(e) => setQuotationDate(e.target.value)}
-                    disabled={isReadOnly}
+                    value={invoiceDate}
+                    onChange={(e) => setInvoiceDate(e.target.value)}
                     required
                   />
                 </div>
@@ -349,14 +297,13 @@ export default function EditQuotationPage() {
                     placeholder="Add any additional notes..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    disabled={isReadOnly}
                     className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                   />
                 </div>
               </div>
             </motion.div>
 
-            {/* Quotation Items Section */}
+            {/* Invoice Items Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -368,24 +315,22 @@ export default function EditQuotationPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-bold text-neutral-900 dark:text-white">
-                      Quotation Items
+                      Invoice Items
                     </h3>
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
                       Add products and quantities
                     </p>
                   </div>
-                  {!isReadOnly && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleAddItem}
-                      className="gap-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Item
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddItem}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Item
+                  </Button>
                 </div>
               </div>
 
@@ -407,7 +352,7 @@ export default function EditQuotationPage() {
                         <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                           Line Total
                         </th>
-                        {!isReadOnly && <th className="pb-3 w-10"></th>}
+                        <th className="pb-3 w-10"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -422,7 +367,6 @@ export default function EditQuotationPage() {
                               onChange={(e) =>
                                 handleProductChange(item.id, e.target.value)
                               }
-                              disabled={isReadOnly}
                               className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
                               required
                             >
@@ -437,7 +381,7 @@ export default function EditQuotationPage() {
                           <td className="py-4 pr-4">
                             <Input
                               type="number"
-                              min="0"
+                              min="1"
                               step="1"
                               placeholder="0"
                               value={item.quantity || ""}
@@ -447,7 +391,6 @@ export default function EditQuotationPage() {
                                   parseInt(e.target.value) || 0
                                 )
                               }
-                              disabled={isReadOnly}
                               className="w-24"
                               required
                             />
@@ -465,7 +408,6 @@ export default function EditQuotationPage() {
                                   parseFloat(e.target.value) || 0
                                 )
                               }
-                              disabled={isReadOnly}
                               className="w-32"
                               required
                             />
@@ -473,20 +415,18 @@ export default function EditQuotationPage() {
                           <td className="py-4 pr-4 text-right font-semibold text-neutral-900 dark:text-white">
                             {formatCurrency(item.lineTotal)}
                           </td>
-                          {!isReadOnly && (
-                            <td className="py-4">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRemoveItem(item.id)}
-                                className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
-                                disabled={items.length === 1}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          )}
+                          <td className="py-4">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveItem(item.id)}
+                              className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                              disabled={items.length === 1}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -537,36 +477,31 @@ export default function EditQuotationPage() {
               </div>
 
               {/* Action Buttons */}
-              {!isReadOnly && (
-                <div className="space-y-3">
-                  <Button type="submit" className="w-full gap-2" size="lg">
-                    <Save className="h-4 w-4" />
-                    Save Changes
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full gap-2"
-                    size="lg"
-                    onClick={handleCancel}
-                  >
-                    <XIcon className="h-4 w-4" />
-                    Cancel
-                  </Button>
-                </div>
-              )}
-
-              {isReadOnly && (
+              <div className="space-y-3">
+                <Button type="submit" className="w-full gap-2" size="lg">
+                  <Save className="h-4 w-4" />
+                  Save Invoice
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full"
+                  className="w-full gap-2"
                   size="lg"
                   onClick={handleCancel}
                 >
-                  Back to Quotations
+                  <XIcon className="h-4 w-4" />
+                  Cancel
                 </Button>
-              )}
+              </div>
+
+              {/* Info Box */}
+              <div className="rounded-xl bg-purple-50 p-4 dark:bg-purple-950/30">
+                <p className="text-xs text-purple-700 dark:text-purple-400">
+                  <strong>Note:</strong> This invoice will be created directly
+                  and can be viewed, printed, or downloaded from the invoices
+                  list.
+                </p>
+              </div>
             </div>
           </motion.div>
         </div>

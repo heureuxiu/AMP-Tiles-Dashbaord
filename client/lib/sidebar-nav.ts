@@ -35,7 +35,7 @@ export const sidebarNav: SidebarNavSection[] = [
     label: "Invoices",
     items: [
       { label: "All Invoices", href: "/invoices" },
-      { label: "Invoice Detail / PDF", href: "/invoices/detail" },
+      { label: "Create Invoice", href: "/invoices/create" },
     ],
   },
   {

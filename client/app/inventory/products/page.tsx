@@ -288,6 +288,7 @@ export default function ProductsPage() {
       category: "",
       finish: "",
       stock: 0,
+      imageUrl: "",
     });
     setEditingProduct(null);
   };
