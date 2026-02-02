@@ -11,23 +11,11 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "AMP Tiles Admin",
   description: "AMP Tiles Australia - Admin Dashboard",
-  icons: {
-    icon: "/assets/AMP-TILES-LOGO.png",
-    shortcut: "/assets/AMP-TILES-LOGO.png",
-    apple: "/assets/AMP-TILES-LOGO.png",
-  },
   openGraph: {
     title: "AMP Tiles Admin",
     description: "AMP Tiles Australia - Admin Dashboard",
-    images: ["/assets/AMP-TILES-LOGO.png"],
     siteName: "AMP Tiles Australia",
     type: "website",
-  },
-  twitter: {
-    card: "summary",
-    title: "AMP Tiles Admin",
-    description: "AMP Tiles Australia - Admin Dashboard",
-    images: ["/assets/AMP-TILES-LOGO.png"],
   },
 };
 
