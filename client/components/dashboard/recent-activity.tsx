@@ -49,26 +49,27 @@ export function RecentActivity() {
         <div className="p-6">
           <div className="space-y-3">
             {recentQuotations.map((quote, index) => (
-              <motion.div
-                key={quote.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                className="group flex items-center justify-between rounded-xl border border-neutral-200/60 bg-neutral-50/50 p-4 transition-all hover:border-neutral-300 hover:bg-white hover:shadow-sm dark:border-neutral-700/60 dark:bg-neutral-900/50 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-neutral-900 dark:text-white">{quote.id}</span>
-                    <span className="text-sm font-semibold" style={{ color: "#3b82f6" }}>{quote.amount}</span>
+              <Link key={quote.id} href={`/quotations/${quote.id}`}>
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className="group flex items-center justify-between rounded-xl border border-neutral-200/60 bg-neutral-50/50 p-4 transition-all hover:border-neutral-300 hover:bg-white hover:shadow-sm hover:cursor-pointer dark:border-neutral-700/60 dark:bg-neutral-900/50 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-neutral-900 dark:text-white">{quote.id}</span>
+                      <span className="text-sm font-semibold" style={{ color: "#3b82f6" }}>{quote.amount}</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-3 text-sm text-neutral-600 dark:text-neutral-400">
+                      <span>{quote.customer}</span>
+                      <span className="text-xs">•</span>
+                      <span className="text-xs">{quote.date}</span>
+                    </div>
                   </div>
-                  <div className="mt-1 flex items-center gap-3 text-sm text-neutral-600 dark:text-neutral-400">
-                    <span>{quote.customer}</span>
-                    <span className="text-xs">•</span>
-                    <span className="text-xs">{quote.date}</span>
-                  </div>
-                </div>
-                <ArrowRight className="h-4 w-4 text-neutral-400 opacity-0 transition-all group-hover:translate-x-1 group-hover:opacity-100" />
-              </motion.div>
+                  <ArrowRight className="h-4 w-4 text-neutral-400 opacity-0 transition-all group-hover:translate-x-1 group-hover:opacity-100" />
+                </motion.div>
+              </Link>
             ))}
           </div>
         </div>
@@ -76,7 +77,7 @@ export function RecentActivity() {
         {/* Footer */}
         <div className="border-t border-neutral-200/60 p-4 dark:border-neutral-700/60">
           <Link
-            href="/dashboard/quotations"
+            href="/quotations"
             className="group flex items-center justify-center gap-2 text-sm font-semibold transition-all hover:gap-3" 
             style={{ color: "#3b82f6" }}
           >
@@ -112,33 +113,34 @@ export function RecentActivity() {
         <div className="p-6">
           <div className="space-y-3">
             {recentInvoices.map((invoice, index) => (
-              <motion.div
-                key={invoice.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                className="group flex items-center justify-between rounded-xl border border-neutral-200/60 bg-neutral-50/50 p-4 transition-all hover:border-neutral-300 hover:bg-white hover:shadow-sm dark:border-neutral-700/60 dark:bg-neutral-900/50 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-sm font-bold text-neutral-900 dark:text-white">{invoice.id}</span>
-                    <span className="text-sm font-semibold" style={{ color: "#8b5cf6" }}>{invoice.amount}</span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      invoice.status === "Paid"
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
-                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                    }`}>
-                      {invoice.status}
-                    </span>
+              <Link key={invoice.id} href={`/invoices/${invoice.id}`}>
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className="group flex items-center justify-between rounded-xl border border-neutral-200/60 bg-neutral-50/50 p-4 transition-all hover:border-neutral-300 hover:bg-white hover:shadow-sm hover:cursor-pointer dark:border-neutral-700/60 dark:bg-neutral-900/50 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-sm font-bold text-neutral-900 dark:text-white">{invoice.id}</span>
+                      <span className="text-sm font-semibold" style={{ color: "#8b5cf6" }}>{invoice.amount}</span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        invoice.status === "Paid"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                      }`}>
+                        {invoice.status}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-3 text-sm text-neutral-600 dark:text-neutral-400">
+                      <span>{invoice.customer}</span>
+                      <span className="text-xs">•</span>
+                      <span className="text-xs">{invoice.date}</span>
+                    </div>
                   </div>
-                  <div className="mt-1 flex items-center gap-3 text-sm text-neutral-600 dark:text-neutral-400">
-                    <span>{invoice.customer}</span>
-                    <span className="text-xs">•</span>
-                    <span className="text-xs">{invoice.date}</span>
-                  </div>
-                </div>
-                <ArrowRight className="h-4 w-4 text-neutral-400 opacity-0 transition-all group-hover:translate-x-1 group-hover:opacity-100" />
-              </motion.div>
+                  <ArrowRight className="h-4 w-4 text-neutral-400 opacity-0 transition-all group-hover:translate-x-1 group-hover:opacity-100" />
+                </motion.div>
+              </Link>
             ))}
           </div>
         </div>
@@ -146,7 +148,7 @@ export function RecentActivity() {
         {/* Footer */}
         <div className="border-t border-neutral-200/60 p-4 dark:border-neutral-700/60">
           <Link
-            href="/dashboard/invoices"
+            href="/invoices"
             className="group flex items-center justify-center gap-2 text-sm font-semibold transition-all hover:gap-3"
             style={{ color: "#8b5cf6" }}
           >

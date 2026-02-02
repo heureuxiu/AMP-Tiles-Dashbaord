@@ -25,10 +25,10 @@ export function LoginLoading() {
           }}
         >
           <Image
-            src="/amp-logo.svg"
+            src="/assets/AMP-TILES-LOGO.png"
             alt="AMP Tiles"
-            width={120}
-            height={120}
+            width={200}
+            height={68}
             priority
             className="h-auto w-auto"
           />

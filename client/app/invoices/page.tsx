@@ -2,9 +2,16 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Receipt, Eye, Download, Search, X } from "lucide-react";
+import { Receipt, Eye, Download, Search, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -16,6 +23,8 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+type InvoiceStatus = "paid" | "pending";
+
 // Mock invoices data (converted from quotations)
 const initialInvoices = [
   {
@@ -24,6 +33,7 @@ const initialInvoices = [
     customerName: "Mike Wilson",
     invoiceDate: "2024-01-26",
     totalAmount: 1800,
+    status: "paid" as InvoiceStatus,
   },
   {
     id: "INV-2024-002",
@@ -31,6 +41,7 @@ const initialInvoices = [
     customerName: "David Brown",
     invoiceDate: "2024-01-24",
     totalAmount: 2950,
+    status: "pending" as InvoiceStatus,
   },
   {
     id: "INV-2024-003",
@@ -38,6 +49,7 @@ const initialInvoices = [
     customerName: "Robert Taylor",
     invoiceDate: "2024-01-22",
     totalAmount: 1250,
+    status: "paid" as InvoiceStatus,
   },
   {
     id: "INV-2024-004",
@@ -45,6 +57,7 @@ const initialInvoices = [
     customerName: "Alice Cooper",
     invoiceDate: "2024-01-28",
     totalAmount: 5600,
+    status: "pending" as InvoiceStatus,
   },
   {
     id: "INV-2024-005",
@@ -52,6 +65,7 @@ const initialInvoices = [
     customerName: "Carol White",
     invoiceDate: "2024-01-26",
     totalAmount: 2800,
+    status: "paid" as InvoiceStatus,
   },
   {
     id: "INV-2024-006",
@@ -59,6 +73,7 @@ const initialInvoices = [
     customerName: "Daniel Lee",
     invoiceDate: "2024-01-25",
     totalAmount: 4200,
+    status: "pending" as InvoiceStatus,
   },
 ];
 
@@ -68,11 +83,12 @@ type Invoice = {
   customerName: string;
   invoiceDate: string;
   totalAmount: number;
+  status: InvoiceStatus;
 };
 
 export default function InvoicesPage() {
   const router = useRouter();
-  const [invoices] = useState<Invoice[]>(initialInvoices);
+  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Filter invoices based on search
@@ -83,6 +99,10 @@ export default function InvoicesPage() {
       inv.customerName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Count invoices by status
+  const paidCount = invoices.filter((inv) => inv.status === "paid").length;
+  const pendingCount = invoices.filter((inv) => inv.status === "pending").length;
+
   const handleViewInvoice = (id: string) => {
     router.push(`/invoices/${id}`);
   };
@@ -90,6 +110,32 @@ export default function InvoicesPage() {
   const handleDownloadPDF = (invoice: Invoice) => {
     toast.info(`Generating PDF for ${invoice.id}...`);
     // TODO: Implement PDF generation
+  };
+
+  const handleStatusChange = (invoiceId: string, newStatus: InvoiceStatus) => {
+    setInvoices(
+      invoices.map((inv) =>
+        inv.id === invoiceId ? { ...inv, status: newStatus } : inv
+      )
+    );
+    toast.success(`Invoice status updated to ${newStatus}`, {
+      description: `${invoiceId} is now marked as ${newStatus}`,
+    });
+  };
+
+  const getStatusBadge = (status: InvoiceStatus) => {
+    if (status === "paid") {
+      return (
+        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
+          Paid
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
+        Pending
+      </Badge>
+    );
   };
 
   const formatCurrency = (amount: number) => {
@@ -192,13 +238,14 @@ export default function InvoicesPage() {
                   <TableHead>Customer Name</TableHead>
                   <TableHead>Invoice Date</TableHead>
                   <TableHead>Total Amount</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="w-0">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredInvoices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-32 text-center">
+                    <TableCell colSpan={6} className="h-32 text-center">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Receipt
                           className="h-12 w-12 text-neutral-300 dark:text-neutral-600"
@@ -235,6 +282,33 @@ export default function InvoicesPage() {
                       </TableCell>
                       <TableCell className="font-semibold text-neutral-900 dark:text-white">
                         {formatCurrency(invoice.totalAmount)}
+                      </TableCell>
+                      <TableCell>
+                        {/* Status Dropdown */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="flex items-center gap-1 outline-none">
+                              {getStatusBadge(invoice.status)}
+                              <ChevronDown className="h-3 w-3 text-neutral-400" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            <DropdownMenuItem
+                              onClick={() => handleStatusChange(invoice.id, "paid")}
+                              className="gap-2"
+                            >
+                              <div className="h-2 w-2 rounded-full bg-green-500" />
+                              Paid
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleStatusChange(invoice.id, "pending")}
+                              className="gap-2"
+                            >
+                              <div className="h-2 w-2 rounded-full bg-amber-500" />
+                              Pending
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                       <TableCell className="flex items-center gap-1">
                         {/* View Button */}
@@ -282,11 +356,22 @@ export default function InvoicesPage() {
             className="border-t border-neutral-200/60 p-6 dark:border-neutral-700/60"
           >
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="text-sm text-neutral-600 dark:text-neutral-400">
-                Total Revenue:{" "}
-                <span className="font-bold text-neutral-900 dark:text-white">
-                  {formatCurrency(invoices.reduce((sum, inv) => sum + inv.totalAmount, 0))}
-                </span>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-600 dark:text-neutral-400">
+                <div>
+                  Total Revenue:{" "}
+                  <span className="font-bold text-neutral-900 dark:text-white">
+                    {formatCurrency(invoices.reduce((sum, inv) => sum + inv.totalAmount, 0))}
+                  </span>
+                </div>
+                <div className="h-4 w-px bg-neutral-300 dark:bg-neutral-600" />
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
+                    {paidCount} Paid
+                  </Badge>
+                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
+                    {pendingCount} Pending
+                  </Badge>
+                </div>
               </div>
               <span className="font-bold text-neutral-900 dark:text-white">
                 Total: {filteredInvoices.length}{" "}

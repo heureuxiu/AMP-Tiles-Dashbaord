@@ -90,7 +90,7 @@ const itemVariants: Variants = {
 export function SummaryCards() {
   return (
     <motion.div 
-      className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 w-full"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4 w-full"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
@@ -120,14 +120,14 @@ export function SummaryCards() {
               }
             }}
           >
-            <Card className="group relative h-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-white shadow-sm transition-all duration-300 hover:border-neutral-300/60 hover:shadow-lg dark:border-neutral-700/60 dark:bg-neutral-800 dark:hover:border-neutral-600/60">
-              <CardContent className="p-5 pb-4">
+            <Card className="group relative h-full overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm transition-all duration-300 hover:border-neutral-300/60 hover:shadow-lg dark:border-neutral-700/60 dark:bg-neutral-800 dark:hover:border-neutral-600/60 sm:rounded-2xl">
+              <CardContent className="p-4 pb-3 sm:p-5 sm:pb-4">
                 {/* Header */}
-                <div className="mb-3">
-                  <dt className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                <div className="mb-2 sm:mb-3">
+                  <dt className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 sm:text-sm">
                     {item.name}
                   </dt>
-                  <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                  <span className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400 sm:text-xs">
                     {item.code}
                   </span>
                 </div>
@@ -136,7 +136,7 @@ export function SummaryCards() {
                 <div className="flex items-baseline justify-between">
                   <dd
                     className={cn(
-                      "text-3xl font-bold tracking-tight",
+                      "text-2xl font-bold tracking-tight sm:text-3xl",
                       item.changeType === "positive"
                         ? "text-green-600 dark:text-green-500"
                         : "text-red-600 dark:text-red-500"
@@ -145,12 +145,12 @@ export function SummaryCards() {
                     {item.value}
                   </dd>
                   <dd className="flex flex-col items-end">
-                    <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                    <span className="text-xs font-semibold text-neutral-900 dark:text-neutral-100 sm:text-sm">
                       {item.change}
                     </span>
                     <span
                       className={cn(
-                        "text-xs font-medium",
+                        "text-[10px] font-medium sm:text-xs",
                         item.changeType === "positive"
                           ? "text-green-600 dark:text-green-500"
                           : "text-red-600 dark:text-red-500"
@@ -162,7 +162,7 @@ export function SummaryCards() {
                 </div>
 
                 {/* Chart */}
-                <div className="mt-4 h-16 w-full">
+                <div className="mt-3 h-12 w-full sm:mt-4 sm:h-16">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart 
                       data={item.data}
@@ -202,8 +202,8 @@ export function SummaryCards() {
                 </div>
 
                 {/* Vs Last Month */}
-                <div className="mt-3 border-t border-neutral-100 pt-3 dark:border-neutral-700">
-                  <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                <div className="mt-2 border-t border-neutral-100 pt-2 dark:border-neutral-700 sm:mt-3 sm:pt-3">
+                  <p className="text-[10px] text-neutral-600 dark:text-neutral-400 sm:text-xs">
                     vs last month
                   </p>
                 </div>

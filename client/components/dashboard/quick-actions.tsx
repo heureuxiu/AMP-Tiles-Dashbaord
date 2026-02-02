@@ -2,57 +2,59 @@
 
 import { motion } from "framer-motion";
 import { Plus, FileText, Receipt, Package, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
-
-const actions = [
-  {
-    title: "Add Product",
-    description: "Create new product",
-    icon: Package,
-    color: "#c7a864",
-    action: () => toast.success("Opening Add Product form..."),
-  },
-  {
-    title: "New Quotation",
-    description: "Create quote",
-    icon: FileText,
-    color: "#3b82f6",
-    action: () => toast.success("Opening Create Quotation form..."),
-  },
-  {
-    title: "New Invoice",
-    description: "Generate invoice",
-    icon: Receipt,
-    color: "#8b5cf6",
-    action: () => toast.success("Opening Create Invoice form..."),
-  },
-  {
-    title: "Update Stock",
-    description: "Manage inventory",
-    icon: RefreshCw,
-    color: "#10b981",
-    action: () => toast.success("Opening Update Stock form..."),
-  },
-];
+import { useRouter } from "next/navigation";
 
 export function QuickActions() {
+  const router = useRouter();
+
+  const actions = [
+    {
+      title: "Add Product",
+      description: "Create new product",
+      icon: Package,
+      color: "#c7a864",
+      action: () => router.push("/inventory/products"),
+    },
+    {
+      title: "New Quotation",
+      description: "Create quote",
+      icon: FileText,
+      color: "#3b82f6",
+      action: () => router.push("/quotations/create"),
+    },
+    {
+      title: "New Invoice",
+      description: "Generate invoice",
+      icon: Receipt,
+      color: "#8b5cf6",
+      action: () => router.push("/invoices/create"),
+    },
+    {
+      title: "Update Stock",
+      description: "Manage inventory",
+      icon: RefreshCw,
+      color: "#10b981",
+      action: () => router.push("/inventory/stock"),
+    },
+  ];
+
   return (
-    <div className="rounded-2xl border border-neutral-200/60 bg-white p-6 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800">
+    <div className="rounded-xl border border-neutral-200/60 bg-white p-4 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:rounded-2xl sm:p-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between sm:mb-6">
         <div>
-          <h2 className="text-lg font-bold text-neutral-900 dark:text-white">Quick Actions</h2>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          <h2 className="text-base font-bold text-neutral-900 dark:text-white sm:text-lg">Quick Actions</h2>
+          <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400 sm:mt-1 sm:text-sm">
             Common tasks for quick access
           </p>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#c7a864] to-[#c7a864]/80">
-          <Plus className="h-5 w-5 text-white" strokeWidth={2.5} />
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#c7a864] to-[#c7a864]/80 sm:h-10 sm:w-10 sm:rounded-xl">
+          <Plus className="h-4 w-4 text-white sm:h-5 sm:w-5" strokeWidth={2.5} />
         </div>
       </div>
 
       {/* Actions Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         {actions.map((action, index) => {
           const Icon = action.icon;
           return (
@@ -64,21 +66,21 @@ export function QuickActions() {
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
               onClick={action.action}
-              className="group relative rounded-xl border border-neutral-200/60 bg-neutral-50/50 p-5 text-left transition-all hover:border-neutral-300 hover:bg-white hover:shadow-sm dark:border-neutral-700/60 dark:bg-neutral-900/50 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
+              className="group relative rounded-lg border border-neutral-200/60 bg-neutral-50/50 p-4 text-left transition-all hover:border-neutral-300 hover:bg-white hover:shadow-sm dark:border-neutral-700/60 dark:bg-neutral-900/50 dark:hover:border-neutral-600 dark:hover:bg-neutral-800 sm:rounded-xl sm:p-5"
             >
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {/* Icon */}
                 <div 
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-xl transition-transform group-hover:scale-110"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg transition-transform group-hover:scale-110 sm:h-12 sm:w-12 sm:rounded-xl"
                   style={{ backgroundColor: `${action.color}15` }}
                 >
-                  <Icon className="h-6 w-6" style={{ color: action.color }} strokeWidth={2} />
+                  <Icon className="h-5 w-5 sm:h-6 sm:w-6" style={{ color: action.color }} strokeWidth={2} />
                 </div>
 
                 {/* Content */}
                 <div>
-                  <h3 className="font-semibold text-neutral-900 dark:text-white">{action.title}</h3>
-                  <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{action.description}</p>
+                  <h3 className="text-sm font-semibold text-neutral-900 dark:text-white sm:text-base">{action.title}</h3>
+                  <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400 sm:mt-1 sm:text-sm">{action.description}</p>
                 </div>
               </div>
             </motion.button>
