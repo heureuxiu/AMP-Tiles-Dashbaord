@@ -42,3 +42,15 @@ export {
 export { Avatar, AvatarImage, AvatarFallback } from "./avatar";
 export { Badge } from "./badge";
 export type { BadgeProps } from "./badge";
+export {
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogClose,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "./dialog";

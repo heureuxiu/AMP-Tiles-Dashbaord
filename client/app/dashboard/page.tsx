@@ -12,7 +12,7 @@ export default function DashboardPage() {
           Dashboard
         </h1>
         <p className="text-neutral-600 dark:text-neutral-400">
-          Welcome back! Here's what's happening with your business today.
+          Welcome back! Here&apos;s what&apos;s happening with your business today.
         </p>
       </div>
 
@@ -22,11 +22,11 @@ export default function DashboardPage() {
       {/* Quick Actions */}
       <QuickActions />
 
-      {/* Recent Activity */}
-      <RecentActivity />
-
       {/* Stock Overview */}
       <StockOverview />
+
+      {/* Recent Activity */}
+      <RecentActivity />
     </div>
   );
 }
