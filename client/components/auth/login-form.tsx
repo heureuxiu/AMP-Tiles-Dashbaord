@@ -8,20 +8,31 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/contexts/auth-context";
 
 export function LoginForm() {
   const router = useRouter();
+  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
-    // TODO: wire to real auth API
-    await new Promise((r) => setTimeout(r, 1000));
-    toast.success("Logged in successfully", {
-      description: "Welcome to AMP Tiles Admin.",
-    });
-    router.push("/dashboard");
+    try {
+      await login(email, password);
+      toast.success("Logged in successfully", {
+        description: "Welcome to AMP Tiles Admin.",
+      });
+      router.push("/dashboard");
+    } catch (error) {
+      toast.error("Login failed", {
+        description: "Please check your credentials and try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -40,6 +51,8 @@ export function LoginForm() {
           required
           placeholder="Enter your email"
           autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
         />
         <PasswordInput
           label="Password"
@@ -47,6 +60,8 @@ export function LoginForm() {
           required
           placeholder="Enter your password"
           autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
         />
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Checkbox name="remember-me" label="Remember me" />

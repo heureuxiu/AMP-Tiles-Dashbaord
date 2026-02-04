@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sidebarNav, type SidebarNavSection } from "@/lib/sidebar-nav";
+import { useAuth } from "@/contexts/auth-context";
 
 const sectionIcons: Record<
   string,
@@ -40,6 +41,7 @@ interface SidebarProps {
 export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, logout } = useAuth();
 
   return (
     <>
@@ -105,6 +107,7 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
                 className="flex w-full items-center gap-2.5 rounded-lg bg-red-500/10 px-2.5 py-2 text-left text-sm font-bold text-red-500 transition-all hover:bg-red-500/15 hover:text-red-500 active:scale-[0.98] sm:gap-3 sm:px-3 sm:py-2.5"
                 onClick={() => {
                   setOpen(false);
+                  logout();
                   toast.success("Logged out successfully", {
                     description: "You have been signed out.",
                   });
@@ -120,10 +123,10 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-bold text-neutral-900 dark:text-neutral-100 sm:text-sm">
-                    Nicholas Ergemla
+                    {user?.name || "Admin User"}
                   </p>
                   <p className="truncate text-[10px] font-normal text-neutral-600 dark:text-neutral-400 sm:text-xs">
-                    nicholas@steelmonk.co
+                    {user?.email || "admin@amptiles.com.au"}
                   </p>
                 </div>
               </div>

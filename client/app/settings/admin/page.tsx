@@ -1,20 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { UserCog, Lock, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function AdminAccountPage() {
-  const [adminName, setAdminName] = useState("Admin User");
-  const [adminEmail] = useState("admin@amptiles.com.au");
+  const { user, updateUser } = useAuth();
+  const [adminName, setAdminName] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isSavingName, setIsSavingName] = useState(false);
+
+  // Load user data when component mounts or user changes
+  useEffect(() => {
+    if (user) {
+      setAdminName(user.name);
+    }
+  }, [user]);
+
+  const handleUpdateName = () => {
+    if (!adminName.trim()) {
+      toast.error("Admin name cannot be empty");
+      return;
+    }
+
+    if (!user) return;
+
+    setIsSavingName(true);
+    // TODO: Implement actual API call
+    setTimeout(() => {
+      updateUser({ ...user, name: adminName });
+      setIsSavingName(false);
+      toast.success("Name updated successfully", {
+        description: "Your admin name has been updated",
+      });
+    }, 500);
+  };
 
   const handleUpdatePassword = () => {
     // Validation
@@ -116,7 +144,7 @@ export default function AdminAccountPage() {
               <Input
                 id="adminEmail"
                 type="email"
-                value={adminEmail}
+                value={user?.email || ""}
                 readOnly
                 className="bg-neutral-50 dark:bg-neutral-900"
               />
@@ -124,6 +152,20 @@ export default function AdminAccountPage() {
                 Email address cannot be changed
               </p>
             </div>
+
+            {/* Save Name Button */}
+            {adminName !== user?.name && (
+              <div className="pt-2">
+                <Button
+                  onClick={handleUpdateName}
+                  disabled={isSavingName}
+                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
+                >
+                  <Save className="h-4 w-4" />
+                  {isSavingName ? "Saving..." : "Save Name"}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "sonner";
+import { AuthProvider } from "@/contexts/auth-context";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -30,8 +31,10 @@ export default function RootLayout({
         className={`${plusJakartaSans.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
-        {children}
-        <Toaster position="top-center" closeButton />
+        <AuthProvider>
+          {children}
+          <Toaster position="top-center" closeButton />
+        </AuthProvider>
       </body>
     </html>
   );
