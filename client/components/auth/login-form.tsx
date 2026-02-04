@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { LoginLoading } from "./login-loading";
 
 export function LoginForm() {
   const router = useRouter();
@@ -18,7 +17,7 @@ export function LoginForm() {
     e.preventDefault();
     setIsLoading(true);
     // TODO: wire to real auth API
-    await new Promise((r) => setTimeout(r, 2000)); // Increased to 2s to see loading screen
+    await new Promise((r) => setTimeout(r, 1000));
     toast.success("Logged in successfully", {
       description: "Welcome to AMP Tiles Admin.",
     });
@@ -26,8 +25,6 @@ export function LoginForm() {
   }
 
   return (
-    <>
-      {isLoading && <LoginLoading />}
     <form
       onSubmit={handleSubmit}
       className="w-full max-w-md lg:ml-auto"
@@ -63,11 +60,10 @@ export function LoginForm() {
       </div>
 
       <div className="mt-12">
-        <Button type="submit" fullWidth>
-          Log in
+        <Button type="submit" fullWidth disabled={isLoading}>
+          {isLoading ? "Logging in..." : "Log in"}
         </Button>
       </div>
     </form>
-    </>
   );
 }

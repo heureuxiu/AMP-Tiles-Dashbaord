@@ -41,7 +41,6 @@ export const sidebarNav: SidebarNavSection[] = [
   {
     label: "Settings",
     items: [
-      { label: "Company Profile", href: "/settings/profile" },
       { label: "Admin Account", href: "/settings/admin" },
     ],
   },
