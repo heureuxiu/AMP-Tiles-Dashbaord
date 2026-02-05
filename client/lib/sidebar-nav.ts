@@ -39,6 +39,20 @@ export const sidebarNav: SidebarNavSection[] = [
     ],
   },
   {
+    label: "Suppliers",
+    items: [
+      { label: "All Suppliers", href: "/suppliers" },
+      { label: "Add Supplier", href: "/suppliers/create" },
+    ],
+  },
+  {
+    label: "Purchase Orders",
+    items: [
+      { label: "All Purchase Orders", href: "/purchase-orders" },
+      { label: "Create Purchase Order", href: "/purchase-orders/create" },
+    ],
+  },
+  {
     label: "Settings",
     items: [
       { label: "Admin Account", href: "/settings/admin" },

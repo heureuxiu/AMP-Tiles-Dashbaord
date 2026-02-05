@@ -39,7 +39,7 @@ export function QuickActions() {
   ];
 
   return (
-    <div className="rounded-xl border border-neutral-200/60 bg-white p-4 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:rounded-2xl sm:p-6">
+    <div className="w-full max-w-full rounded-xl border border-neutral-200/60 bg-white p-4 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:rounded-2xl sm:p-6">
       {/* Header */}
       <div className="mb-4 flex items-center justify-between sm:mb-6">
         <div>

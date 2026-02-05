@@ -16,7 +16,7 @@ export default function QuotationsLayout({
     <div className="flex min-h-screen w-full bg-background font-sans">
       <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
 
-      <div className="flex flex-1 flex-col sm:md:pl-[300px] md:pl-[300px]">
+      <div className="flex flex-1 flex-col md:pl-[300px]">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-neutral-200/60 bg-white/80 px-4 backdrop-blur-sm dark:border-neutral-700/60 dark:bg-neutral-900/80 sm:h-16 sm:gap-4 sm:px-6">
           <button
             type="button"
@@ -34,7 +34,7 @@ export default function QuotationsLayout({
           </span>
         </header>
 
-        <main className="flex-1 overflow-auto bg-neutral-50 dark:bg-neutral-900">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-neutral-50 dark:bg-neutral-900">
           {children}
         </main>
       </div>

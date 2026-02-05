@@ -15,6 +15,8 @@ import {
   X,
   LogOut,
   User,
+  Users,
+  ShoppingCart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sidebarNav, type SidebarNavSection } from "@/lib/sidebar-nav";
@@ -28,6 +30,8 @@ const sectionIcons: Record<
   Inventory: Package,
   Quotations: FileText,
   Invoices: Receipt,
+  Suppliers: Users,
+  "Purchase Orders": ShoppingCart,
   Settings: Settings,
 };
 

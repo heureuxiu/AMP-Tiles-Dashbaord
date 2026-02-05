@@ -154,24 +154,24 @@ export function StockOverview() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800"
+      className="w-full max-w-full rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800"
     >
       {/* Header */}
-      <div className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60">
+      <div className="border-b border-neutral-200/60 p-4 sm:p-6 dark:border-neutral-700/60">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl"
+              className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl"
               style={{ backgroundColor: "#c7a86415" }}
             >
-              <Package className="h-5 w-5" style={{ color: "#c7a864" }} strokeWidth={2} />
+              <Package className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "#c7a864" }} strokeWidth={2} />
             </div>
             <div>
-              <h3 className="font-bold text-neutral-900 dark:text-white">Stock Overview</h3>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">Current inventory status</p>
+              <h3 className="text-sm sm:text-base font-bold text-neutral-900 dark:text-white">Stock Overview</h3>
+              <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400">Current inventory status</p>
             </div>
           </div>
-          <Link href="/dashboard/inventory" className="text-sm font-semibold hover:underline" style={{ color: "#c7a864" }}>
+          <Link href="/dashboard/inventory" className="text-xs sm:text-sm font-semibold hover:underline" style={{ color: "#c7a864" }}>
             View All
           </Link>
         </div>
@@ -182,7 +182,7 @@ export function StockOverview() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.1 }}
-        className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60"
+        className="border-b border-neutral-200/60 p-4 sm:p-6 dark:border-neutral-700/60"
       >
         {/* Search Bar */}
         <motion.div
@@ -428,21 +428,23 @@ export function StockOverview() {
       </motion.div>
 
       {/* Table Content */}
-      <div className="p-6">
-        <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>
-                  <Checkbox id={id} aria-label="select-all" />
-                </TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Finish</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead className="w-0">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+      <div className="p-4 sm:p-6">
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <div className="inline-block min-w-full align-middle">
+            <div className="overflow-hidden rounded-lg border border-neutral-200/60 dark:border-neutral-700/60">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="hidden sm:table-cell">
+                      <Checkbox id={id} aria-label="select-all" />
+                    </TableHead>
+                    <TableHead className="min-w-[200px]">Product</TableHead>
+                    <TableHead className="hidden md:table-cell">Category</TableHead>
+                    <TableHead className="hidden lg:table-cell">Finish</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead className="w-0">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
             <TableBody>
               {filteredData.length === 0 ? (
                 <TableRow>
@@ -468,29 +470,30 @@ export function StockOverview() {
                     transition={{ duration: 0.3, delay: index * 0.05 }}
                     className="border-b transition-colors hover:bg-neutral-100/50 data-[state=selected]:bg-neutral-100 dark:hover:bg-neutral-800/50 dark:data-[state=selected]:bg-neutral-800"
                   >
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <Checkbox id={`table-checkbox-${item.id}`} aria-label={`product-checkbox-${item.id}`} />
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="rounded-lg h-12 w-12">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <Avatar className="rounded-lg h-10 w-10 sm:h-12 sm:w-12">
                           <AvatarImage src={item.src} alt={item.model} />
                           <AvatarFallback className="text-xs rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
-                            <Package className="h-6 w-6 text-neutral-500" strokeWidth={1.5} />
+                            <Package className="h-5 w-5 sm:h-6 sm:w-6 text-neutral-500" strokeWidth={1.5} />
                           </AvatarFallback>
                         </Avatar>
-                        <div>
-                          <div className="font-medium text-neutral-900 dark:text-white">{item.productName}</div>
-                          <span className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{item.model}</span>
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm sm:text-base text-neutral-900 dark:text-white truncate">{item.productName}</div>
+                          <span className="mt-0.5 text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400 block md:hidden">{item.category}</span>
+                          <span className="mt-0.5 text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400">{item.model}</span>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-neutral-700 dark:text-neutral-300">{item.category}</TableCell>
-                    <TableCell className="text-neutral-700 dark:text-neutral-300">{item.finish}</TableCell>
+                    <TableCell className="hidden md:table-cell text-neutral-700 dark:text-neutral-300">{item.category}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-neutral-700 dark:text-neutral-300">{item.finish}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 sm:gap-2">
                         <span
-                          className={`text-lg font-bold ${
+                          className={`text-base sm:text-lg font-bold ${
                             stockStatus === "out"
                               ? "text-red-600 dark:text-red-400"
                               : stockStatus === "low"
@@ -500,47 +503,51 @@ export function StockOverview() {
                         >
                           {item.stock}
                         </span>
-                        <span className="text-xs text-neutral-500 dark:text-neutral-400">boxes</span>
+                        <span className="text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400">boxes</span>
                       </div>
                     </TableCell>
-                    <TableCell className="flex items-center gap-1">
-                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                          aria-label={`product-${item.id}-edit`}
-                        >
-                          <PencilIcon className="h-4 w-4" />
-                        </Button>
-                      </motion.div>
-                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                          aria-label={`product-${item.id}-remove`}
-                        >
-                          <Trash2Icon className="h-4 w-4" />
-                        </Button>
-                      </motion.div>
-                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                          aria-label={`product-${item.id}-archive`}
-                        >
-                          <ArchiveIcon className="h-4 w-4" />
-                        </Button>
-                      </motion.div>
+                    <TableCell>
+                      <div className="flex items-center gap-0.5 sm:gap-1">
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                            aria-label={`product-${item.id}-edit`}
+                          >
+                            <PencilIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          </Button>
+                        </motion.div>
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className="hidden sm:block">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                            aria-label={`product-${item.id}-remove`}
+                          >
+                            <Trash2Icon className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className="hidden lg:block">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                            aria-label={`product-${item.id}-archive`}
+                          >
+                            <ArchiveIcon className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+                      </div>
                     </TableCell>
                   </motion.tr>
                 );
               })
               )}
             </TableBody>
-          </Table>
+              </Table>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -549,24 +556,24 @@ export function StockOverview() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.2 }}
-        className="border-t border-neutral-200/60 p-6 dark:border-neutral-700/60"
+        className="border-t border-neutral-200/60 p-4 sm:p-6 dark:border-neutral-700/60"
       >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
+        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-6">
             <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-green-500" />
-              <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">In Stock: {inStock}</span>
+              <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-green-500" />
+              <span className="text-xs sm:text-sm font-semibold text-neutral-700 dark:text-neutral-300">In Stock: {inStock}</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-amber-500" />
-              <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Low Stock: {lowStock}</span>
+              <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-amber-500" />
+              <span className="text-xs sm:text-sm font-semibold text-neutral-700 dark:text-neutral-300">Low Stock: {lowStock}</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-red-500" />
-              <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Out of Stock: {outOfStock}</span>
+              <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-red-500" />
+              <span className="text-xs sm:text-sm font-semibold text-neutral-700 dark:text-neutral-300">Out of Stock: {outOfStock}</span>
             </div>
           </div>
-          <span className="font-bold text-neutral-900 dark:text-white">
+          <span className="text-sm sm:text-base font-bold text-neutral-900 dark:text-white">
             Total: {filteredData.length} {activeFiltersCount > 0 ? `of ${stockData.length}` : ""} Products
           </span>
         </div>

@@ -5,7 +5,7 @@ import { StockOverview } from "@/components/dashboard/stock-overview";
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
+    <div className="w-full max-w-full space-y-4 p-4 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
       {/* Header */}
       <div className="space-y-1 sm:space-y-2">
         <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-3xl">

@@ -90,7 +90,7 @@ const itemVariants: Variants = {
 export function SummaryCards() {
   return (
     <motion.div 
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4 w-full"
+      className="grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
@@ -119,6 +119,7 @@ export function SummaryCards() {
                 ease: "easeOut"
               }
             }}
+            className="w-full min-w-0"
           >
             <Card className="group relative h-full overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm transition-all duration-300 hover:border-neutral-300/60 hover:shadow-lg dark:border-neutral-700/60 dark:bg-neutral-800 dark:hover:border-neutral-600/60 sm:rounded-2xl">
               <CardContent className="p-4 pb-3 sm:p-5 sm:pb-4">

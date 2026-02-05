@@ -5,7 +5,7 @@ import { Menu } from "lucide-react";
 import { Sidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-export default function DashboardLayout({
+export default function SuppliersLayout({
   children,
 }: {
   children: React.ReactNode;
