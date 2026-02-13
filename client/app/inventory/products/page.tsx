@@ -1,7 +1,8 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
+import { api } from "@/lib/api";
 import {
   Plus,
   PencilIcon,
@@ -107,23 +108,25 @@ const initialProductsData = [
   },
 ];
 
-const categories = ["Royal Series", "Artic Series", "Galaxy Series", "Marella Series"];
-const finishes = ["Matt", "Polished", "Gloss", "In & Out (P4)"];
-
 type Product = {
-  id: string;
-  productName: string;
-  model: string;
-  src: string;
-  fallback: string;
+  _id: string;
+  name: string;
+  sku: string;
+  description: string;
   category: string;
   finish: string;
+  size?: string;
+  price: number;
   stock: number;
+  unit: string;
+  image?: string;
+  isActive: boolean;
 };
 
 export default function ProductsPage() {
   const id = useId();
-  const [products, setProducts] = useState<Product[]>(initialProductsData);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -131,20 +134,58 @@ export default function ProductsPage() {
   const [selectedFinishes, setSelectedFinishes] = useState<string[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
   const [formData, setFormData] = useState({
-    productName: "",
-    model: "",
+    name: "",
+    sku: "",
+    description: "",
     category: "",
     finish: "",
+    size: "",
+    price: 0,
     stock: 0,
-    imageUrl: "",
+    unit: "boxes",
+    image: "",
   });
+
+  // Load products from API
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.getProducts();
+      if (response.success && response.products) {
+        setProducts(response.products);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch products";
+      toast.error("Failed to load products", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Extract unique categories and finishes from products
+  const categories = useMemo(() => {
+    const uniqueCategories = [...new Set(products.map((p) => p.category))];
+    return uniqueCategories.filter(Boolean).sort();
+  }, [products]);
+
+  const finishes = useMemo(() => {
+    const uniqueFinishes = [...new Set(products.map((p) => p.finish))];
+    return uniqueFinishes.filter(Boolean).sort();
+  }, [products]);
 
   // Filter logic
   const filteredData = products.filter((item) => {
     const matchesSearch =
       searchQuery === "" ||
-      item.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.model.toLowerCase().includes(searchQuery.toLowerCase());
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesCategory =
       selectedCategories.length === 0 || selectedCategories.includes(item.category);
@@ -200,12 +241,16 @@ export default function ProductsPage() {
   const handleAddProduct = () => {
     setEditingProduct(null);
     setFormData({
-      productName: "",
-      model: "",
+      name: "",
+      sku: "",
+      description: "",
       category: "",
       finish: "",
+      size: "",
+      price: 0,
       stock: 0,
-      imageUrl: "",
+      unit: "boxes",
+      image: "",
     });
     setIsDialogOpen(true);
   };
@@ -213,95 +258,105 @@ export default function ProductsPage() {
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product);
     setFormData({
-      productName: product.productName,
-      model: product.model,
+      name: product.name,
+      sku: product.sku,
+      description: product.description,
       category: product.category,
       finish: product.finish,
+      size: product.size || "",
+      price: product.price,
       stock: product.stock,
-      imageUrl: product.src,
+      unit: product.unit,
+      image: product.image || "",
     });
     setIsDialogOpen(true);
   };
 
-  const handleDeleteProduct = (id: string) => {
-    setProducts(products.filter((p) => p.id !== id));
-    toast.success("Product deleted successfully");
-  };
-
-  const handleSaveProduct = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (
-      !formData.productName ||
-      !formData.model ||
-      !formData.category ||
-      !formData.finish ||
-      formData.stock < 0
-    ) {
-      toast.error("Please fill all fields correctly");
+  const handleDeleteProduct = async (productId: string) => {
+    if (!confirm("Are you sure you want to delete this product?")) {
       return;
     }
 
-    if (editingProduct) {
-      // Update existing product
-      setProducts(
-        products.map((p) =>
-          p.id === editingProduct.id
-            ? {
-                ...p,
-                productName: formData.productName,
-                model: formData.model,
-                category: formData.category,
-                finish: formData.finish,
-                stock: formData.stock,
-                src: formData.imageUrl || p.src,
-              }
-            : p
-        )
-      );
-      toast.success("Product updated successfully");
-    } else {
-      // Add new product
-      const newProduct: Product = {
-        id: String(Math.max(...products.map((p) => parseInt(p.id))) + 1),
-        productName: formData.productName,
-        model: formData.model,
-        category: formData.category,
-        finish: formData.finish,
-        stock: formData.stock,
-        src: formData.imageUrl || "/assets/products/placeholder.jpg",
-        fallback: formData.productName
-          .split(" ")
-          .map((w) => w[0])
-          .join("")
-          .toUpperCase()
-          .slice(0, 3),
-      };
-      setProducts([...products, newProduct]);
-      toast.success("Product added successfully");
+    try {
+      const response = await api.deleteProduct(productId);
+      if (response.success) {
+        toast.success("Product deleted successfully");
+        fetchProducts(); // Refresh list
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete product";
+      toast.error("Failed to delete product", {
+        description: errorMessage,
+      });
+    }
+  };
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (
+      !formData.name ||
+      !formData.sku ||
+      !formData.category ||
+      !formData.finish ||
+      formData.price <= 0
+    ) {
+      toast.error("Please fill all required fields correctly");
+      return;
     }
 
-    setIsDialogOpen(false);
-    setFormData({
-      productName: "",
-      model: "",
-      category: "",
-      finish: "",
-      stock: 0,
-      imageUrl: "",
-    });
-    setEditingProduct(null);
+    try {
+      if (editingProduct) {
+        // Update existing product
+        const response = await api.updateProduct(editingProduct._id, formData);
+        if (response.success) {
+          toast.success("Product updated successfully");
+          fetchProducts(); // Refresh list
+        }
+      } else {
+        // Add new product
+        const response = await api.createProduct(formData);
+        if (response.success) {
+          toast.success("Product added successfully");
+          fetchProducts(); // Refresh list
+        }
+      }
+
+      setIsDialogOpen(false);
+      setFormData({
+        name: "",
+        sku: "",
+        description: "",
+        category: "",
+        finish: "",
+        size: "",
+        price: 0,
+        stock: 0,
+        unit: "boxes",
+        image: "",
+      });
+      setEditingProduct(null);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to save product";
+      toast.error(editingProduct ? "Failed to update product" : "Failed to add product", {
+        description: errorMessage,
+      });
+    }
   };
 
   const handleCancel = () => {
     setIsDialogOpen(false);
     setFormData({
-      productName: "",
-      model: "",
+      name: "",
+      sku: "",
+      description: "",
       category: "",
       finish: "",
+      size: "",
+      price: 0,
       stock: 0,
-      imageUrl: "",
+      unit: "boxes",
+      image: "",
     });
     setEditingProduct(null);
   };
@@ -588,22 +643,30 @@ export default function ProductsPage() {
 
         {/* Table Content */}
         <div className="p-6">
-          <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>
-                    <Checkbox id={id} aria-label="select-all" />
-                  </TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Finish</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead className="w-0">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredData.length === 0 ? (
+          {isLoading ? (
+            <div className="flex h-64 items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading products...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>
+                      <Checkbox id={id} aria-label="select-all" />
+                    </TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Finish</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead className="w-0">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredData.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="h-32 text-center">
                       <div className="flex flex-col items-center justify-center gap-2">
@@ -627,7 +690,7 @@ export default function ProductsPage() {
 
                     return (
                       <motion.tr
-                        key={item.id}
+                        key={item._id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.05 }}
@@ -635,14 +698,14 @@ export default function ProductsPage() {
                       >
                         <TableCell>
                           <Checkbox
-                            id={`table-checkbox-${item.id}`}
-                            aria-label={`product-checkbox-${item.id}`}
+                            id={`table-checkbox-${item._id}`}
+                            aria-label={`product-checkbox-${item._id}`}
                           />
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="rounded-lg h-12 w-12">
-                              <AvatarImage src={item.src} alt={item.model} />
+                              <AvatarImage src={item.image || "/assets/products/placeholder.jpg"} alt={item.name} />
                               <AvatarFallback className="text-xs rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
                                 <Package
                                   className="h-6 w-6 text-neutral-500"
@@ -652,10 +715,10 @@ export default function ProductsPage() {
                             </Avatar>
                             <div>
                               <div className="font-medium text-neutral-900 dark:text-white">
-                                {item.productName}
+                                {item.name}
                               </div>
                               <span className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                                {item.model}
+                                {item.sku}
                               </span>
                             </div>
                           </div>
@@ -680,7 +743,7 @@ export default function ProductsPage() {
                               {item.stock}
                             </span>
                             <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                              boxes
+                              {item.unit}
                             </span>
                           </div>
                         </TableCell>
@@ -691,7 +754,7 @@ export default function ProductsPage() {
                               size="icon"
                               className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
                               onClick={() => handleEditProduct(item)}
-                              aria-label={`product-${item.id}-edit`}
+                              aria-label={`product-${item._id}-edit`}
                             >
                               <PencilIcon className="h-4 w-4" />
                             </Button>
@@ -701,8 +764,8 @@ export default function ProductsPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                              onClick={() => handleDeleteProduct(item.id)}
-                              aria-label={`product-${item.id}-remove`}
+                              onClick={() => handleDeleteProduct(item._id)}
+                              aria-label={`product-${item._id}-remove`}
                             >
                               <Trash2Icon className="h-4 w-4" />
                             </Button>
@@ -712,9 +775,10 @@ export default function ProductsPage() {
                     );
                   })
                 )}
-              </TableBody>
-            </Table>
-          </div>
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
 
         {/* Footer Summary */}
@@ -781,10 +845,10 @@ export default function ProductsPage() {
                 {/* Image Preview */}
                 <div className="flex flex-col items-center gap-3">
                   <div className="relative h-32 w-32 overflow-hidden rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-800">
-                    {formData.imageUrl ? (
+                    {formData.image ? (
                       <Avatar className="h-full w-full rounded-xl">
                         <AvatarImage
-                          src={formData.imageUrl}
+                          src={formData.image}
                           alt="Product preview"
                           className="object-cover"
                         />
@@ -819,16 +883,16 @@ export default function ProductsPage() {
                           // Convert image to base64
                           const reader = new FileReader();
                           reader.onloadend = () => {
-                            setFormData({ ...formData, imageUrl: reader.result as string });
+                            setFormData({ ...formData, image: reader.result as string });
                           };
                           reader.readAsDataURL(file);
                         }
                       }}
                     />
-                    {formData.imageUrl && (
+                    {formData.image && (
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, imageUrl: "" })}
+                        onClick={() => setFormData({ ...formData, image: "" })}
                         className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       >
                         Remove Image
@@ -845,35 +909,89 @@ export default function ProductsPage() {
               {/* Product Name */}
               <div className="grid gap-2">
                 <label
-                  htmlFor="productName"
+                  htmlFor="name"
                   className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
-                  Product Name
+                  Product Name <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  id="productName"
+                  id="name"
                   placeholder="e.g., Artic Apricot Matt"
-                  value={formData.productName}
+                  value={formData.name}
                   onChange={(e) =>
-                    setFormData({ ...formData, productName: e.target.value })
+                    setFormData({ ...formData, name: e.target.value })
                   }
                   required
                 />
               </div>
 
-              {/* Model/Description */}
+              {/* SKU */}
               <div className="grid gap-2">
                 <label
-                  htmlFor="model"
+                  htmlFor="sku"
                   className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
-                  Model/Description
+                  SKU <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  id="model"
+                  id="sku"
+                  placeholder="e.g., CERAMIC-WHITE-60X60"
+                  value={formData.sku}
+                  onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
+                  required
+                />
+              </div>
+
+              {/* Description */}
+              <div className="grid gap-2">
+                <label
+                  htmlFor="description"
+                  className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                >
+                  Description (Optional)
+                </label>
+                <Input
+                  id="description"
                   placeholder="e.g., Porcelain Tile"
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+
+              {/* Size */}
+              <div className="grid gap-2">
+                <label
+                  htmlFor="size"
+                  className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                >
+                  Size (Optional)
+                </label>
+                <Input
+                  id="size"
+                  placeholder="e.g., 60x60 cm"
+                  value={formData.size}
+                  onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                />
+              </div>
+
+              {/* Price */}
+              <div className="grid gap-2">
+                <label
+                  htmlFor="price"
+                  className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                >
+                  Price (AUD) <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  id="price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="e.g., 45.00"
+                  value={formData.price || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })
+                  }
                   required
                 />
               </div>
@@ -884,24 +1002,28 @@ export default function ProductsPage() {
                   htmlFor="category"
                   className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
-                  Category
+                  Category <span className="text-red-500">*</span>
                 </label>
-                <select
+                <Input
                   id="category"
+                  list="category-options"
+                  placeholder="Select or type category"
                   value={formData.category}
                   onChange={(e) =>
                     setFormData({ ...formData, category: e.target.value })
                   }
-                  className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                   required
-                >
-                  <option value="">Select category</option>
+                />
+                <datalist id="category-options">
                   {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
+                    <option key={cat} value={cat} />
                   ))}
-                </select>
+                </datalist>
+                {formData.category && !categories.includes(formData.category) && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    ⚠️ This will create a new category: "{formData.category}"
+                  </p>
+                )}
               </div>
 
               {/* Finish */}
@@ -910,22 +1032,26 @@ export default function ProductsPage() {
                   htmlFor="finish"
                   className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
-                  Finish
+                  Finish <span className="text-red-500">*</span>
                 </label>
-                <select
+                <Input
                   id="finish"
+                  list="finish-options"
+                  placeholder="Select or type finish"
                   value={formData.finish}
                   onChange={(e) => setFormData({ ...formData, finish: e.target.value })}
-                  className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                   required
-                >
-                  <option value="">Select finish</option>
+                />
+                <datalist id="finish-options">
                   {finishes.map((fin) => (
-                    <option key={fin} value={fin}>
-                      {fin}
-                    </option>
+                    <option key={fin} value={fin} />
                   ))}
-                </select>
+                </datalist>
+                {formData.finish && !finishes.includes(formData.finish) && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    ⚠️ This will create a new finish: "{formData.finish}"
+                  </p>
+                )}
               </div>
 
               {/* Stock Quantity */}
@@ -934,18 +1060,33 @@ export default function ProductsPage() {
                   htmlFor="stock"
                   className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
-                  Stock Quantity (boxes)
+                  Stock Quantity
                 </label>
                 <Input
                   id="stock"
                   type="number"
                   min="0"
                   placeholder="e.g., 100"
-                  value={formData.stock}
+                  value={formData.stock || ""}
                   onChange={(e) =>
                     setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })
                   }
-                  required
+                />
+              </div>
+
+              {/* Unit */}
+              <div className="grid gap-2">
+                <label
+                  htmlFor="unit"
+                  className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                >
+                  Unit
+                </label>
+                <Input
+                  id="unit"
+                  placeholder="e.g., boxes, pieces, sqm"
+                  value={formData.unit}
+                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                 />
               </div>
             </div>

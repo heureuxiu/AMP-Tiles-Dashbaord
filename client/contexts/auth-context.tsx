@@ -1,61 +1,105 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 type User = {
+  id: string;
   name: string;
   email: string;
+  role: string;
 };
 
 type AuthContextType = {
   user: User | null;
+  loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-  updateUser: (user: User) => void;
+  logout: () => Promise<void>;
+  updateUser: (name: string, email: string) => Promise<void>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Load user from localStorage on mount
-  const [user, setUser] = useState<User | null>(() => {
-    if (typeof window !== "undefined") {
-      const storedUser = localStorage.getItem("amp_user");
-      if (storedUser) {
-        return JSON.parse(storedUser);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Check if user is logged in on mount
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const token = localStorage.getItem("amp_token");
+      if (token) {
+        const response = await api.getMe();
+        if (response.success && response.user) {
+          setUser(response.user);
+        }
       }
+    } catch (error) {
+      console.error("Auth check failed:", error);
+      localStorage.removeItem("amp_token");
+    } finally {
+      setLoading(false);
     }
-    return null;
-  });
+  };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const login = async (email: string, password: string) => {
-    // TODO: Replace with actual API call
-    // Simulating API call - password will be used when API is implemented
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Mock user data - replace with actual API response
-    const userData: User = {
-      name: "Admin User",
-      email: email,
-    };
-
-    setUser(userData);
-    localStorage.setItem("amp_user", JSON.stringify(userData));
+    try {
+      const response = await api.login(email, password);
+      
+      if (response.success && response.token && response.user) {
+        localStorage.setItem("amp_token", response.token);
+        setUser(response.user);
+      } else {
+        throw new Error(response.message || "Login failed");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Login failed";
+      throw new Error(errorMessage);
+    }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("amp_user");
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setUser(null);
+      localStorage.removeItem("amp_token");
+    }
   };
 
-  const updateUser = (updatedUser: User) => {
-    setUser(updatedUser);
-    localStorage.setItem("amp_user", JSON.stringify(updatedUser));
+  const updateUser = async (name: string, email: string) => {
+    try {
+      const response = await api.updateDetails(name, email);
+      if (response.success && response.user) {
+        setUser(response.user);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Update failed";
+      throw new Error(errorMessage);
+    }
+  };
+
+  const updatePassword = async (currentPassword: string, newPassword: string) => {
+    try {
+      const response = await api.updatePassword(currentPassword, newPassword);
+      if (response.success && response.token) {
+        localStorage.setItem("amp_token", response.token);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Password update failed";
+      throw new Error(errorMessage);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );

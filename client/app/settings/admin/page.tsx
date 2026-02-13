@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
 
 export default function AdminAccountPage() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, updatePassword } = useAuth();
   const [adminName, setAdminName] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -25,7 +25,7 @@ export default function AdminAccountPage() {
     }
   }, [user]);
 
-  const handleUpdateName = () => {
+  const handleUpdateName = async () => {
     if (!adminName.trim()) {
       toast.error("Admin name cannot be empty");
       return;
@@ -34,17 +34,22 @@ export default function AdminAccountPage() {
     if (!user) return;
 
     setIsSavingName(true);
-    // TODO: Implement actual API call
-    setTimeout(() => {
-      updateUser({ ...user, name: adminName });
-      setIsSavingName(false);
+    try {
+      await updateUser(adminName, user.email);
       toast.success("Name updated successfully", {
         description: "Your admin name has been updated",
       });
-    }, 500);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Please try again";
+      toast.error("Failed to update name", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsSavingName(false);
+    }
   };
 
-  const handleUpdatePassword = () => {
+  const handleUpdatePassword = async () => {
     // Validation
     if (!currentPassword || !newPassword || !confirmPassword) {
       toast.error("All password fields are required");
@@ -61,10 +66,9 @@ export default function AdminAccountPage() {
       return;
     }
 
-    // TODO: Implement actual password change API call
     setIsChangingPassword(true);
-    setTimeout(() => {
-      setIsChangingPassword(false);
+    try {
+      await updatePassword(currentPassword, newPassword);
       toast.success("Password updated successfully", {
         description: "Your admin password has been changed",
       });
@@ -72,7 +76,14 @@ export default function AdminAccountPage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    }, 1000);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Please check your current password";
+      toast.error("Failed to update password", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleCancel = () => {

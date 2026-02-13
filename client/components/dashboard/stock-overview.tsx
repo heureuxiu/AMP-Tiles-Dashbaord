@@ -507,7 +507,7 @@ export function StockOverview() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-0.5 sm:gap-1">
+                      <div className="flex items-center gap-0.5">
                         <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                           <Button
                             variant="ghost"
@@ -515,27 +515,27 @@ export function StockOverview() {
                             className="h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
                             aria-label={`product-${item.id}-edit`}
                           >
-                            <PencilIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            <PencilIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                         </motion.div>
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className="hidden sm:block">
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                            className="h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
                             aria-label={`product-${item.id}-remove`}
                           >
-                            <Trash2Icon className="h-4 w-4" />
+                            <Trash2Icon className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                         </motion.div>
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className="hidden lg:block">
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                            className="h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
                             aria-label={`product-${item.id}-archive`}
                           >
-                            <ArchiveIcon className="h-4 w-4" />
+                            <ArchiveIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                         </motion.div>
                       </div>

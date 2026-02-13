@@ -1,69 +1,85 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Package, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
-// Mock products data (in real app, fetch from API or shared state)
-const productsData = [
-  {
-    id: "1",
-    productName: "Amaze Grey Polished",
-    model: "Marble Look Porcelain Tile",
-    src: "/assets/products/amaze-grey.jpg",
-    stock: 245,
-  },
-  {
-    id: "2",
-    productName: "Amaze Luxury Matt",
-    model: "Marble Look Porcelain Tile",
-    src: "/assets/products/amaze-luxury.jpg",
-    stock: 156,
-  },
-  {
-    id: "3",
-    productName: "Artic Apricot Matt",
-    model: "Porcelain Tile",
-    src: "/assets/products/artic-apricot.jpg",
-    stock: 89,
-  },
-  {
-    id: "4",
-    productName: "Artic Cloud Matt",
-    model: "Porcelain Tile",
-    src: "/assets/products/artic-cloud.jpg",
-    stock: 23,
-  },
-  {
-    id: "5",
-    productName: "Aspen Ash Grey",
-    model: "Steel Matt Porcelain",
-    src: "/assets/products/aspen-ash.jpg",
-    stock: 12,
-  },
-  {
-    id: "6",
-    productName: "Bianco Matt",
-    model: "Marble Look Porcelain",
-    src: "/assets/products/bianco-matt.jpg",
-    stock: 0,
-  },
-];
+type Product = {
+  _id: string;
+  name: string;
+  sku: string;
+  description: string;
+  category: string;
+  finish: string;
+  stock: number;
+  unit: string;
+  image?: string;
+};
+
+type StockStats = {
+  totalProducts: number;
+  totalStock: number;
+  inStock: number;
+  lowStock: number;
+  outOfStock: number;
+};
 
 export default function StockUpdatePage() {
   const [selectedProductId, setSelectedProductId] = useState("");
-  const [actionType, setActionType] = useState("");
+  const [actionType, setActionType] = useState<"stock-in" | "stock-out" | "">("");
   const [quantity, setQuantity] = useState(0);
   const [remarks, setRemarks] = useState("");
-  const [products, setProducts] = useState(productsData);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [stats, setStats] = useState<StockStats>({
+    totalProducts: 0,
+    totalStock: 0,
+    inStock: 0,
+    lowStock: 0,
+    outOfStock: 0,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectedProduct = products.find((p) => p.id === selectedProductId);
+  const selectedProduct = products.find((p) => p._id === selectedProductId);
 
-  const handleUpdateStock = (e: React.FormEvent) => {
+  // Load products and stats on mount
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fetch products and stats in parallel
+      const [productsResponse, statsResponse] = await Promise.all([
+        api.getProducts(),
+        api.getStockStats(),
+      ]);
+
+      if (productsResponse.success && productsResponse.products) {
+        setProducts(productsResponse.products);
+      }
+
+      if (statsResponse.success && statsResponse.stats) {
+        setStats(statsResponse.stats);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch data";
+      toast.error("Failed to load data", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateStock = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!selectedProductId || !actionType || quantity <= 0) {
@@ -71,29 +87,40 @@ export default function StockUpdatePage() {
       return;
     }
 
-    // Update stock
-    setProducts(
-      products.map((p) => {
-        if (p.id === selectedProductId) {
-          const newStock =
-            actionType === "stock-in" ? p.stock + quantity : p.stock - quantity;
-          return { ...p, stock: Math.max(0, newStock) };
-        }
-        return p;
-      })
-    );
+    try {
+      setIsSubmitting(true);
 
-    toast.success(
-      `Stock ${actionType === "stock-in" ? "added" : "removed"} successfully`,
-      {
-        description: `${quantity} boxes ${actionType === "stock-in" ? "added to" : "removed from"} ${
-          selectedProduct?.productName
-        }`,
+      const response = await api.createStockTransaction({
+        productId: selectedProductId,
+        type: actionType,
+        quantity,
+        remarks,
+      });
+
+      if (response.success) {
+        toast.success(
+          `Stock ${actionType === "stock-in" ? "added" : "removed"} successfully`,
+          {
+            description: `${quantity} ${selectedProduct?.unit || 'boxes'} ${
+              actionType === "stock-in" ? "added to" : "removed from"
+            } ${selectedProduct?.name}`,
+          }
+        );
+
+        // Refresh data
+        await fetchData();
+
+        // Reset form
+        handleReset();
       }
-    );
-
-    // Reset form
-    handleReset();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to update stock";
+      toast.error("Failed to update stock", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReset = () => {
@@ -166,11 +193,13 @@ export default function StockUpdatePage() {
                   onChange={(e) => setSelectedProductId(e.target.value)}
                   className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                   required
+
+                  disabled={isLoading || isSubmitting}
                 >
                   <option value="">Choose a product</option>
                   {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.productName} - {product.model}
+                    <option key={product._id} value={product._id}>
+                      {product.name} ({product.sku})
                     </option>
                   ))}
                 </select>
@@ -188,7 +217,8 @@ export default function StockUpdatePage() {
                   <button
                     type="button"
                     onClick={() => setActionType("stock-in")}
-                    className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all ${
+                    disabled={isSubmitting}
+                    className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       actionType === "stock-in"
                         ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400"
                         : "border-neutral-200 bg-white hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-800 dark:hover:border-neutral-600"
@@ -200,7 +230,8 @@ export default function StockUpdatePage() {
                   <button
                     type="button"
                     onClick={() => setActionType("stock-out")}
-                    className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all ${
+                    disabled={isSubmitting}
+                    className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       actionType === "stock-out"
                         ? "border-red-500 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400"
                         : "border-neutral-200 bg-white hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-800 dark:hover:border-neutral-600"
@@ -227,6 +258,7 @@ export default function StockUpdatePage() {
                   placeholder="Enter quantity"
                   value={quantity || ""}
                   onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+                  disabled={isSubmitting}
                   required
                 />
               </div>
@@ -245,20 +277,22 @@ export default function StockUpdatePage() {
                   placeholder="Add notes or reasons for this stock update..."
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
+                  disabled={isSubmitting}
                   className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                 />
               </div>
 
               {/* Buttons */}
               <div className="flex gap-3 pt-2">
-                <Button type="submit" className="flex-1">
-                  Update Stock
+                <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                  {isSubmitting ? "Updating..." : "Update Stock"}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleReset}
                   className="gap-2"
+                  disabled={isSubmitting}
                 >
                   <RotateCcw className="h-4 w-4" />
                   Reset
@@ -283,14 +317,21 @@ export default function StockUpdatePage() {
               </h3>
             </div>
             <div className="p-6">
-              {selectedProduct ? (
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+                  <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+                    Loading...
+                  </p>
+                </div>
+              ) : selectedProduct ? (
                 <div className="space-y-6">
                   {/* Product Info */}
                   <div className="flex items-center gap-3">
                     <Avatar className="h-16 w-16 rounded-xl">
                       <AvatarImage
-                        src={selectedProduct.src}
-                        alt={selectedProduct.productName}
+                        src={selectedProduct.image || "/assets/products/placeholder.jpg"}
+                        alt={selectedProduct.name}
                         className="object-cover"
                       />
                       <AvatarFallback className="rounded-xl bg-neutral-200 dark:bg-neutral-700">
@@ -299,10 +340,10 @@ export default function StockUpdatePage() {
                     </Avatar>
                     <div className="flex-1">
                       <h4 className="font-semibold text-neutral-900 dark:text-white">
-                        {selectedProduct.productName}
+                        {selectedProduct.name}
                       </h4>
                       <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                        {selectedProduct.model}
+                        {selectedProduct.sku}
                       </p>
                     </div>
                   </div>
@@ -317,7 +358,7 @@ export default function StockUpdatePage() {
                         {selectedProduct.stock}
                       </span>
                       <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                        boxes
+                        {selectedProduct.unit}
                       </span>
                     </div>
                   </div>
@@ -356,7 +397,7 @@ export default function StockUpdatePage() {
                               {newStock}
                             </span>
                             <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                              boxes
+                              {selectedProduct.unit}
                             </span>
                           </div>
                         </div>
@@ -396,32 +437,44 @@ export default function StockUpdatePage() {
             <h4 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-white">
               Quick Stats
             </h4>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-neutral-600 dark:text-neutral-400">Total Products</span>
-                <span className="font-semibold text-neutral-900 dark:text-white">
-                  {products.length}
-                </span>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="h-6 w-6 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-neutral-600 dark:text-neutral-400">Total Stock</span>
-                <span className="font-semibold text-neutral-900 dark:text-white">
-                  {products.reduce((sum, p) => sum + p.stock, 0)} boxes
-                </span>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-600 dark:text-neutral-400">Total Products</span>
+                  <span className="font-semibold text-neutral-900 dark:text-white">
+                    {stats.totalProducts}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-600 dark:text-neutral-400">Total Stock</span>
+                  <span className="font-semibold text-neutral-900 dark:text-white">
+                    {stats.totalStock}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-600 dark:text-neutral-400">In Stock</span>
+                  <span className="font-semibold text-green-600 dark:text-green-400">
+                    {stats.inStock}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-600 dark:text-neutral-400">Low Stock</span>
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">
+                    {stats.lowStock}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-600 dark:text-neutral-400">Out of Stock</span>
+                  <span className="font-semibold text-red-600 dark:text-red-400">
+                    {stats.outOfStock}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-neutral-600 dark:text-neutral-400">Low Stock Items</span>
-                <span className="font-semibold text-amber-600 dark:text-amber-400">
-                  {products.filter((p) => p.stock > 0 && p.stock <= 30).length}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-neutral-600 dark:text-neutral-400">Out of Stock</span>
-                <span className="font-semibold text-red-600 dark:text-red-400">
-                  {products.filter((p) => p.stock === 0).length}
-                </span>
-              </div>
-            </div>
+            )}
           </div>
         </motion.div>
       </div>

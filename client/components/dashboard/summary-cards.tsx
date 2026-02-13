@@ -121,14 +121,14 @@ export function SummaryCards() {
             }}
             className="w-full min-w-0"
           >
-            <Card className="group relative h-full overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm transition-all duration-300 hover:border-neutral-300/60 hover:shadow-lg dark:border-neutral-700/60 dark:bg-neutral-800 dark:hover:border-neutral-600/60 sm:rounded-2xl">
-              <CardContent className="p-4 pb-3 sm:p-5 sm:pb-4">
+            <Card className="group relative h-full overflow-hidden rounded-lg border border-neutral-200/60 bg-white shadow-sm transition-all duration-300 hover:border-neutral-300/60 hover:shadow-lg dark:border-neutral-700/60 dark:bg-neutral-800 dark:hover:border-neutral-600/60 sm:rounded-xl lg:rounded-2xl">
+              <CardContent className="p-3 pb-2.5 sm:p-4 sm:pb-3 lg:p-5 lg:pb-4">
                 {/* Header */}
-                <div className="mb-2 sm:mb-3">
-                  <dt className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 sm:text-sm">
+                <div className="mb-1.5 sm:mb-2 lg:mb-3">
+                  <dt className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 sm:text-xs lg:text-sm">
                     {item.name}
                   </dt>
-                  <span className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400 sm:text-xs">
+                  <span className="text-[9px] font-medium text-neutral-500 dark:text-neutral-400 sm:text-[10px] lg:text-xs">
                     {item.code}
                   </span>
                 </div>
@@ -137,7 +137,7 @@ export function SummaryCards() {
                 <div className="flex items-baseline justify-between">
                   <dd
                     className={cn(
-                      "text-2xl font-bold tracking-tight sm:text-3xl",
+                      "text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl",
                       item.changeType === "positive"
                         ? "text-green-600 dark:text-green-500"
                         : "text-red-600 dark:text-red-500"
@@ -146,12 +146,12 @@ export function SummaryCards() {
                     {item.value}
                   </dd>
                   <dd className="flex flex-col items-end">
-                    <span className="text-xs font-semibold text-neutral-900 dark:text-neutral-100 sm:text-sm">
+                    <span className="text-[11px] font-semibold text-neutral-900 dark:text-neutral-100 sm:text-xs lg:text-sm">
                       {item.change}
                     </span>
                     <span
                       className={cn(
-                        "text-[10px] font-medium sm:text-xs",
+                        "text-[9px] font-medium sm:text-[10px] lg:text-xs",
                         item.changeType === "positive"
                           ? "text-green-600 dark:text-green-500"
                           : "text-red-600 dark:text-red-500"
@@ -163,7 +163,7 @@ export function SummaryCards() {
                 </div>
 
                 {/* Chart */}
-                <div className="mt-3 h-12 w-full sm:mt-4 sm:h-16">
+                <div className="mt-2 h-10 w-full sm:mt-3 sm:h-12 lg:mt-4 lg:h-16">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart 
                       data={item.data}
@@ -203,8 +203,8 @@ export function SummaryCards() {
                 </div>
 
                 {/* Vs Last Month */}
-                <div className="mt-2 border-t border-neutral-100 pt-2 dark:border-neutral-700 sm:mt-3 sm:pt-3">
-                  <p className="text-[10px] text-neutral-600 dark:text-neutral-400 sm:text-xs">
+                <div className="mt-1.5 border-t border-neutral-100 pt-1.5 dark:border-neutral-700 sm:mt-2 sm:pt-2 lg:mt-3 lg:pt-3">
+                  <p className="text-[9px] text-neutral-600 dark:text-neutral-400 sm:text-[10px] lg:text-xs">
                     vs last month
                   </p>
                 </div>
