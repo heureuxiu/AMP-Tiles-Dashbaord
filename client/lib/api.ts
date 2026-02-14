@@ -354,6 +354,180 @@ class ApiClient {
       method: 'GET',
     });
   }
+
+  // Supplier Management endpoints
+  async getSuppliers(params?: {
+    search?: string;
+    status?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    limit?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    const query = queryParams.toString();
+    return this.request(`/suppliers${query ? `?${query}` : ''}`, {
+      method: 'GET',
+    });
+  }
+
+  async getSupplier(id: string) {
+    return this.request(`/suppliers/${id}`, {
+      method: 'GET',
+    });
+  }
+
+  async createSupplier(data: {
+    name: string;
+    contactPerson?: string;
+    phone: string;
+    email?: string;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      postcode?: string;
+      country?: string;
+    };
+    website?: string;
+    abn?: string;
+    notes?: string;
+    paymentTerms?: string;
+  }) {
+    return this.request('/suppliers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSupplier(id: string, data: {
+    name?: string;
+    contactPerson?: string;
+    phone?: string;
+    email?: string;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      postcode?: string;
+      country?: string;
+    };
+    website?: string;
+    abn?: string;
+    notes?: string;
+    status?: string;
+    paymentTerms?: string;
+  }) {
+    return this.request(`/suppliers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSupplier(id: string) {
+    return this.request(`/suppliers/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getSupplierStats() {
+    return this.request('/suppliers/stats/summary', {
+      method: 'GET',
+    });
+  }
+
+  // Purchase Order Management endpoints
+  async getPurchaseOrders(params?: {
+    search?: string;
+    supplier?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.supplier) queryParams.append('supplier', params.supplier);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+
+    const query = queryParams.toString();
+    return this.request(`/purchase-orders${query ? `?${query}` : ''}`, {
+      method: 'GET',
+    });
+  }
+
+  async getPurchaseOrder(id: string) {
+    return this.request(`/purchase-orders/${id}`, {
+      method: 'GET',
+    });
+  }
+
+  async createPurchaseOrder(data: {
+    supplier: string;
+    poDate?: string;
+    expectedDeliveryDate?: string;
+    items: Array<{
+      product: string;
+      quantity: number;
+      rate: number;
+    }>;
+    taxRate?: number;
+    notes?: string;
+    terms?: string;
+  }) {
+    return this.request('/purchase-orders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePurchaseOrder(id: string, data: {
+    supplier?: string;
+    poDate?: string;
+    expectedDeliveryDate?: string;
+    items?: Array<{
+      product: string;
+      quantity: number;
+      rate: number;
+    }>;
+    taxRate?: number;
+    notes?: string;
+    terms?: string;
+    status?: string;
+  }) {
+    return this.request(`/purchase-orders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async receivePurchaseOrder(id: string) {
+    return this.request(`/purchase-orders/${id}/receive`, {
+      method: 'POST',
+    });
+  }
+
+  async deletePurchaseOrder(id: string) {
+    return this.request(`/purchase-orders/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getPurchaseOrderStats() {
+    return this.request('/purchase-orders/stats/summary', {
+      method: 'GET',
+    });
+  }
 }
 
 export const api = new ApiClient(API_URL);

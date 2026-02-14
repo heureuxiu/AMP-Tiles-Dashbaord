@@ -8,14 +8,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
 export default function CreateSupplierPage() {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
+    contactPerson: "",
     phone: "",
     email: "",
+    website: "",
+    abn: "",
+    street: "",
+    city: "",
+    state: "",
+    postcode: "",
+    paymentTerms: "",
     notes: "",
   });
 
@@ -26,7 +35,7 @@ export default function CreateSupplierPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validation
@@ -35,15 +44,47 @@ export default function CreateSupplierPage() {
       return;
     }
 
-    // TODO: Implement actual API call
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-      toast.success("Supplier added successfully", {
-        description: `${formData.name} has been added to suppliers`,
+    if (!formData.phone.trim()) {
+      toast.error("Phone number is required");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      const supplierData = {
+        name: formData.name,
+        contactPerson: formData.contactPerson || undefined,
+        phone: formData.phone,
+        email: formData.email || undefined,
+        website: formData.website || undefined,
+        abn: formData.abn || undefined,
+        address: {
+          street: formData.street || undefined,
+          city: formData.city || undefined,
+          state: formData.state || undefined,
+          postcode: formData.postcode || undefined,
+        },
+        paymentTerms: formData.paymentTerms || undefined,
+        notes: formData.notes || undefined,
+      };
+
+      const response = await api.createSupplier(supplierData);
+
+      if (response.success) {
+        toast.success("Supplier added successfully", {
+          description: `${formData.name} has been added to suppliers`,
+        });
+        router.push("/suppliers");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to create supplier";
+      toast.error("Failed to create supplier", {
+        description: errorMessage,
       });
-      router.push("/suppliers");
-    }, 1000);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -93,7 +134,14 @@ export default function CreateSupplierPage() {
 
         {/* Form Content */}
         <form onSubmit={handleSubmit} className="p-6">
-          <div className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Basic Information Section */}
+            <div className="space-y-6 md:col-span-2">
+              <h4 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                Basic Information
+              </h4>
+            </div>
+
             {/* Supplier Name */}
             <div className="space-y-2">
               <Label htmlFor="name">
@@ -106,13 +154,30 @@ export default function CreateSupplierPage() {
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="Enter supplier name"
+                disabled={isSaving}
                 required
+              />
+            </div>
+
+            {/* Contact Person */}
+            <div className="space-y-2">
+              <Label htmlFor="contactPerson">Contact Person</Label>
+              <Input
+                id="contactPerson"
+                name="contactPerson"
+                type="text"
+                value={formData.contactPerson}
+                onChange={handleChange}
+                placeholder="Enter contact person name"
+                disabled={isSaving}
               />
             </div>
 
             {/* Phone */}
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone (Optional)</Label>
+              <Label htmlFor="phone">
+                Phone <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="phone"
                 name="phone"
@@ -120,12 +185,14 @@ export default function CreateSupplierPage() {
                 value={formData.phone}
                 onChange={handleChange}
                 placeholder="Enter phone number"
+                disabled={isSaving}
+                required
               />
             </div>
 
             {/* Email */}
             <div className="space-y-2">
-              <Label htmlFor="email">Email (Optional)</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 name="email"
@@ -133,12 +200,118 @@ export default function CreateSupplierPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="Enter email address"
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* Website */}
+            <div className="space-y-2">
+              <Label htmlFor="website">Website</Label>
+              <Input
+                id="website"
+                name="website"
+                type="url"
+                value={formData.website}
+                onChange={handleChange}
+                placeholder="https://example.com"
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* ABN */}
+            <div className="space-y-2">
+              <Label htmlFor="abn">ABN</Label>
+              <Input
+                id="abn"
+                name="abn"
+                type="text"
+                value={formData.abn}
+                onChange={handleChange}
+                placeholder="Enter ABN"
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* Address Section */}
+            <div className="space-y-6 md:col-span-2 pt-4">
+              <h4 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                Address
+              </h4>
+            </div>
+
+            {/* Street */}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="street">Street</Label>
+              <Input
+                id="street"
+                name="street"
+                type="text"
+                value={formData.street}
+                onChange={handleChange}
+                placeholder="Enter street address"
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* City */}
+            <div className="space-y-2">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                name="city"
+                type="text"
+                value={formData.city}
+                onChange={handleChange}
+                placeholder="Enter city"
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* State */}
+            <div className="space-y-2">
+              <Label htmlFor="state">State</Label>
+              <Input
+                id="state"
+                name="state"
+                type="text"
+                value={formData.state}
+                onChange={handleChange}
+                placeholder="Enter state"
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* Postcode */}
+            <div className="space-y-2">
+              <Label htmlFor="postcode">Postcode</Label>
+              <Input
+                id="postcode"
+                name="postcode"
+                type="text"
+                value={formData.postcode}
+                onChange={handleChange}
+                placeholder="Enter postcode"
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* Payment Terms */}
+            <div className="space-y-2">
+              <Label htmlFor="paymentTerms">Payment Terms</Label>
+              <Input
+                id="paymentTerms"
+                name="paymentTerms"
+                type="text"
+                value={formData.paymentTerms}
+                onChange={handleChange}
+                placeholder="e.g., Net 30"
+                disabled={isSaving}
               />
             </div>
 
             {/* Notes */}
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="notes">Notes</Label>
               <textarea
                 id="notes"
                 name="notes"
@@ -146,12 +319,13 @@ export default function CreateSupplierPage() {
                 onChange={handleChange}
                 placeholder="Enter any additional notes about this supplier"
                 rows={4}
+                disabled={isSaving}
                 className="w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/50 focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900"
               />
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-4 md:col-span-2">
               <Button
                 type="submit"
                 disabled={isSaving}

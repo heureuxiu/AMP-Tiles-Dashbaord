@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { ShoppingCart, Save, X, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,48 +16,79 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
 type POItem = {
   id: string;
-  productSku: string;
+  product: string;
+  productName: string;
   quantity: number;
   rate: number;
   lineTotal: number;
 };
 
-// Mock data
-const mockSuppliers = [
-  "Tiles International Pty Ltd",
-  "Stone & Marble Wholesale",
-  "Ceramic Pro Supplies",
-  "Porcelain World",
-  "Australian Tile Distributors",
-];
+type Supplier = {
+  _id: string;
+  name: string;
+  supplierNumber: string;
+};
 
-const mockProducts = [
-  "CERAMIC-WHITE-60X60",
-  "PORCELAIN-GREY-80X80",
-  "MARBLE-CLASSIC-60X120",
-  "GRANITE-BLACK-30X30",
-  "TILES-WOOD-LOOK-20X120",
-  "MOSAIC-GLASS-30X30",
-  "STONE-NATURAL-40X40",
-];
+type Product = {
+  _id: string;
+  name: string;
+  sku: string;
+  price: number;
+};
 
 export default function CreatePurchaseOrderPage() {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [supplier, setSupplier] = useState("");
   const [poDate, setPoDate] = useState(new Date().toISOString().split("T")[0]);
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [terms, setTerms] = useState("");
   const [items, setItems] = useState<POItem[]>([
-    { id: "1", productSku: "", quantity: 0, rate: 0, lineTotal: 0 },
+    { id: "1", product: "", productName: "", quantity: 0, rate: 0, lineTotal: 0 },
   ]);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setIsLoadingData(true);
+      const [suppliersResponse, productsResponse] = await Promise.all([
+        api.getSuppliers(),
+        api.getProducts(),
+      ]);
+
+      if (suppliersResponse.success && suppliersResponse.suppliers) {
+        setSuppliers(suppliersResponse.suppliers);
+      }
+
+      if (productsResponse.success && productsResponse.products) {
+        setProducts(productsResponse.products);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to load data";
+      toast.error("Failed to load data", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
 
   const handleAddItem = () => {
     const newItem: POItem = {
       id: Date.now().toString(),
-      productSku: "",
+      product: "",
+      productName: "",
       quantity: 0,
       rate: 0,
       lineTotal: 0,
@@ -82,6 +113,17 @@ export default function CreatePurchaseOrderPage() {
       items.map((item) => {
         if (item.id === id) {
           const updatedItem = { ...item, [field]: value };
+          
+          // If product is changed, update product name and rate
+          if (field === "product") {
+            const selectedProduct = products.find((p) => p._id === value);
+            if (selectedProduct) {
+              updatedItem.productName = selectedProduct.name;
+              updatedItem.rate = selectedProduct.price;
+              updatedItem.lineTotal = updatedItem.quantity * selectedProduct.price;
+            }
+          }
+          
           // Auto-calculate line total
           if (field === "quantity" || field === "rate") {
             updatedItem.lineTotal = updatedItem.quantity * updatedItem.rate;
@@ -99,37 +141,56 @@ export default function CreatePurchaseOrderPage() {
       return false;
     }
 
-    if (items.length === 0) {
-      toast.error("At least one item is required");
+    const validItems = items.filter((item) => item.product && item.quantity > 0);
+    if (validItems.length === 0) {
+      toast.error("Please add at least one item with quantity");
       return false;
-    }
-
-    for (const item of items) {
-      if (!item.productSku) {
-        toast.error("All items must have a product/SKU selected");
-        return false;
-      }
-      if (item.quantity <= 0) {
-        toast.error("Quantity must be greater than 0");
-        return false;
-      }
     }
 
     return true;
   };
 
-  const handleSaveDraft = () => {
-    if (!validateForm()) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-    // TODO: Implement actual API call
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-      toast.success("Purchase Order saved as draft", {
-        description: "PO has been saved successfully",
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      const validItems = items.filter((item) => item.product && item.quantity > 0);
+      
+      const poData = {
+        supplier,
+        poDate,
+        expectedDeliveryDate: expectedDeliveryDate || undefined,
+        items: validItems.map((item) => ({
+          product: item.product,
+          quantity: item.quantity,
+          rate: item.rate,
+        })),
+        notes: notes || undefined,
+        terms: terms || undefined,
+      };
+
+      const response = await api.createPurchaseOrder(poData);
+
+      if (response.success) {
+        toast.success("Purchase order created successfully", {
+          description: `PO ${response.purchaseOrder.poNumber} has been created`,
+        });
+        router.push("/purchase-orders");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to create purchase order";
+      toast.error("Failed to create purchase order", {
+        description: errorMessage,
       });
-      router.push("/purchase-orders");
-    }, 1000);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -196,51 +257,90 @@ export default function CreatePurchaseOrderPage() {
         </div>
 
         <div className="p-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Supplier */}
-            <div className="space-y-2">
-              <Label htmlFor="supplier">
-                Supplier <span className="text-red-500">*</span>
-              </Label>
-              <select
-                id="supplier"
-                value={supplier}
-                onChange={(e) => setSupplier(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 dark:border-neutral-700 dark:bg-neutral-900"
-              >
-                <option value="">Select Supplier</option>
-                {mockSuppliers.map((sup) => (
-                  <option key={sup} value={sup}>
-                    {sup}
-                  </option>
-                ))}
-              </select>
+          {isLoadingData ? (
+            <div className="flex h-32 items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading suppliers and products...</p>
+              </div>
             </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Supplier */}
+              <div className="space-y-2">
+                <Label htmlFor="supplier">
+                  Supplier <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="supplier"
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                  disabled={isSaving}
+                  className="w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900"
+                >
+                  <option value="">Select Supplier</option>
+                  {suppliers.map((sup) => (
+                    <option key={sup._id} value={sup._id}>
+                      {sup.name} ({sup.supplierNumber})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* PO Date */}
-            <div className="space-y-2">
-              <Label htmlFor="poDate">PO Date</Label>
-              <Input
-                id="poDate"
-                type="date"
-                value={poDate}
-                onChange={(e) => setPoDate(e.target.value)}
-              />
-            </div>
+              {/* PO Date */}
+              <div className="space-y-2">
+                <Label htmlFor="poDate">
+                  PO Date <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="poDate"
+                  type="date"
+                  value={poDate}
+                  onChange={(e) => setPoDate(e.target.value)}
+                  disabled={isSaving}
+                />
+              </div>
 
-            {/* Notes */}
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
-              <textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Enter any additional notes"
-                rows={3}
-                className="w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/50 focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 dark:border-neutral-700 dark:bg-neutral-900"
-              />
+              {/* Expected Delivery Date */}
+              <div className="space-y-2">
+                <Label htmlFor="expectedDeliveryDate">Expected Delivery Date</Label>
+                <Input
+                  id="expectedDeliveryDate"
+                  type="date"
+                  value={expectedDeliveryDate}
+                  onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                  disabled={isSaving}
+                />
+              </div>
+
+              {/* Terms */}
+              <div className="space-y-2">
+                <Label htmlFor="terms">Payment Terms</Label>
+                <Input
+                  id="terms"
+                  type="text"
+                  value={terms}
+                  onChange={(e) => setTerms(e.target.value)}
+                  placeholder="e.g., Net 30"
+                  disabled={isSaving}
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Enter any additional notes"
+                  rows={3}
+                  disabled={isSaving}
+                  className="w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/50 focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900"
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </motion.div>
 
@@ -262,6 +362,7 @@ export default function CreatePurchaseOrderPage() {
             <Button
               onClick={handleAddItem}
               size="sm"
+              disabled={isLoadingData || isSaving}
               className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
             >
               <Plus className="h-4 w-4" />
@@ -275,8 +376,8 @@ export default function CreatePurchaseOrderPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="min-w-[200px]">
-                    Product / SKU <span className="text-red-500">*</span>
+                  <TableHead className="min-w-[250px]">
+                    Product <span className="text-red-500">*</span>
                   </TableHead>
                   <TableHead className="min-w-[120px]">
                     Quantity <span className="text-red-500">*</span>
@@ -291,16 +392,17 @@ export default function CreatePurchaseOrderPage() {
                   <TableRow key={item.id}>
                     <TableCell>
                       <select
-                        value={item.productSku}
+                        value={item.product}
                         onChange={(e) =>
-                          handleItemChange(item.id, "productSku", e.target.value)
+                          handleItemChange(item.id, "product", e.target.value)
                         }
-                        className="w-full rounded-md border border-gray-200 bg-slate-100 px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 dark:border-neutral-700 dark:bg-neutral-900"
+                        disabled={isLoadingData || isSaving}
+                        className="w-full rounded-md border border-gray-200 bg-slate-100 px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900"
                       >
                         <option value="">Select Product</option>
-                        {mockProducts.map((product) => (
-                          <option key={product} value={product}>
-                            {product}
+                        {products.map((product) => (
+                          <option key={product._id} value={product._id}>
+                            {product.name} ({product.sku}) - ${product.price}
                           </option>
                         ))}
                       </select>
@@ -314,6 +416,7 @@ export default function CreatePurchaseOrderPage() {
                           handleItemChange(item.id, "quantity", Number(e.target.value))
                         }
                         placeholder="0"
+                        disabled={isSaving}
                         className="w-full"
                       />
                     </TableCell>
@@ -327,6 +430,7 @@ export default function CreatePurchaseOrderPage() {
                           handleItemChange(item.id, "rate", Number(e.target.value))
                         }
                         placeholder="0.00"
+                        disabled={isSaving}
                         className="w-full"
                       />
                     </TableCell>
@@ -338,8 +442,8 @@ export default function CreatePurchaseOrderPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleRemoveItem(item.id)}
-                        className="h-8 w-8 text-red-500 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20"
-                        disabled={items.length === 1}
+                        disabled={items.length === 1 || isSaving}
+                        className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -368,37 +472,29 @@ export default function CreatePurchaseOrderPage() {
           </div>
           <div className="text-right">
             <p className="text-sm text-neutral-600 dark:text-neutral-400">Grand Total</p>
-            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+            <p className="text-2xl font-bold text-neutral-900 dark:text-white">
               {formatCurrency(calculateGrandTotal())}
             </p>
           </div>
         </div>
-      </motion.div>
 
-      {/* Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-        className="flex gap-3"
-      >
-        <Button
-          onClick={handleSaveDraft}
-          disabled={isSaving}
-          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
-        >
-          <Save className="h-4 w-4" />
-          {isSaving ? "Saving..." : "Save as Draft"}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={handleCancel}
-          disabled={isSaving}
-          className="flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Cancel
-        </Button>
+        <div className="mt-6 flex gap-3">
+          <Button
+            onClick={handleSubmit}
+            disabled={isSaving || isLoadingData}
+            className="flex-1 bg-purple-600 hover:bg-purple-700"
+          >
+            {isSaving ? "Saving..." : "Create Purchase Order"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleCancel}
+            disabled={isSaving}
+          >
+            <X className="mr-2 h-4 w-4" />
+            Cancel
+          </Button>
+        </div>
       </motion.div>
     </div>
   );

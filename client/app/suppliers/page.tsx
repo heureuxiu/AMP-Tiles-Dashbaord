@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Users, Edit, Search, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,64 +14,63 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 type Supplier = {
-  id: string;
+  _id: string;
+  supplierNumber: string;
   name: string;
   phone: string;
-  email: string;
+  email?: string;
+  status: string;
   notes?: string;
 };
 
-// Mock suppliers data
-const initialSuppliers: Supplier[] = [
-  {
-    id: "SUP-001",
-    name: "Tiles International Pty Ltd",
-    phone: "+61 3 9999 1111",
-    email: "contact@tilesintl.com.au",
-    notes: "Premium tile supplier",
-  },
-  {
-    id: "SUP-002",
-    name: "Stone & Marble Wholesale",
-    phone: "+61 3 9999 2222",
-    email: "sales@stonemarble.com.au",
-    notes: "Natural stone specialist",
-  },
-  {
-    id: "SUP-003",
-    name: "Ceramic Pro Supplies",
-    phone: "+61 3 9999 3333",
-    email: "info@ceramicpro.com.au",
-  },
-  {
-    id: "SUP-004",
-    name: "Porcelain World",
-    phone: "+61 3 9999 4444",
-    email: "orders@porcelainworld.com.au",
-    notes: "Imported porcelain tiles",
-  },
-  {
-    id: "SUP-005",
-    name: "Australian Tile Distributors",
-    phone: "+61 3 9999 5555",
-    email: "sales@austile.com.au",
-  },
-];
-
 export default function SuppliersPage() {
   const router = useRouter();
-  const [suppliers] = useState<Supplier[]>(initialSuppliers);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    inactive: 0,
+  });
+
+  useEffect(() => {
+    fetchSuppliers();
+  }, []);
+
+  const fetchSuppliers = async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.getSuppliers();
+      
+      if (response.success && response.suppliers) {
+        setSuppliers(response.suppliers);
+        if (response.stats) {
+          setStats(response.stats);
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to load suppliers";
+      toast.error("Failed to load suppliers", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter suppliers based on search
   const filteredSuppliers = suppliers.filter(
     (supplier) =>
       searchQuery === "" ||
       supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      supplier.phone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      supplier.email.toLowerCase().includes(searchQuery.toLowerCase())
+      supplier.supplierNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (supplier.phone && supplier.phone.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (supplier.email && supplier.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const handleEdit = (id: string) => {
@@ -166,88 +165,113 @@ export default function SuppliersPage() {
 
         {/* Table Content */}
         <div className="p-6">
-          <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Supplier Name</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead className="w-0">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSuppliers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Users
-                          className="h-12 w-12 text-neutral-300 dark:text-neutral-600"
-                          strokeWidth={1.5}
-                        />
-                        <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-                          {searchQuery ? "No suppliers found" : "No suppliers added yet"}
-                        </p>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-500">
-                          {searchQuery
-                            ? "Try adjusting your search"
-                            : "Add your first supplier to get started"}
-                        </p>
-                        {!searchQuery && (
-                          <Button
-                            onClick={handleAddSupplier}
-                            className="mt-2 flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
-                          >
-                            <Plus className="h-4 w-4" />
-                            Add Supplier
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
+          {isLoading ? (
+            <div className="flex h-64 items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading suppliers...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Supplier Number</TableHead>
+                    <TableHead>Supplier Name</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-0">Actions</TableHead>
                   </TableRow>
-                ) : (
-                  filteredSuppliers.map((supplier, index) => (
-                    <motion.tr
-                      key={supplier.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="border-b transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50"
-                    >
-                      <TableCell className="font-medium text-neutral-900 dark:text-white">
-                        {supplier.name}
+                </TableHeader>
+                <TableBody>
+                  {filteredSuppliers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-32 text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Users
+                            className="h-12 w-12 text-neutral-300 dark:text-neutral-600"
+                            strokeWidth={1.5}
+                          />
+                          <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+                            {searchQuery ? "No suppliers found" : "No suppliers added yet"}
+                          </p>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-500">
+                            {searchQuery
+                              ? "Try adjusting your search"
+                              : "Add your first supplier to get started"}
+                          </p>
+                          {!searchQuery && (
+                            <Button
+                              onClick={handleAddSupplier}
+                              className="mt-2 flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Add Supplier
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400">
-                        {supplier.phone}
-                      </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400">
-                        {supplier.email}
-                      </TableCell>
-                      <TableCell className="flex items-center gap-1">
-                        {/* Edit Button */}
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/20"
-                            onClick={() => handleEdit(supplier.id)}
-                            aria-label={`Edit ${supplier.name}`}
-                            title="Edit Supplier"
+                    </TableRow>
+                  ) : (
+                    filteredSuppliers.map((supplier, index) => (
+                      <motion.tr
+                        key={supplier._id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className="border-b transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50"
+                      >
+                        <TableCell className="font-mono text-sm text-neutral-600 dark:text-neutral-400">
+                          {supplier.supplierNumber}
+                        </TableCell>
+                        <TableCell className="font-medium text-neutral-900 dark:text-white">
+                          {supplier.name}
+                        </TableCell>
+                        <TableCell className="text-neutral-600 dark:text-neutral-400">
+                          {supplier.phone}
+                        </TableCell>
+                        <TableCell className="text-neutral-600 dark:text-neutral-400">
+                          {supplier.email || "N/A"}
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                              supplier.status === "active"
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+                                : "bg-neutral-100 text-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-400"
+                            }`}
                           >
-                            <Edit className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                          </Button>
-                        </motion.div>
-                      </TableCell>
-                    </motion.tr>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                            {supplier.status.charAt(0).toUpperCase() + supplier.status.slice(1)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="flex items-center gap-1">
+                          {/* Edit Button */}
+                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/20"
+                              onClick={() => handleEdit(supplier._id)}
+                              aria-label={`Edit ${supplier.name}`}
+                              title="Edit Supplier"
+                            >
+                              <Edit className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                            </Button>
+                          </motion.div>
+                        </TableCell>
+                      </motion.tr>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
 
         {/* Footer Summary */}
-        {suppliers.length > 0 && (
+        {!isLoading && suppliers.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -255,9 +279,17 @@ export default function SuppliersPage() {
             className="border-t border-neutral-200/60 p-6 dark:border-neutral-700/60"
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                Total Suppliers: <span className="font-bold text-neutral-900 dark:text-white">{suppliers.length}</span>
-              </span>
+              <div className="flex gap-4 text-sm text-neutral-600 dark:text-neutral-400">
+                <span>
+                  Total: <span className="font-bold text-neutral-900 dark:text-white">{stats.total}</span>
+                </span>
+                <span>
+                  Active: <span className="font-bold text-green-600 dark:text-green-400">{stats.active}</span>
+                </span>
+                <span>
+                  Inactive: <span className="font-bold text-neutral-600 dark:text-neutral-400">{stats.inactive}</span>
+                </span>
+              </div>
               <span className="font-bold text-neutral-900 dark:text-white">
                 Showing: {filteredSuppliers.length}{" "}
                 {searchQuery ? `of ${suppliers.length}` : ""} Suppliers

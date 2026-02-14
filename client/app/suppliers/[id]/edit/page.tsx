@@ -2,51 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Edit, Save, X } from "lucide-react";
+import { Edit, Save, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
-
-// Mock data - replace with actual API call
-const mockSuppliers: Record<string, any> = {
-  "SUP-001": {
-    id: "SUP-001",
-    name: "Tiles International Pty Ltd",
-    phone: "+61 3 9999 1111",
-    email: "contact@tilesintl.com.au",
-    notes: "Premium tile supplier",
-  },
-  "SUP-002": {
-    id: "SUP-002",
-    name: "Stone & Marble Wholesale",
-    phone: "+61 3 9999 2222",
-    email: "sales@stonemarble.com.au",
-    notes: "Natural stone specialist",
-  },
-  "SUP-003": {
-    id: "SUP-003",
-    name: "Ceramic Pro Supplies",
-    phone: "+61 3 9999 3333",
-    email: "info@ceramicpro.com.au",
-    notes: "",
-  },
-  "SUP-004": {
-    id: "SUP-004",
-    name: "Porcelain World",
-    phone: "+61 3 9999 4444",
-    email: "orders@porcelainworld.com.au",
-    notes: "Imported porcelain tiles",
-  },
-  "SUP-005": {
-    id: "SUP-005",
-    name: "Australian Tile Distributors",
-    phone: "+61 3 9999 5555",
-    email: "sales@austile.com.au",
-    notes: "",
-  },
-};
+import { api } from "@/lib/api";
 
 export default function EditSupplierPage() {
   const router = useRouter();
@@ -55,41 +17,72 @@ export default function EditSupplierPage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
+    supplierNumber: "",
     name: "",
+    contactPerson: "",
     phone: "",
     email: "",
+    website: "",
+    abn: "",
+    street: "",
+    city: "",
+    state: "",
+    postcode: "",
+    paymentTerms: "",
+    status: "active",
     notes: "",
   });
 
   // Load supplier data
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const supplier = mockSuppliers[supplierId];
-      if (supplier) {
+    fetchSupplier();
+  }, [supplierId]);
+
+  const fetchSupplier = async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.getSupplier(supplierId);
+      
+      if (response.success && response.supplier) {
+        const supplier = response.supplier;
         setFormData({
-          name: supplier.name,
-          phone: supplier.phone,
-          email: supplier.email,
+          supplierNumber: supplier.supplierNumber || "",
+          name: supplier.name || "",
+          contactPerson: supplier.contactPerson || "",
+          phone: supplier.phone || "",
+          email: supplier.email || "",
+          website: supplier.website || "",
+          abn: supplier.abn || "",
+          street: supplier.address?.street || "",
+          city: supplier.address?.city || "",
+          state: supplier.address?.state || "",
+          postcode: supplier.address?.postcode || "",
+          paymentTerms: supplier.paymentTerms || "",
+          status: supplier.status || "active",
           notes: supplier.notes || "",
         });
-      } else {
-        toast.error("Supplier not found");
-        router.push("/suppliers");
       }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to load supplier";
+      toast.error("Failed to load supplier", {
+        description: errorMessage,
+      });
+      router.push("/suppliers");
+    } finally {
       setIsLoading(false);
-    }, 500);
-  }, [supplierId, router]);
+    }
+  };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validation
@@ -98,15 +91,71 @@ export default function EditSupplierPage() {
       return;
     }
 
-    // TODO: Implement actual API call
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-      toast.success("Supplier updated successfully", {
-        description: `${formData.name} has been updated`,
+    if (!formData.phone.trim()) {
+      toast.error("Phone number is required");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      const supplierData = {
+        name: formData.name,
+        contactPerson: formData.contactPerson || undefined,
+        phone: formData.phone,
+        email: formData.email || undefined,
+        website: formData.website || undefined,
+        abn: formData.abn || undefined,
+        address: {
+          street: formData.street || undefined,
+          city: formData.city || undefined,
+          state: formData.state || undefined,
+          postcode: formData.postcode || undefined,
+        },
+        paymentTerms: formData.paymentTerms || undefined,
+        status: formData.status,
+        notes: formData.notes || undefined,
+      };
+
+      const response = await api.updateSupplier(supplierId, supplierData);
+
+      if (response.success) {
+        toast.success("Supplier updated successfully", {
+          description: `${formData.name} has been updated`,
+        });
+        router.push("/suppliers");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to update supplier";
+      toast.error("Failed to update supplier", {
+        description: errorMessage,
       });
-      router.push("/suppliers");
-    }, 1000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${formData.name}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      const response = await api.deleteSupplier(supplierId);
+
+      if (response.success) {
+        toast.success("Supplier deleted successfully");
+        router.push("/suppliers");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete supplier";
+      toast.error("Failed to delete supplier", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -169,17 +218,24 @@ export default function EditSupplierPage() {
 
         {/* Form Content */}
         <form onSubmit={handleSubmit} className="p-6">
-          <div className="space-y-6">
-            {/* Supplier ID (Read-only) */}
-            <div className="space-y-2">
-              <Label htmlFor="supplierId">Supplier ID</Label>
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Supplier Number (Read-only) */}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="supplierNumber">Supplier Number</Label>
               <Input
-                id="supplierId"
+                id="supplierNumber"
                 type="text"
-                value={supplierId}
+                value={formData.supplierNumber}
                 readOnly
-                className="bg-neutral-50 dark:bg-neutral-900"
+                className="bg-neutral-50 dark:bg-neutral-900 font-mono"
               />
+            </div>
+
+            {/* Basic Information Section */}
+            <div className="space-y-6 md:col-span-2">
+              <h4 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                Basic Information
+              </h4>
             </div>
 
             {/* Supplier Name */}
@@ -194,13 +250,30 @@ export default function EditSupplierPage() {
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="Enter supplier name"
+                disabled={isSaving || isDeleting}
                 required
+              />
+            </div>
+
+            {/* Contact Person */}
+            <div className="space-y-2">
+              <Label htmlFor="contactPerson">Contact Person</Label>
+              <Input
+                id="contactPerson"
+                name="contactPerson"
+                type="text"
+                value={formData.contactPerson}
+                onChange={handleChange}
+                placeholder="Enter contact person name"
+                disabled={isSaving || isDeleting}
               />
             </div>
 
             {/* Phone */}
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone (Optional)</Label>
+              <Label htmlFor="phone">
+                Phone <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="phone"
                 name="phone"
@@ -208,12 +281,14 @@ export default function EditSupplierPage() {
                 value={formData.phone}
                 onChange={handleChange}
                 placeholder="Enter phone number"
+                disabled={isSaving || isDeleting}
+                required
               />
             </div>
 
             {/* Email */}
             <div className="space-y-2">
-              <Label htmlFor="email">Email (Optional)</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 name="email"
@@ -221,12 +296,136 @@ export default function EditSupplierPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="Enter email address"
+                disabled={isSaving || isDeleting}
+              />
+            </div>
+
+            {/* Website */}
+            <div className="space-y-2">
+              <Label htmlFor="website">Website</Label>
+              <Input
+                id="website"
+                name="website"
+                type="url"
+                value={formData.website}
+                onChange={handleChange}
+                placeholder="https://example.com"
+                disabled={isSaving || isDeleting}
+              />
+            </div>
+
+            {/* ABN */}
+            <div className="space-y-2">
+              <Label htmlFor="abn">ABN</Label>
+              <Input
+                id="abn"
+                name="abn"
+                type="text"
+                value={formData.abn}
+                onChange={handleChange}
+                placeholder="Enter ABN"
+                disabled={isSaving || isDeleting}
+              />
+            </div>
+
+            {/* Status */}
+            <div className="space-y-2">
+              <Label htmlFor="status">
+                Status <span className="text-red-500">*</span>
+              </Label>
+              <select
+                id="status"
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                disabled={isSaving || isDeleting}
+                className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+
+            {/* Payment Terms */}
+            <div className="space-y-2">
+              <Label htmlFor="paymentTerms">Payment Terms</Label>
+              <Input
+                id="paymentTerms"
+                name="paymentTerms"
+                type="text"
+                value={formData.paymentTerms}
+                onChange={handleChange}
+                placeholder="e.g., Net 30"
+                disabled={isSaving || isDeleting}
+              />
+            </div>
+
+            {/* Address Section */}
+            <div className="space-y-6 md:col-span-2 pt-4">
+              <h4 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                Address
+              </h4>
+            </div>
+
+            {/* Street */}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="street">Street</Label>
+              <Input
+                id="street"
+                name="street"
+                type="text"
+                value={formData.street}
+                onChange={handleChange}
+                placeholder="Enter street address"
+                disabled={isSaving || isDeleting}
+              />
+            </div>
+
+            {/* City */}
+            <div className="space-y-2">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                name="city"
+                type="text"
+                value={formData.city}
+                onChange={handleChange}
+                placeholder="Enter city"
+                disabled={isSaving || isDeleting}
+              />
+            </div>
+
+            {/* State */}
+            <div className="space-y-2">
+              <Label htmlFor="state">State</Label>
+              <Input
+                id="state"
+                name="state"
+                type="text"
+                value={formData.state}
+                onChange={handleChange}
+                placeholder="Enter state"
+                disabled={isSaving || isDeleting}
+              />
+            </div>
+
+            {/* Postcode */}
+            <div className="space-y-2">
+              <Label htmlFor="postcode">Postcode</Label>
+              <Input
+                id="postcode"
+                name="postcode"
+                type="text"
+                value={formData.postcode}
+                onChange={handleChange}
+                placeholder="Enter postcode"
+                disabled={isSaving || isDeleting}
               />
             </div>
 
             {/* Notes */}
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="notes">Notes</Label>
               <textarea
                 id="notes"
                 name="notes"
@@ -234,29 +433,42 @@ export default function EditSupplierPage() {
                 onChange={handleChange}
                 placeholder="Enter any additional notes about this supplier"
                 rows={4}
+                disabled={isSaving || isDeleting}
                 className="w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/50 focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900"
               />
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4">
-              <Button
-                type="submit"
-                disabled={isSaving}
-                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
-              >
-                <Save className="h-4 w-4" />
-                {isSaving ? "Saving..." : "Save Changes"}
-              </Button>
+            <div className="flex justify-between gap-3 pt-4 md:col-span-2">
+              <div className="flex gap-3">
+                <Button
+                  type="submit"
+                  disabled={isSaving || isDeleting}
+                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
+                >
+                  <Save className="h-4 w-4" />
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCancel}
+                  disabled={isSaving || isDeleting}
+                  className="flex items-center gap-2"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </Button>
+              </div>
               <Button
                 type="button"
-                variant="outline"
-                onClick={handleCancel}
-                disabled={isSaving}
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={isSaving || isDeleting}
                 className="flex items-center gap-2"
               >
-                <X className="h-4 w-4" />
-                Cancel
+                <Trash2 className="h-4 w-4" />
+                {isDeleting ? "Deleting..." : "Delete Supplier"}
               </Button>
             </div>
           </div>

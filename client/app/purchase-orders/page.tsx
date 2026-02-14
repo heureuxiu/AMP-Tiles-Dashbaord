@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { ShoppingCart, Eye, CheckCircle, Edit, Plus, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,99 +21,102 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
-type POStatus = "draft" | "received";
+type POStatus = "draft" | "sent" | "received" | "cancelled";
 
 type PurchaseOrder = {
-  id: string;
-  poNo: string;
+  _id: string;
+  poNumber: string;
   supplierName: string;
   poDate: string;
   status: POStatus;
-  totalItems: number;
-  totalAmount?: number;
+  items: any[];
+  grandTotal: number;
 };
 
-// Mock data
-const initialPurchaseOrders: PurchaseOrder[] = [
-  {
-    id: "1",
-    poNo: "PO-2024-001",
-    supplierName: "Tiles International Pty Ltd",
-    poDate: "2024-01-28",
-    status: "received",
-    totalItems: 5,
-    totalAmount: 15000,
-  },
-  {
-    id: "2",
-    poNo: "PO-2024-002",
-    supplierName: "Stone & Marble Wholesale",
-    poDate: "2024-01-29",
-    status: "draft",
-    totalItems: 3,
-    totalAmount: 8500,
-  },
-  {
-    id: "3",
-    poNo: "PO-2024-003",
-    supplierName: "Ceramic Pro Supplies",
-    poDate: "2024-01-30",
-    status: "draft",
-    totalItems: 8,
-    totalAmount: 22000,
-  },
-  {
-    id: "4",
-    poNo: "PO-2024-004",
-    supplierName: "Porcelain World",
-    poDate: "2024-01-26",
-    status: "received",
-    totalItems: 4,
-    totalAmount: 12500,
-  },
-];
-
-const mockSuppliers = [
-  "All Suppliers",
-  "Tiles International Pty Ltd",
-  "Stone & Marble Wholesale",
-  "Ceramic Pro Supplies",
-  "Porcelain World",
-  "Australian Tile Distributors",
-];
+type Supplier = {
+  _id: string;
+  name: string;
+};
 
 export default function PurchaseOrdersPage() {
   const router = useRouter();
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(initialPurchaseOrders);
-  const [supplierFilter, setSupplierFilter] = useState("All Suppliers");
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [supplierFilter, setSupplierFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | POStatus>("all");
+  const [stats, setStats] = useState({
+    total: 0,
+    draft: 0,
+    sent: 0,
+    received: 0,
+    cancelled: 0,
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [poResponse, suppliersResponse] = await Promise.all([
+        api.getPurchaseOrders(),
+        api.getSuppliers(),
+      ]);
+
+      if (poResponse.success && poResponse.purchaseOrders) {
+        setPurchaseOrders(poResponse.purchaseOrders);
+        if (poResponse.stats) {
+          setStats(poResponse.stats);
+        }
+      }
+
+      if (suppliersResponse.success && suppliersResponse.suppliers) {
+        setSuppliers(suppliersResponse.suppliers);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to load data";
+      toast.error("Failed to load purchase orders", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter purchase orders
   const filteredPurchaseOrders = purchaseOrders.filter((po) => {
-    const matchesSupplier =
-      supplierFilter === "All Suppliers" || po.supplierName === supplierFilter;
+    const matchesSupplier = supplierFilter === "all" || po.supplier?._id === supplierFilter;
     const matchesStatus = statusFilter === "all" || po.status === statusFilter;
     return matchesSupplier && matchesStatus;
   });
 
-  const handleView = (poNo: string) => {
-    router.push(`/purchase-orders/${poNo}`);
+  const handleView = (id: string) => {
+    router.push(`/purchase-orders/${id}`);
   };
 
-  const handleEdit = (poNo: string) => {
-    router.push(`/purchase-orders/${poNo}/edit`);
+  const handleEdit = (id: string) => {
+    router.push(`/purchase-orders/${id}/edit`);
   };
 
-  const handleMarkReceived = (poNo: string) => {
-    setPurchaseOrders(
-      purchaseOrders.map((po) =>
-        po.poNo === poNo ? { ...po, status: "received" as POStatus } : po
-      )
-    );
-    toast.success("Purchase Order marked as received", {
-      description: `${poNo} has been marked as received`,
-    });
+  const handleMarkReceived = async (id: string, poNumber: string) => {
+    try {
+      const response = await api.receivePurchaseOrder(id);
+      if (response.success) {
+        toast.success("Purchase Order marked as received", {
+          description: `${poNumber} has been marked as received and stock updated`,
+        });
+        fetchData();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to mark as received";
+      toast.error("Failed to mark as received", {
+        description: errorMessage,
+      });
+    }
   };
 
   const handleCreatePO = () => {
@@ -121,18 +124,32 @@ export default function PurchaseOrdersPage() {
   };
 
   const getStatusBadge = (status: POStatus) => {
-    if (status === "received") {
-      return (
-        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
-          Received
-        </Badge>
-      );
+    switch (status) {
+      case "received":
+        return (
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
+            Received
+          </Badge>
+        );
+      case "sent":
+        return (
+          <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
+            Sent
+          </Badge>
+        );
+      case "cancelled":
+        return (
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">
+            Cancelled
+          </Badge>
+        );
+      default:
+        return (
+          <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
+            Draft
+          </Badge>
+        );
     }
-    return (
-      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
-        Draft
-      </Badge>
-    );
   };
 
   const formatDate = (dateString: string) => {
@@ -151,7 +168,7 @@ export default function PurchaseOrdersPage() {
     }).format(amount);
   };
 
-  const hasActiveFilters = supplierFilter !== "All Suppliers" || statusFilter !== "all";
+  const hasActiveFilters = supplierFilter !== "all" || statusFilter !== "all";
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -220,16 +237,21 @@ export default function PurchaseOrdersPage() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
-                  {supplierFilter}
+                  {supplierFilter === "all" 
+                    ? "All Suppliers" 
+                    : suppliers.find(s => s._id === supplierFilter)?.name || "All Suppliers"}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
-                {mockSuppliers.map((supplier) => (
+                <DropdownMenuItem onClick={() => setSupplierFilter("all")}>
+                  All Suppliers
+                </DropdownMenuItem>
+                {suppliers.map((supplier) => (
                   <DropdownMenuItem
-                    key={supplier}
-                    onClick={() => setSupplierFilter(supplier)}
+                    key={supplier._id}
+                    onClick={() => setSupplierFilter(supplier._id)}
                   >
-                    {supplier}
+                    {supplier.name}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -243,6 +265,10 @@ export default function PurchaseOrdersPage() {
                     ? "All Status"
                     : statusFilter === "draft"
                     ? "Draft"
+                    : statusFilter === "sent"
+                    ? "Sent"
+                    : statusFilter === "cancelled"
+                    ? "Cancelled"
                     : "Received"}
                 </Button>
               </DropdownMenuTrigger>
@@ -253,8 +279,14 @@ export default function PurchaseOrdersPage() {
                 <DropdownMenuItem onClick={() => setStatusFilter("draft")}>
                   Draft
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("sent")}>
+                  Sent
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setStatusFilter("received")}>
                   Received
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("cancelled")}>
+                  Cancelled
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -265,7 +297,7 @@ export default function PurchaseOrdersPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setSupplierFilter("All Suppliers");
+                  setSupplierFilter("all");
                   setStatusFilter("all");
                 }}
                 className="gap-2 text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
@@ -285,126 +317,123 @@ export default function PurchaseOrdersPage() {
 
         {/* Table Content */}
         <div className="p-6">
-          <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>PO No</TableHead>
-                  <TableHead>Supplier Name</TableHead>
-                  <TableHead>PO Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Total Items</TableHead>
-                  <TableHead className="w-0">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPurchaseOrders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="h-32 text-center">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <ShoppingCart
-                          className="h-12 w-12 text-neutral-300 dark:text-neutral-600"
-                          strokeWidth={1.5}
-                        />
-                        <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-                          No purchase orders found
-                        </p>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-500">
-                          {hasActiveFilters
-                            ? "Try adjusting your filters"
-                            : "Create your first purchase order to get started"}
-                        </p>
-                        {!hasActiveFilters && (
-                          <Button
-                            onClick={handleCreatePO}
-                            className="mt-2 flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
-                          >
-                            <Plus className="h-4 w-4" />
-                            Create Purchase Order
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
+          {isLoading ? (
+            <div className="flex h-64 items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading purchase orders...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>PO No</TableHead>
+                    <TableHead>Supplier Name</TableHead>
+                    <TableHead>PO Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Total Items</TableHead>
+                    <TableHead>Total Amount</TableHead>
+                    <TableHead className="w-0">Actions</TableHead>
                   </TableRow>
-                ) : (
-                  filteredPurchaseOrders.map((po, index) => (
-                    <motion.tr
-                      key={po.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="border-b transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50"
-                    >
-                      <TableCell className="font-mono text-sm font-semibold text-neutral-900 dark:text-white">
-                        {po.poNo}
+                </TableHeader>
+                <TableBody>
+                  {filteredPurchaseOrders.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-32 text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <ShoppingCart
+                            className="h-12 w-12 text-neutral-300 dark:text-neutral-600"
+                            strokeWidth={1.5}
+                          />
+                          <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+                            No purchase orders found
+                          </p>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-500">
+                            {hasActiveFilters
+                              ? "Try adjusting your filters"
+                              : "Create your first purchase order to get started"}
+                          </p>
+                          {!hasActiveFilters && (
+                            <Button
+                              onClick={handleCreatePO}
+                              className="mt-2 flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Create Purchase Order
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="font-medium text-neutral-900 dark:text-white">
-                        {po.supplierName}
-                      </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400">
-                        {formatDate(po.poDate)}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(po.status)}</TableCell>
-                      <TableCell className="font-semibold text-neutral-900 dark:text-white">
-                        {po.totalItems} items
-                      </TableCell>
-                      <TableCell className="flex items-center gap-1">
-                        {/* View Button */}
-                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                            onClick={() => handleView(po.poNo)}
-                            aria-label={`View ${po.poNo}`}
-                            title="View Purchase Order"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </motion.div>
-
-                        {/* Mark as Received Button (only for draft) */}
-                        {po.status === "draft" && (
+                    </TableRow>
+                  ) : (
+                    filteredPurchaseOrders.map((po, index) => (
+                      <motion.tr
+                        key={po._id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className="border-b transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50"
+                      >
+                        <TableCell className="font-mono text-sm font-semibold text-neutral-900 dark:text-white">
+                          {po.poNumber}
+                        </TableCell>
+                        <TableCell className="font-medium text-neutral-900 dark:text-white">
+                          {po.supplierName}
+                        </TableCell>
+                        <TableCell className="text-neutral-600 dark:text-neutral-400">
+                          {formatDate(po.poDate)}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(po.status)}</TableCell>
+                        <TableCell className="font-semibold text-neutral-900 dark:text-white">
+                          {po.items?.length || 0} items
+                        </TableCell>
+                        <TableCell className="font-semibold text-neutral-900 dark:text-white">
+                          {formatCurrency(po.grandTotal)}
+                        </TableCell>
+                        <TableCell className="flex items-center gap-1">
+                          {/* View Button */}
                           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 rounded-full hover:bg-green-100 dark:hover:bg-green-900/20"
-                              onClick={() => handleMarkReceived(po.poNo)}
-                              aria-label={`Mark ${po.poNo} as received`}
-                              title="Mark as Received"
+                              className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                              onClick={() => handleView(po._id)}
+                              aria-label={`View ${po.poNumber}`}
+                              title="View Purchase Order"
                             >
-                              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                              <Eye className="h-4 w-4" />
                             </Button>
                           </motion.div>
-                        )}
 
-                        {/* Edit Button (only for draft) */}
-                        {po.status === "draft" && (
-                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/20"
-                              onClick={() => handleEdit(po.poNo)}
-                              aria-label={`Edit ${po.poNo}`}
-                              title="Edit Purchase Order"
-                            >
-                              <Edit className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                            </Button>
-                          </motion.div>
-                        )}
-                      </TableCell>
-                    </motion.tr>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                          {/* Mark as Received Button (only for draft/sent) */}
+                          {(po.status === "draft" || po.status === "sent") && (
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full hover:bg-green-100 dark:hover:bg-green-900/20"
+                                onClick={() => handleMarkReceived(po._id, po.poNumber)}
+                                aria-label={`Mark ${po.poNumber} as received`}
+                                title="Mark as Received"
+                              >
+                                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                              </Button>
+                            </motion.div>
+                          )}
+                        </TableCell>
+                      </motion.tr>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
 
         {/* Footer Summary */}
-        {purchaseOrders.length > 0 && (
+        {!isLoading && purchaseOrders.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -414,11 +443,14 @@ export default function PurchaseOrdersPage() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-600 dark:text-neutral-400">
                 <div className="flex items-center gap-2">
+                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
+                    {stats.draft} Draft
+                  </Badge>
                   <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
-                    {purchaseOrders.filter((po) => po.status === "draft").length} Draft
+                    {stats.sent} Sent
                   </Badge>
                   <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
-                    {purchaseOrders.filter((po) => po.status === "received").length} Received
+                    {stats.received} Received
                   </Badge>
                 </div>
               </div>
