@@ -12,25 +12,28 @@ connectDB();
 
 const app = express();
 
-// Body parser middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Cookie parser middleware
-app.use(cookieParser());
-
-// CORS middleware
+// CORS middleware (MUST be before other middleware)
 app.use(
   cors({
     origin: process.env.CLIENT_URL || 'http://localhost:3000',
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
+// Body parser middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Cookie parser middleware
+app.use(cookieParser());
 
 // Mount routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/stock', require('./routes/stockRoutes'));
+app.use('/api/quotations', require('./routes/quotationRoutes'));
 
 // Health check route
 app.get('/api/health', (req, res) => {

@@ -1,9 +1,11 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion, type Variants } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
+import { api } from "@/lib/api";
 
 // Generate sample data for each stat
 const generateData = (baseValue: number, trend: "up" | "down") => {
@@ -23,44 +25,15 @@ const generateData = (baseValue: number, trend: "up" | "down") => {
   return data;
 };
 
-const summary = [
-  {
-    name: "Total Products",
-    code: "PRD",
-    value: "156",
-    change: "+18",
-    percentageChange: "+13.1%",
-    changeType: "positive" as const,
-    data: generateData(156, "up"),
-  },
-  {
-    name: "Stock Quantity",
-    code: "STK",
-    value: "2,847",
-    change: "+219",
-    percentageChange: "+8.3%",
-    changeType: "positive" as const,
-    data: generateData(2847, "up"),
-  },
-  {
-    name: "Quotations",
-    code: "QTE",
-    value: "43",
-    change: "+6",
-    percentageChange: "+16.2%",
-    changeType: "positive" as const,
-    data: generateData(43, "up"),
-  },
-  {
-    name: "Invoices",
-    code: "INV",
-    value: "28",
-    change: "-1",
-    percentageChange: "-3.4%",
-    changeType: "negative" as const,
-    data: generateData(28, "down"),
-  },
-];
+type SummaryItem = {
+  name: string;
+  code: string;
+  value: string;
+  change: string;
+  percentageChange: string;
+  changeType: "positive" | "negative";
+  data: Array<{ index: number; value: number }>;
+};
 
 const sanitizeName = (name: string) => {
   return name
@@ -88,6 +61,86 @@ const itemVariants: Variants = {
 };
 
 export function SummaryCards() {
+  const [summary, setSummary] = useState<SummaryItem[]>([
+    {
+      name: "Total Products",
+      code: "PRD",
+      value: "0",
+      change: "0",
+      percentageChange: "0%",
+      changeType: "positive",
+      data: generateData(0, "up"),
+    },
+    {
+      name: "Stock Quantity",
+      code: "STK",
+      value: "0",
+      change: "0",
+      percentageChange: "0%",
+      changeType: "positive",
+      data: generateData(0, "up"),
+    },
+    {
+      name: "Quotations",
+      code: "QTE",
+      value: "43",
+      change: "+6",
+      percentageChange: "+16.2%",
+      changeType: "positive",
+      data: generateData(43, "up"),
+    },
+    {
+      name: "Invoices",
+      code: "INV",
+      value: "28",
+      change: "-1",
+      percentageChange: "-3.4%",
+      changeType: "negative",
+      data: generateData(28, "down"),
+    },
+  ]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      const statsResponse = await api.getStockStats();
+      
+      if (statsResponse.success && statsResponse.stats) {
+        const { totalProducts, totalStock } = statsResponse.stats;
+        
+        setSummary((prev) => [
+          {
+            ...prev[0],
+            value: totalProducts.toString(),
+            change: "+0",
+            percentageChange: "0%",
+            changeType: "positive",
+            data: generateData(totalProducts, "up"),
+          },
+          {
+            ...prev[1],
+            value: totalStock.toLocaleString(),
+            change: "+0",
+            percentageChange: "0%",
+            changeType: "positive",
+            data: generateData(totalStock, "up"),
+          },
+          prev[2],
+          prev[3],
+        ]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <motion.div 
       className="grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4"

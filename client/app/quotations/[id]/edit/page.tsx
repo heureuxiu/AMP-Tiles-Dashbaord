@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Plus, Trash2, FileText, Save, X as XIcon, ArrowLeft } from "lucide-react";
@@ -8,50 +8,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
-// Mock products data
-const productsData = [
-  { id: "1", name: "Amaze Grey Polished", rate: 45.50 },
-  { id: "2", name: "Amaze Luxury Matt", rate: 42.00 },
-  { id: "3", name: "Artic Apricot Matt", rate: 38.75 },
-  { id: "4", name: "Artic Cloud Matt", rate: 40.00 },
-  { id: "5", name: "Aspen Ash Grey", rate: 35.50 },
-  { id: "6", name: "Bianco Matt", rate: 48.00 },
-];
-
-type QuotationStatus = "draft" | "converted";
-
-// Mock existing quotation data
-const mockQuotationData = {
-  id: "QT-2024-001",
-  customerName: "John Smith",
-  customerPhone: "+61 400 123 456",
-  date: "2024-01-28",
-  notes: "Customer requested delivery by end of month",
-  status: "draft" as QuotationStatus,
-  items: [
-    {
-      id: "1",
-      productId: "1",
-      productName: "Amaze Grey Polished",
-      quantity: 50,
-      rate: 45.50,
-      lineTotal: 2275.00,
-    },
-    {
-      id: "2",
-      productId: "4",
-      productName: "Artic Cloud Matt",
-      quantity: 30,
-      rate: 40.00,
-      lineTotal: 1200.00,
-    },
-  ],
+type Product = {
+  _id: string;
+  name: string;
+  sku: string;
+  price: number;
 };
+
+type QuotationStatus = "draft" | "sent" | "converted" | "expired" | "cancelled";
 
 type QuotationItem = {
   id: string;
-  productId: string;
+  product: string;
   productName: string;
   quantity: number;
   rate: number;
@@ -63,23 +33,74 @@ export default function EditQuotationPage() {
   const router = useRouter();
   const quotationId = params.id as string;
 
-  // In real app, fetch quotation data based on ID
-  const existingQuotation = mockQuotationData;
-
-  const [customerName, setCustomerName] = useState(existingQuotation.customerName);
-  const [customerPhone, setCustomerPhone] = useState(existingQuotation.customerPhone);
-  const [quotationDate, setQuotationDate] = useState(existingQuotation.date);
-  const [notes, setNotes] = useState(existingQuotation.notes);
-  const [status] = useState(existingQuotation.status);
-  const [items, setItems] = useState<QuotationItem[]>(existingQuotation.items);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const [quotationNumber, setQuotationNumber] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [quotationDate, setQuotationDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [status, setStatus] = useState<QuotationStatus>("draft");
+  const [items, setItems] = useState<QuotationItem[]>([]);
 
   const isReadOnly = status === "converted";
+
+  useEffect(() => {
+    fetchData();
+  }, [quotationId]);
+
+  const fetchData = async () => {
+    try {
+      setIsLoadingData(true);
+      
+      // Fetch products and quotation in parallel
+      const [productsResponse, quotationResponse] = await Promise.all([
+        api.getProducts(),
+        api.getQuotation(quotationId),
+      ]);
+
+      if (productsResponse.success && productsResponse.products) {
+        setProducts(productsResponse.products);
+      }
+
+      if (quotationResponse.success && quotationResponse.quotation) {
+        const q = quotationResponse.quotation;
+        setQuotationNumber(q.quotationNumber);
+        setCustomerName(q.customerName);
+        setCustomerPhone(q.customerPhone || "");
+        setQuotationDate(q.quotationDate.split("T")[0]); // Format date
+        setNotes(q.notes || "");
+        setStatus(q.status);
+        
+        // Map items to frontend format
+        const mappedItems = q.items.map((item: any, index: number) => ({
+          id: `${item._id || index}`,
+          product: item.product._id || item.product,
+          productName: item.productName,
+          quantity: item.quantity,
+          rate: item.rate,
+          lineTotal: item.lineTotal,
+        }));
+        
+        setItems(mappedItems);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to load data";
+      toast.error("Failed to load quotation", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
 
   const handleAddItem = () => {
     if (isReadOnly) return;
     const newItem: QuotationItem = {
       id: Date.now().toString(),
-      productId: "",
+      product: "",
       productName: "",
       quantity: 0,
       rate: 0,
@@ -99,7 +120,7 @@ export default function EditQuotationPage() {
 
   const handleProductChange = (itemId: string, productId: string) => {
     if (isReadOnly) return;
-    const product = productsData.find((p) => p.id === productId);
+    const product = products.find((p) => p._id === productId);
     if (!product) return;
 
     setItems(
@@ -107,10 +128,10 @@ export default function EditQuotationPage() {
         item.id === itemId
           ? {
               ...item,
-              productId: product.id,
+              product: product._id,
               productName: product.name,
-              rate: product.rate,
-              lineTotal: item.quantity * product.rate,
+              rate: product.price,
+              lineTotal: item.quantity * product.price,
             }
           : item
       )
@@ -151,7 +172,7 @@ export default function EditQuotationPage() {
     return items.reduce((sum, item) => sum + item.lineTotal, 0);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (isReadOnly) {
@@ -165,7 +186,7 @@ export default function EditQuotationPage() {
     }
 
     const validItems = items.filter(
-      (item) => item.productId && item.quantity > 0
+      (item) => item.product && item.quantity > 0
     );
 
     if (validItems.length === 0) {
@@ -173,14 +194,40 @@ export default function EditQuotationPage() {
       return;
     }
 
-    // TODO: Save to backend
-    toast.success("Quotation updated successfully", {
-      description: `${quotationId} has been updated`,
-    });
+    try {
+      setIsSaving(true);
 
-    setTimeout(() => {
-      router.push("/quotations");
-    }, 1000);
+      const quotationData = {
+        customerName,
+        customerPhone,
+        quotationDate,
+        notes,
+        items: validItems.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          rate: item.rate,
+        })),
+      };
+
+      const response = await api.updateQuotation(quotationId, quotationData);
+
+      if (response.success) {
+        toast.success("Quotation updated successfully", {
+          description: `${quotationNumber} has been updated`,
+        });
+
+        setTimeout(() => {
+          router.push("/quotations");
+        }, 1000);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to update quotation";
+      toast.error("Failed to update quotation", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -206,6 +253,7 @@ export default function EditQuotationPage() {
             variant="outline"
             size="icon"
             onClick={() => router.push("/quotations")}
+            disabled={isSaving}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -219,16 +267,22 @@ export default function EditQuotationPage() {
                 className={
                   status === "draft"
                     ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                    : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+                    : status === "sent"
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400"
+                    : status === "converted"
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+                    : "bg-neutral-100 text-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-400"
                 }
               >
-                {status === "draft" ? "Draft" : "Converted"}
+                {status.charAt(0).toUpperCase() + status.slice(1)}
               </Badge>
             </div>
             <p className="mt-1 text-neutral-600 dark:text-neutral-400">
-              {isReadOnly
+              {isLoadingData
+                ? "Loading..."
+                : isReadOnly
                 ? "This quotation has been converted and is read-only"
-                : `Editing ${quotationId}`}
+                : `Editing ${quotationNumber}`}
             </p>
           </div>
         </div>
@@ -244,7 +298,15 @@ export default function EditQuotationPage() {
       )}
 
       <form onSubmit={handleSave}>
-        <div className="grid gap-6 lg:grid-cols-3">
+        {isLoadingData ? (
+          <div className="flex h-96 items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading quotation data...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Form Section */}
           <div className="lg:col-span-2 space-y-6">
             {/* Basic Information Section */}
@@ -288,14 +350,14 @@ export default function EditQuotationPage() {
                   >
                     Customer Name <span className="text-red-500">*</span>
                   </label>
-                  <Input
-                    id="customerName"
-                    placeholder="Enter customer name"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    disabled={isReadOnly}
-                    required
-                  />
+                    <Input
+                      id="customerName"
+                      placeholder="Enter customer name"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      disabled={isReadOnly || isSaving}
+                      required
+                    />
                 </div>
 
                 {/* Customer Phone */}
@@ -307,14 +369,14 @@ export default function EditQuotationPage() {
                     Customer Phone{" "}
                     <span className="text-neutral-400">(Optional)</span>
                   </label>
-                  <Input
-                    id="customerPhone"
-                    type="tel"
-                    placeholder="Enter phone number"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    disabled={isReadOnly}
-                  />
+                    <Input
+                      id="customerPhone"
+                      type="tel"
+                      placeholder="Enter phone number"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      disabled={isReadOnly || isSaving}
+                    />
                 </div>
 
                 {/* Quotation Date */}
@@ -325,14 +387,14 @@ export default function EditQuotationPage() {
                   >
                     Quotation Date <span className="text-red-500">*</span>
                   </label>
-                  <Input
-                    id="quotationDate"
-                    type="date"
-                    value={quotationDate}
-                    onChange={(e) => setQuotationDate(e.target.value)}
-                    disabled={isReadOnly}
-                    required
-                  />
+                    <Input
+                      id="quotationDate"
+                      type="date"
+                      value={quotationDate}
+                      onChange={(e) => setQuotationDate(e.target.value)}
+                      disabled={isReadOnly || isSaving}
+                      required
+                    />
                 </div>
 
                 {/* Notes */}
@@ -343,15 +405,15 @@ export default function EditQuotationPage() {
                   >
                     Notes <span className="text-neutral-400">(Optional)</span>
                   </label>
-                  <textarea
-                    id="notes"
-                    rows={3}
-                    placeholder="Add any additional notes..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    disabled={isReadOnly}
-                    className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
-                  />
+                    <textarea
+                      id="notes"
+                      rows={3}
+                      placeholder="Add any additional notes..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      disabled={isReadOnly || isSaving}
+                      className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
+                    />
                 </div>
               </div>
             </motion.div>
@@ -418,18 +480,18 @@ export default function EditQuotationPage() {
                         >
                           <td className="py-4 pr-4">
                             <select
-                              value={item.productId}
+                              value={item.product}
                               onChange={(e) =>
                                 handleProductChange(item.id, e.target.value)
                               }
-                              disabled={isReadOnly}
+                              disabled={isReadOnly || isSaving}
                               className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
                               required
                             >
                               <option value="">Select product</option>
-                              {productsData.map((product) => (
-                                <option key={product.id} value={product.id}>
-                                  {product.name}
+                              {products.map((product) => (
+                                <option key={product._id} value={product._id}>
+                                  {product.name} ({product.sku})
                                 </option>
                               ))}
                             </select>
@@ -447,7 +509,7 @@ export default function EditQuotationPage() {
                                   parseInt(e.target.value) || 0
                                 )
                               }
-                              disabled={isReadOnly}
+                              disabled={isReadOnly || isSaving}
                               className="w-24"
                               required
                             />
@@ -465,7 +527,7 @@ export default function EditQuotationPage() {
                                   parseFloat(e.target.value) || 0
                                 )
                               }
-                              disabled={isReadOnly}
+                              disabled={isReadOnly || isSaving}
                               className="w-32"
                               required
                             />
@@ -539,9 +601,9 @@ export default function EditQuotationPage() {
               {/* Action Buttons */}
               {!isReadOnly && (
                 <div className="space-y-3">
-                  <Button type="submit" className="w-full gap-2" size="lg">
+                  <Button type="submit" className="w-full gap-2" size="lg" disabled={isSaving}>
                     <Save className="h-4 w-4" />
-                    Save Changes
+                    {isSaving ? "Saving..." : "Save Changes"}
                   </Button>
                   <Button
                     type="button"
@@ -549,6 +611,7 @@ export default function EditQuotationPage() {
                     className="w-full gap-2"
                     size="lg"
                     onClick={handleCancel}
+                    disabled={isSaving}
                   >
                     <XIcon className="h-4 w-4" />
                     Cancel
@@ -570,6 +633,7 @@ export default function EditQuotationPage() {
             </div>
           </motion.div>
         </div>
+        )}
       </form>
     </div>
   );

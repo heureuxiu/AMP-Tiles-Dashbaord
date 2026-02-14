@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, useEffect, useMemo } from "react";
 import { PencilIcon, Trash2Icon, ArchiveIcon, Package, Search, X, ChevronDown, Filter } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -17,86 +17,70 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
-const stockData = [
-  {
-    id: "1",
-    productName: "Amaze Grey Polished",
-    model: "Marble Look Porcelain Tile",
-    src: "/assets/products/amaze-grey.jpg",
-    fallback: "AGP",
-    category: "Royal Series",
-    finish: "Polished",
-    stock: 245,
-  },
-  {
-    id: "2",
-    productName: "Amaze Luxury Matt",
-    model: "Marble Look Porcelain Tile",
-    src: "/assets/products/amaze-luxury.jpg",
-    fallback: "ALM",
-    category: "Royal Series",
-    finish: "Matt",
-    stock: 156,
-  },
-  {
-    id: "3",
-    productName: "Artic Apricot Matt",
-    model: "Porcelain Tile",
-    src: "/assets/products/artic-apricot.jpg",
-    fallback: "AAM",
-    category: "Artic Series",
-    finish: "Matt",
-    stock: 89,
-  },
-  {
-    id: "4",
-    productName: "Artic Cloud Matt",
-    model: "Porcelain Tile",
-    src: "/assets/products/artic-cloud.jpg",
-    fallback: "ACM",
-    category: "Artic Series",
-    finish: "Matt",
-    stock: 23,
-  },
-  {
-    id: "5",
-    productName: "Aspen Ash Grey",
-    model: "Steel Matt Porcelain",
-    src: "/assets/products/aspen-ash.jpg",
-    fallback: "AAG",
-    category: "Galaxy Series",
-    finish: "Matt",
-    stock: 12,
-  },
-  {
-    id: "6",
-    productName: "Bianco Matt",
-    model: "Marble Look Porcelain",
-    src: "/assets/products/bianco-matt.jpg",
-    fallback: "BMM",
-    category: "Marella Series",
-    finish: "Matt",
-    stock: 0,
-  },
-];
-
-const categories = ["Royal Series", "Artic Series", "Galaxy Series", "Marella Series"];
-const finishes = ["Matt", "Polished", "Gloss", "In & Out (P4)"];
+type Product = {
+  _id: string;
+  name: string;
+  sku: string;
+  description: string;
+  category: string;
+  finish: string;
+  stock: number;
+  unit: string;
+  image?: string;
+};
 
 export function StockOverview() {
   const id = useId();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedFinishes, setSelectedFinishes] = useState<string[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
 
+  // Load products on mount
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.getProducts();
+      if (response.success && response.products) {
+        setProducts(response.products);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch products";
+      toast.error("Failed to load products", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Extract unique categories and finishes from products
+  const categories = useMemo(() => {
+    const uniqueCategories = [...new Set(products.map((p) => p.category))];
+    return uniqueCategories.filter(Boolean).sort();
+  }, [products]);
+
+  const finishes = useMemo(() => {
+    const uniqueFinishes = [...new Set(products.map((p) => p.finish))];
+    return uniqueFinishes.filter(Boolean).sort();
+  }, [products]);
+
   // Filter logic
-  const filteredData = stockData.filter((item) => {
+  const filteredData = products.filter((item) => {
     const matchesSearch =
       searchQuery === "" ||
-      item.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.model.toLowerCase().includes(searchQuery.toLowerCase());
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesCategory =
       selectedCategories.length === 0 || selectedCategories.includes(item.category);
@@ -422,17 +406,25 @@ export function StockOverview() {
             transition={{ duration: 0.3 }}
             className="mt-4 text-sm text-neutral-600 dark:text-neutral-400"
           >
-            Showing {filteredData.length} of {stockData.length} products
+            Showing {filteredData.length} of {products.length} products
           </motion.div>
         )}
       </motion.div>
 
       {/* Table Content */}
       <div className="p-4 sm:p-6">
-        <div className="overflow-x-auto -mx-4 sm:mx-0">
-          <div className="inline-block min-w-full align-middle">
-            <div className="overflow-hidden rounded-lg border border-neutral-200/60 dark:border-neutral-700/60">
-              <Table>
+        {isLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading products...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <div className="overflow-hidden rounded-lg border border-neutral-200/60 dark:border-neutral-700/60">
+                <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="hidden sm:table-cell">
@@ -464,27 +456,27 @@ export function StockOverview() {
 
                 return (
                   <motion.tr
-                    key={item.id}
+                    key={item._id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.05 }}
                     className="border-b transition-colors hover:bg-neutral-100/50 data-[state=selected]:bg-neutral-100 dark:hover:bg-neutral-800/50 dark:data-[state=selected]:bg-neutral-800"
                   >
                     <TableCell className="hidden sm:table-cell">
-                      <Checkbox id={`table-checkbox-${item.id}`} aria-label={`product-checkbox-${item.id}`} />
+                      <Checkbox id={`table-checkbox-${item._id}`} aria-label={`product-checkbox-${item._id}`} />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 sm:gap-3">
                         <Avatar className="rounded-lg h-10 w-10 sm:h-12 sm:w-12">
-                          <AvatarImage src={item.src} alt={item.model} />
+                          <AvatarImage src={item.image || "/assets/products/placeholder.jpg"} alt={item.name} />
                           <AvatarFallback className="text-xs rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
                             <Package className="h-5 w-5 sm:h-6 sm:w-6 text-neutral-500" strokeWidth={1.5} />
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
-                          <div className="font-medium text-sm sm:text-base text-neutral-900 dark:text-white truncate">{item.productName}</div>
+                          <div className="font-medium text-sm sm:text-base text-neutral-900 dark:text-white truncate">{item.name}</div>
                           <span className="mt-0.5 text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400 block md:hidden">{item.category}</span>
-                          <span className="mt-0.5 text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400">{item.model}</span>
+                          <span className="mt-0.5 text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400">{item.sku}</span>
                         </div>
                       </div>
                     </TableCell>
@@ -503,27 +495,29 @@ export function StockOverview() {
                         >
                           {item.stock}
                         </span>
-                        <span className="text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400">boxes</span>
+                        <span className="text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400">{item.unit}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-0.5">
                         <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                            aria-label={`product-${item.id}-edit`}
-                          >
-                            <PencilIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                          </Button>
+                          <Link href={`/inventory/products`}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                              aria-label={`product-${item._id}-edit`}
+                            >
+                              <PencilIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                          </Link>
                         </motion.div>
                         <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                            aria-label={`product-${item.id}-remove`}
+                            aria-label={`product-${item._id}-remove`}
                           >
                             <Trash2Icon className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
@@ -533,7 +527,7 @@ export function StockOverview() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                            aria-label={`product-${item.id}-archive`}
+                            aria-label={`product-${item._id}-archive`}
                           >
                             <ArchiveIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
@@ -545,10 +539,11 @@ export function StockOverview() {
               })
               )}
             </TableBody>
-              </Table>
+                </Table>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Footer Summary */}
@@ -574,7 +569,7 @@ export function StockOverview() {
             </div>
           </div>
           <span className="text-sm sm:text-base font-bold text-neutral-900 dark:text-white">
-            Total: {filteredData.length} {activeFiltersCount > 0 ? `of ${stockData.length}` : ""} Products
+            Total: {filteredData.length} {activeFiltersCount > 0 ? `of ${products.length}` : ""} Products
           </span>
         </div>
       </motion.div>

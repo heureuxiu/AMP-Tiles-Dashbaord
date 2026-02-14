@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Plus, PencilIcon, FileText, Eye, ArrowRight, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,92 +16,70 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
-type QuotationStatus = "draft" | "converted";
-
-// Mock quotations data
-const initialQuotations = [
-  {
-    id: "QT-2024-001",
-    customerName: "John Smith",
-    date: "2024-01-28",
-    totalAmount: 2450,
-    status: "draft" as QuotationStatus,
-  },
-  {
-    id: "QT-2024-002",
-    customerName: "Sarah Johnson",
-    date: "2024-01-27",
-    totalAmount: 3200,
-    status: "draft" as QuotationStatus,
-  },
-  {
-    id: "QT-2024-003",
-    customerName: "Mike Wilson",
-    date: "2024-01-26",
-    totalAmount: 1800,
-    status: "converted" as QuotationStatus,
-  },
-  {
-    id: "QT-2024-004",
-    customerName: "Emma Davis",
-    date: "2024-01-25",
-    totalAmount: 4100,
-    status: "draft" as QuotationStatus,
-  },
-  {
-    id: "QT-2024-005",
-    customerName: "David Brown",
-    date: "2024-01-24",
-    totalAmount: 2950,
-    status: "converted" as QuotationStatus,
-  },
-  {
-    id: "QT-2024-006",
-    customerName: "Lisa Anderson",
-    date: "2024-01-23",
-    totalAmount: 5600,
-    status: "draft" as QuotationStatus,
-  },
-  {
-    id: "QT-2024-007",
-    customerName: "Robert Taylor",
-    date: "2024-01-22",
-    totalAmount: 1250,
-    status: "converted" as QuotationStatus,
-  },
-  {
-    id: "QT-2024-008",
-    customerName: "Jennifer White",
-    date: "2024-01-21",
-    totalAmount: 3800,
-    status: "draft" as QuotationStatus,
-  },
-];
+type QuotationStatus = "draft" | "sent" | "converted" | "expired" | "cancelled";
 
 type Quotation = {
-  id: string;
+  _id: string;
+  quotationNumber: string;
   customerName: string;
-  date: string;
-  totalAmount: number;
+  quotationDate: string;
+  grandTotal: number;
   status: QuotationStatus;
+  convertedToInvoice: boolean;
 };
 
 export default function QuotationsPage() {
   const router = useRouter();
-  const [quotations, setQuotations] = useState<Quotation[]>(initialQuotations);
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    draft: 0,
+    sent: 0,
+    converted: 0,
+    expired: 0,
+    cancelled: 0,
+  });
+
+  useEffect(() => {
+    fetchQuotations();
+  }, []);
+
+  const fetchQuotations = async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.getQuotations();
+      if (response.success && response.quotations) {
+        setQuotations(response.quotations);
+        if (response.stats) {
+          setStats({
+            draft: response.stats.draft || 0,
+            sent: response.stats.sent || 0,
+            converted: response.stats.converted || 0,
+            expired: response.stats.expired || 0,
+            cancelled: response.stats.cancelled || 0,
+          });
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch quotations";
+      toast.error("Failed to load quotations", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter quotations based on search
   const filteredQuotations = quotations.filter(
     (q) =>
       searchQuery === "" ||
-      q.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      q.quotationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       q.customerName.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const draftCount = quotations.filter((q) => q.status === "draft").length;
-  const convertedCount = quotations.filter((q) => q.status === "converted").length;
 
   const handleCreateQuotation = () => {
     router.push("/quotations/create");
@@ -111,20 +89,26 @@ export default function QuotationsPage() {
     router.push(`/quotations/${id}/edit`);
   };
 
-  const handleConvertToInvoice = (quotation: Quotation) => {
+  const handleConvertToInvoice = async (quotation: Quotation) => {
     if (quotation.status === "converted") {
       toast.error("This quotation has already been converted");
       return;
     }
 
-    setQuotations(
-      quotations.map((q) =>
-        q.id === quotation.id ? { ...q, status: "converted" as QuotationStatus } : q
-      )
-    );
-    toast.success("Quotation converted to invoice", {
-      description: `${quotation.id} has been converted successfully`,
-    });
+    try {
+      const response = await api.convertQuotationToInvoice(quotation._id);
+      if (response.success) {
+        toast.success("Quotation converted to invoice", {
+          description: `${quotation.quotationNumber} has been converted successfully`,
+        });
+        fetchQuotations(); // Refresh list
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to convert quotation";
+      toast.error("Failed to convert quotation", {
+        description: errorMessage,
+      });
+    }
   };
 
   const handleViewQuotation = (id: string) => {
@@ -144,6 +128,27 @@ export default function QuotationsPage() {
       month: "short",
       year: "numeric",
     });
+  };
+
+  const getStatusBadgeClass = (status: QuotationStatus) => {
+    switch (status) {
+      case "draft":
+        return "bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-400";
+      case "sent":
+        return "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-400";
+      case "converted":
+        return "bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/40 dark:text-green-400";
+      case "expired":
+        return "bg-neutral-100 text-neutral-700 hover:bg-neutral-100 dark:bg-neutral-900/40 dark:text-neutral-400";
+      case "cancelled":
+        return "bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/40 dark:text-red-400";
+      default:
+        return "bg-neutral-100 text-neutral-700 hover:bg-neutral-100 dark:bg-neutral-900/40 dark:text-neutral-400";
+    }
+  };
+
+  const getStatusLabel = (status: QuotationStatus) => {
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   return (
@@ -227,8 +232,16 @@ export default function QuotationsPage() {
 
         {/* Table Content */}
         <div className="p-6">
-          <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
-            <Table>
+          {isLoading ? (
+            <div className="flex h-64 items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading quotations...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
+              <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Quote No</TableHead>
@@ -262,34 +275,30 @@ export default function QuotationsPage() {
                 ) : (
                   filteredQuotations.map((quotation, index) => (
                     <motion.tr
-                      key={quotation.id}
+                      key={quotation._id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3, delay: index * 0.05 }}
                       className="border-b transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50"
                     >
                       <TableCell className="font-mono text-sm font-semibold text-neutral-900 dark:text-white">
-                        {quotation.id}
+                        {quotation.quotationNumber}
                       </TableCell>
                       <TableCell className="font-medium text-neutral-900 dark:text-white">
                         {quotation.customerName}
                       </TableCell>
                       <TableCell className="text-neutral-600 dark:text-neutral-400">
-                        {formatDate(quotation.date)}
+                        {formatDate(quotation.quotationDate)}
                       </TableCell>
                       <TableCell className="font-semibold text-neutral-900 dark:text-white">
-                        {formatCurrency(quotation.totalAmount)}
+                        {formatCurrency(quotation.grandTotal)}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="secondary"
-                          className={
-                            quotation.status === "draft"
-                              ? "bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-400"
-                              : "bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/40 dark:text-green-400"
-                          }
+                          className={getStatusBadgeClass(quotation.status)}
                         >
-                          {quotation.status === "draft" ? "Draft" : "Converted"}
+                          {getStatusLabel(quotation.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="flex items-center gap-1">
@@ -299,8 +308,8 @@ export default function QuotationsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                            onClick={() => handleEditQuotation(quotation.id)}
-                            aria-label={`Edit ${quotation.id}`}
+                            onClick={() => handleEditQuotation(quotation._id)}
+                            aria-label={`Edit ${quotation.quotationNumber}`}
                             title="Edit Quotation"
                           >
                             <PencilIcon className="h-4 w-4" />
@@ -319,7 +328,7 @@ export default function QuotationsPage() {
                             }`}
                             onClick={() => handleConvertToInvoice(quotation)}
                             disabled={quotation.status === "converted"}
-                            aria-label={`Convert ${quotation.id} to invoice`}
+                            aria-label={`Convert ${quotation.quotationNumber} to invoice`}
                             title="Convert to Invoice"
                           >
                             <ArrowRight className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -332,8 +341,8 @@ export default function QuotationsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                            onClick={() => handleViewQuotation(quotation.id)}
-                            aria-label={`View ${quotation.id}`}
+                            onClick={() => handleViewQuotation(quotation._id)}
+                            aria-label={`View ${quotation.quotationNumber}`}
                             title="View Quotation"
                           >
                             <Eye className="h-4 w-4" />
@@ -346,7 +355,8 @@ export default function QuotationsPage() {
               </TableBody>
             </Table>
           </div>
-        </div>
+        )}
+      </div>
 
         {/* Footer Summary */}
         {quotations.length > 0 && (
@@ -361,13 +371,19 @@ export default function QuotationsPage() {
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-amber-500" />
                   <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                    Draft: {draftCount}
+                    Draft: {stats.draft}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-blue-500" />
+                  <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                    Sent: {stats.sent}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-green-500" />
                   <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                    Converted: {convertedCount}
+                    Converted: {stats.converted}
                   </span>
                 </div>
               </div>
@@ -375,7 +391,7 @@ export default function QuotationsPage() {
                 <span className="text-sm text-neutral-600 dark:text-neutral-400">
                   Total Value:{" "}
                   <span className="font-bold text-neutral-900 dark:text-white">
-                    {formatCurrency(quotations.reduce((sum, q) => sum + q.totalAmount, 0))}
+                    {formatCurrency(quotations.reduce((sum, q) => sum + q.grandTotal, 0))}
                   </span>
                 </span>
                 <span className="font-bold text-neutral-900 dark:text-white">

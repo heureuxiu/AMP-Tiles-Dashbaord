@@ -1,38 +1,37 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FileText, Edit, ArrowLeft, ArrowRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
-type QuotationStatus = "draft" | "converted";
+type QuotationStatus = "draft" | "sent" | "converted" | "expired" | "cancelled";
 
-// Mock data (in real app, fetch based on ID)
-const mockQuotationData = {
-  id: "QT-2024-001",
-  customerName: "John Smith",
-  customerPhone: "+61 400 123 456",
-  date: "2024-01-28",
-  notes: "Customer requested delivery by end of month",
-  status: "draft" as QuotationStatus,
-  items: [
-    {
-      id: "1",
-      productName: "Amaze Grey Polished",
-      quantity: 50,
-      rate: 45.50,
-      lineTotal: 2275.00,
-    },
-    {
-      id: "2",
-      productName: "Artic Cloud Matt",
-      quantity: 30,
-      rate: 40.00,
-      lineTotal: 1200.00,
-    },
-  ],
+type QuotationItem = {
+  _id: string;
+  productName: string;
+  quantity: number;
+  rate: number;
+  lineTotal: number;
+};
+
+type QuotationData = {
+  _id: string;
+  quotationNumber: string;
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  quotationDate: string;
+  notes?: string;
+  status: QuotationStatus;
+  items: QuotationItem[];
+  subtotal: number;
+  tax: number;
+  grandTotal: number;
 };
 
 export default function ViewQuotationPage() {
@@ -40,11 +39,30 @@ export default function ViewQuotationPage() {
   const router = useRouter();
   const quotationId = params.id as string;
 
-  // In real app, fetch quotation data based on ID
-  const quotation = mockQuotationData;
+  const [quotation, setQuotation] = useState<QuotationData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const subtotal = quotation.items.reduce((sum, item) => sum + item.lineTotal, 0);
-  const grandTotal = subtotal;
+  useEffect(() => {
+    fetchQuotation();
+  }, [quotationId]);
+
+  const fetchQuotation = async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.getQuotation(quotationId);
+      
+      if (response.success && response.quotation) {
+        setQuotation(response.quotation);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to load quotation";
+      toast.error("Failed to load quotation", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-AU", {
@@ -62,28 +80,83 @@ export default function ViewQuotationPage() {
   };
 
   const handleEdit = () => {
-    if (quotation.status === "converted") {
+    if (!quotation || quotation.status === "converted") {
       toast.error("Cannot edit converted quotation");
       return;
     }
     router.push(`/quotations/${quotationId}/edit`);
   };
 
-  const handleConvert = () => {
-    if (quotation.status === "converted") {
+  const handleConvert = async () => {
+    if (!quotation || quotation.status === "converted") {
       toast.error("This quotation has already been converted");
       return;
     }
-    toast.success("Quotation converted to invoice", {
-      description: `${quotationId} has been converted successfully`,
-    });
-    // In real app, update status in backend
+
+    try {
+      const response = await api.convertQuotationToInvoice(quotationId);
+      if (response.success) {
+        toast.success("Quotation converted to invoice", {
+          description: `${quotation.quotationNumber} has been converted successfully`,
+        });
+        fetchQuotation(); // Refresh data
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to convert quotation";
+      toast.error("Failed to convert quotation", {
+        description: errorMessage,
+      });
+    }
   };
 
   const handleDownloadPDF = () => {
     toast.info("Generating PDF...");
     // TODO: Implement PDF generation
   };
+
+  const getStatusBadgeClass = (status: QuotationStatus) => {
+    switch (status) {
+      case "draft":
+        return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400";
+      case "sent":
+        return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400";
+      case "converted":
+        return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400";
+      case "expired":
+        return "bg-neutral-100 text-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-400";
+      case "cancelled":
+        return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400";
+      default:
+        return "bg-neutral-100 text-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-400";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading quotation...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!quotation) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <FileText className="mx-auto h-12 w-12 text-neutral-300 dark:text-neutral-600" />
+          <p className="mt-3 text-sm font-medium text-neutral-600 dark:text-neutral-400">
+            Quotation not found
+          </p>
+          <Button onClick={() => router.push("/quotations")} className="mt-4">
+            Back to Quotations
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -99,7 +172,7 @@ export default function ViewQuotationPage() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-              {quotationId}
+              {quotation.quotationNumber}
             </h1>
             <p className="mt-1 text-neutral-600 dark:text-neutral-400">
               View quotation details
@@ -158,13 +231,9 @@ export default function ViewQuotationPage() {
                 </div>
                 <Badge
                   variant="secondary"
-                  className={
-                    quotation.status === "draft"
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                      : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
-                  }
+                  className={getStatusBadgeClass(quotation.status)}
                 >
-                  {quotation.status === "draft" ? "Draft" : "Converted"}
+                  {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
                 </Badge>
               </div>
             </div>
@@ -191,7 +260,7 @@ export default function ViewQuotationPage() {
                     Quotation Date
                   </label>
                   <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
-                    {formatDate(quotation.date)}
+                    {formatDate(quotation.quotationDate)}
                   </p>
                 </div>
                 <div>
@@ -199,7 +268,7 @@ export default function ViewQuotationPage() {
                     Quote Number
                   </label>
                   <p className="mt-1 text-base font-mono font-semibold text-neutral-900 dark:text-white">
-                    {quotation.id}
+                    {quotation.quotationNumber}
                   </p>
                 </div>
               </div>
@@ -250,14 +319,14 @@ export default function ViewQuotationPage() {
                   <tbody>
                     {quotation.items.map((item) => (
                       <tr
-                        key={item.id}
+                        key={item._id}
                         className="border-b border-neutral-100 dark:border-neutral-800"
                       >
                         <td className="py-4 text-neutral-900 dark:text-white">
                           {item.productName}
                         </td>
                         <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
-                          {item.quantity} boxes
+                          {item.quantity}
                         </td>
                         <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                           {formatCurrency(item.rate)}
@@ -293,7 +362,16 @@ export default function ViewQuotationPage() {
                   Subtotal
                 </span>
                 <span className="font-semibold text-neutral-900 dark:text-white">
-                  {formatCurrency(subtotal)}
+                  {formatCurrency(quotation.subtotal)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                  Tax (GST {quotation.taxRate || 10}%)
+                </span>
+                <span className="font-semibold text-neutral-900 dark:text-white">
+                  {formatCurrency(quotation.tax)}
                 </span>
               </div>
 
@@ -304,7 +382,7 @@ export default function ViewQuotationPage() {
                   Grand Total
                 </span>
                 <span className="text-2xl font-bold text-neutral-900 dark:text-white">
-                  {formatCurrency(grandTotal)}
+                  {formatCurrency(quotation.grandTotal)}
                 </span>
               </div>
             </div>

@@ -259,6 +259,101 @@ class ApiClient {
       method: 'GET',
     });
   }
+
+  // Quotation Management endpoints
+  async getQuotations(params?: {
+    search?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    sortBy?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+
+    const query = queryParams.toString();
+    return this.request(`/quotations${query ? `?${query}` : ''}`, {
+      method: 'GET',
+    });
+  }
+
+  async getQuotation(id: string) {
+    return this.request(`/quotations/${id}`, {
+      method: 'GET',
+    });
+  }
+
+  async createQuotation(data: {
+    customerName: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    customerAddress?: string;
+    quotationDate?: string;
+    validUntil?: string;
+    items: Array<{
+      product: string;
+      quantity: number;
+      rate: number;
+    }>;
+    discount?: number;
+    discountType?: 'percentage' | 'fixed';
+    taxRate?: number;
+    notes?: string;
+    terms?: string;
+    status?: string;
+  }) {
+    return this.request('/quotations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateQuotation(id: string, data: {
+    customerName?: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    customerAddress?: string;
+    quotationDate?: string;
+    validUntil?: string;
+    items?: Array<{
+      product: string;
+      quantity: number;
+      rate: number;
+    }>;
+    discount?: number;
+    discountType?: 'percentage' | 'fixed';
+    taxRate?: number;
+    notes?: string;
+    terms?: string;
+    status?: string;
+  }) {
+    return this.request(`/quotations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteQuotation(id: string) {
+    return this.request(`/quotations/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async convertQuotationToInvoice(id: string) {
+    return this.request(`/quotations/${id}/convert`, {
+      method: 'POST',
+    });
+  }
+
+  async getQuotationStats() {
+    return this.request('/quotations/stats/summary', {
+      method: 'GET',
+    });
+  }
 }
 
 export const api = new ApiClient(API_URL);

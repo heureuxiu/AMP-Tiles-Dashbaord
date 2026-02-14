@@ -1,26 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Plus, Trash2, FileText, Save, X as XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
-// Mock products data
-const productsData = [
-  { id: "1", name: "Amaze Grey Polished", rate: 45.50 },
-  { id: "2", name: "Amaze Luxury Matt", rate: 42.00 },
-  { id: "3", name: "Artic Apricot Matt", rate: 38.75 },
-  { id: "4", name: "Artic Cloud Matt", rate: 40.00 },
-  { id: "5", name: "Aspen Ash Grey", rate: 35.50 },
-  { id: "6", name: "Bianco Matt", rate: 48.00 },
-];
+type Product = {
+  _id: string;
+  name: string;
+  sku: string;
+  price: number;
+};
 
 type QuotationItem = {
   id: string;
-  productId: string;
+  product: string;
   productName: string;
   quantity: number;
   rate: number;
@@ -29,6 +27,9 @@ type QuotationItem = {
 
 export default function CreateQuotationPage() {
   const router = useRouter();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [quotationDate, setQuotationDate] = useState(
@@ -38,7 +39,7 @@ export default function CreateQuotationPage() {
   const [items, setItems] = useState<QuotationItem[]>([
     {
       id: "1",
-      productId: "",
+      product: "",
       productName: "",
       quantity: 0,
       rate: 0,
@@ -46,10 +47,31 @@ export default function CreateQuotationPage() {
     },
   ]);
 
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      setIsLoadingProducts(true);
+      const response = await api.getProducts();
+      if (response.success && response.products) {
+        setProducts(response.products);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch products";
+      toast.error("Failed to load products", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
   const handleAddItem = () => {
     const newItem: QuotationItem = {
       id: Date.now().toString(),
-      productId: "",
+      product: "",
       productName: "",
       quantity: 0,
       rate: 0,
@@ -67,7 +89,7 @@ export default function CreateQuotationPage() {
   };
 
   const handleProductChange = (itemId: string, productId: string) => {
-    const product = productsData.find((p) => p.id === productId);
+    const product = products.find((p) => p._id === productId);
     if (!product) return;
 
     setItems(
@@ -75,10 +97,10 @@ export default function CreateQuotationPage() {
         item.id === itemId
           ? {
               ...item,
-              productId: product.id,
+              product: product._id,
               productName: product.name,
-              rate: product.rate,
-              lineTotal: item.quantity * product.rate,
+              rate: product.price,
+              lineTotal: item.quantity * product.price,
             }
           : item
       )
@@ -117,7 +139,7 @@ export default function CreateQuotationPage() {
     return items.reduce((sum, item) => sum + item.lineTotal, 0);
   };
 
-  const handleSaveDraft = (e: React.FormEvent) => {
+  const handleSaveDraft = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!customerName.trim()) {
@@ -126,7 +148,7 @@ export default function CreateQuotationPage() {
     }
 
     const validItems = items.filter(
-      (item) => item.productId && item.quantity > 0
+      (item) => item.product && item.quantity > 0
     );
 
     if (validItems.length === 0) {
@@ -134,14 +156,41 @@ export default function CreateQuotationPage() {
       return;
     }
 
-    // TODO: Save to backend
-    toast.success("Quotation saved as draft", {
-      description: `Quote for ${customerName} has been saved`,
-    });
+    try {
+      setIsSaving(true);
 
-    setTimeout(() => {
-      router.push("/quotations");
-    }, 1000);
+      const quotationData = {
+        customerName,
+        customerPhone,
+        quotationDate,
+        notes,
+        items: validItems.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          rate: item.rate,
+        })),
+        status: "draft",
+      };
+
+      const response = await api.createQuotation(quotationData);
+
+      if (response.success) {
+        toast.success("Quotation saved as draft", {
+          description: `Quote for ${customerName} has been saved`,
+        });
+
+        setTimeout(() => {
+          router.push("/quotations");
+        }, 1000);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to create quotation";
+      toast.error("Failed to save quotation", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -339,17 +388,20 @@ export default function CreateQuotationPage() {
                         >
                           <td className="py-4 pr-4">
                             <select
-                              value={item.productId}
+                              value={item.product}
                               onChange={(e) =>
                                 handleProductChange(item.id, e.target.value)
                               }
+                              disabled={isLoadingProducts}
                               className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
                               required
                             >
-                              <option value="">Select product</option>
-                              {productsData.map((product) => (
-                                <option key={product.id} value={product.id}>
-                                  {product.name}
+                              <option value="">
+                                {isLoadingProducts ? "Loading..." : "Select product"}
+                              </option>
+                              {products.map((product) => (
+                                <option key={product._id} value={product._id}>
+                                  {product.name} ({product.sku})
                                 </option>
                               ))}
                             </select>
@@ -454,9 +506,9 @@ export default function CreateQuotationPage() {
 
               {/* Action Buttons */}
               <div className="space-y-3">
-                <Button type="submit" className="w-full gap-2" size="lg">
+                <Button type="submit" className="w-full gap-2" size="lg" disabled={isSaving || isLoadingProducts}>
                   <Save className="h-4 w-4" />
-                  Save as Draft
+                  {isSaving ? "Saving..." : "Save as Draft"}
                 </Button>
                 <Button
                   type="button"
@@ -464,6 +516,7 @@ export default function CreateQuotationPage() {
                   className="w-full gap-2"
                   size="lg"
                   onClick={handleCancel}
+                  disabled={isSaving}
                 >
                   <XIcon className="h-4 w-4" />
                   Cancel
