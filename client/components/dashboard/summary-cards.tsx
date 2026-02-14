@@ -61,44 +61,7 @@ const itemVariants: Variants = {
 };
 
 export function SummaryCards() {
-  const [summary, setSummary] = useState<SummaryItem[]>([
-    {
-      name: "Total Products",
-      code: "PRD",
-      value: "0",
-      change: "0",
-      percentageChange: "0%",
-      changeType: "positive",
-      data: generateData(0, "up"),
-    },
-    {
-      name: "Stock Quantity",
-      code: "STK",
-      value: "0",
-      change: "0",
-      percentageChange: "0%",
-      changeType: "positive",
-      data: generateData(0, "up"),
-    },
-    {
-      name: "Quotations",
-      code: "QTE",
-      value: "43",
-      change: "+6",
-      percentageChange: "+16.2%",
-      changeType: "positive",
-      data: generateData(43, "up"),
-    },
-    {
-      name: "Invoices",
-      code: "INV",
-      value: "28",
-      change: "-1",
-      percentageChange: "-3.4%",
-      changeType: "negative",
-      data: generateData(28, "down"),
-    },
-  ]);
+  const [summary, setSummary] = useState<SummaryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -114,74 +77,136 @@ export function SummaryCards() {
         api.getInvoiceStats(),
       ]);
       
-      if (stockStatsResponse.success && stockStatsResponse.stats) {
-        const { totalProducts, totalStock } = stockStatsResponse.stats;
-        
-        let quotationsCount = 0;
-        let invoicesCount = 0;
-        
-        if (quotationStatsResponse.success && quotationStatsResponse.stats) {
-          quotationsCount = quotationStatsResponse.stats.totalQuotations || 0;
-        }
-        
-        if (invoiceStatsResponse.success && invoiceStatsResponse.stats) {
-          invoicesCount = invoiceStatsResponse.stats.totalInvoices || 0;
-        }
-        
-        setSummary([
-          {
-            name: "Total Products",
-            code: "PRD",
-            value: totalProducts.toString(),
-            change: "+0",
-            percentageChange: "0%",
-            changeType: "positive",
-            data: generateData(totalProducts, "up"),
-          },
-          {
-            name: "Stock Quantity",
-            code: "STK",
-            value: totalStock.toLocaleString(),
-            change: "+0",
-            percentageChange: "0%",
-            changeType: "positive",
-            data: generateData(totalStock, "up"),
-          },
-          {
-            name: "Quotations",
-            code: "QTE",
-            value: quotationsCount.toString(),
-            change: "+6",
-            percentageChange: "+16.2%",
-            changeType: "positive",
-            data: generateData(quotationsCount, "up"),
-          },
-          {
-            name: "Invoices",
-            code: "INV",
-            value: invoicesCount.toString(),
-            change: invoicesCount > 0 ? "+1" : "0",
-            percentageChange: invoicesCount > 0 ? "+3.7%" : "0%",
-            changeType: "positive",
-            data: generateData(invoicesCount, "up"),
-          },
-        ]);
-      }
+      const totalProducts = stockStatsResponse.success && stockStatsResponse.stats ? stockStatsResponse.stats.totalProducts : 0;
+      const totalStock = stockStatsResponse.success && stockStatsResponse.stats ? stockStatsResponse.stats.totalStock : 0;
+      const quotationsCount = quotationStatsResponse.success && quotationStatsResponse.stats ? quotationStatsResponse.stats.totalQuotations || 0 : 0;
+      const invoicesCount = invoiceStatsResponse.success && invoiceStatsResponse.stats ? invoiceStatsResponse.stats.totalInvoices || 0 : 0;
+      
+      setSummary([
+        {
+          name: "Total Products",
+          code: "PRD",
+          value: totalProducts.toString(),
+          change: "—",
+          percentageChange: "—",
+          changeType: "positive",
+          data: generateData(totalProducts || 1, "up"),
+        },
+        {
+          name: "Stock Quantity",
+          code: "STK",
+          value: totalStock.toLocaleString(),
+          change: "—",
+          percentageChange: "—",
+          changeType: "positive",
+          data: generateData(totalStock || 1, "up"),
+        },
+        {
+          name: "Quotations",
+          code: "QTE",
+          value: quotationsCount.toString(),
+          change: "—",
+          percentageChange: "—",
+          changeType: "positive",
+          data: generateData(quotationsCount || 1, "up"),
+        },
+        {
+          name: "Invoices",
+          code: "INV",
+          value: invoicesCount.toString(),
+          change: "—",
+          percentageChange: "—",
+          changeType: "positive",
+          data: generateData(invoicesCount || 1, "up"),
+        },
+      ]);
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
+      // Set default values on error
+      setSummary([
+        {
+          name: "Total Products",
+          code: "PRD",
+          value: "0",
+          change: "—",
+          percentageChange: "—",
+          changeType: "positive",
+          data: generateData(1, "up"),
+        },
+        {
+          name: "Stock Quantity",
+          code: "STK",
+          value: "0",
+          change: "—",
+          percentageChange: "—",
+          changeType: "positive",
+          data: generateData(1, "up"),
+        },
+        {
+          name: "Quotations",
+          code: "QTE",
+          value: "0",
+          change: "—",
+          percentageChange: "—",
+          changeType: "positive",
+          data: generateData(1, "up"),
+        },
+        {
+          name: "Invoices",
+          code: "INV",
+          value: "0",
+          change: "—",
+          percentageChange: "—",
+          changeType: "positive",
+          data: generateData(1, "up"),
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <motion.div 
-      className="grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
-      {summary.map((item) => {
+    <div className="grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
+      {isLoading ? (
+        // Loading skeletons
+        Array.from({ length: 4 }).map((_, index) => (
+          <motion.div
+            key={`skeleton-${index}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ 
+              duration: 0.5,
+              delay: index * 0.1,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            }}
+            className="w-full min-w-0"
+          >
+            <Card className="relative h-full overflow-hidden rounded-lg border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:rounded-xl lg:rounded-2xl">
+              <CardContent className="p-3 pb-2.5 sm:p-4 sm:pb-3 lg:p-5 lg:pb-4">
+                <div className="animate-pulse">
+                  <div className="mb-1.5 sm:mb-2 lg:mb-3">
+                    <div className="h-3 w-24 rounded bg-neutral-200 dark:bg-neutral-700 sm:h-4" />
+                    <div className="mt-1 h-2 w-16 rounded bg-neutral-200 dark:bg-neutral-700" />
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <div className="h-8 w-16 rounded bg-neutral-200 dark:bg-neutral-700 sm:h-10 lg:h-12" />
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="h-3 w-10 rounded bg-neutral-200 dark:bg-neutral-700" />
+                      <div className="h-2 w-12 rounded bg-neutral-200 dark:bg-neutral-700" />
+                    </div>
+                  </div>
+                  <div className="mt-2 h-10 w-full rounded bg-neutral-200 dark:bg-neutral-700 sm:mt-3 sm:h-12 lg:mt-4 lg:h-16" />
+                  <div className="mt-1.5 border-t border-neutral-100 pt-1.5 dark:border-neutral-700 sm:mt-2 sm:pt-2 lg:mt-3 lg:pt-3">
+                    <div className="h-2 w-20 rounded bg-neutral-200 dark:bg-neutral-700" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))
+      ) : (
+        summary.map((item, index) => {
         const sanitizedName = sanitizeName(item.name);
         const gradientId = `gradient-${sanitizedName}`;
 
@@ -193,9 +218,11 @@ export function SummaryCards() {
         return (
           <motion.div
             key={item.name}
-            variants={itemVariants}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ 
               duration: 0.5,
+              delay: index * 0.1,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
             whileHover={{ 
@@ -298,7 +325,8 @@ export function SummaryCards() {
             </Card>
           </motion.div>
         );
-      })}
-    </motion.div>
+      })
+      )}
+    </div>
   );
 }
