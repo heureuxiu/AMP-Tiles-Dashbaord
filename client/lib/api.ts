@@ -267,6 +267,7 @@ class ApiClient {
     startDate?: string;
     endDate?: string;
     sortBy?: string;
+    sortOrder?: string;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
@@ -274,6 +275,7 @@ class ApiClient {
     if (params?.startDate) queryParams.append('startDate', params.startDate);
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
 
     const query = queryParams.toString();
     return this.request(`/quotations${query ? `?${query}` : ''}`, {
@@ -525,6 +527,109 @@ class ApiClient {
 
   async getPurchaseOrderStats() {
     return this.request('/purchase-orders/stats/summary', {
+      method: 'GET',
+    });
+  }
+
+  // Invoice Management endpoints
+  async getInvoices(params?: {
+    search?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+
+    const query = queryParams.toString();
+    return this.request(`/invoices${query ? `?${query}` : ''}`, {
+      method: 'GET',
+    });
+  }
+
+  async getInvoice(id: string) {
+    return this.request(`/invoices/${id}`, {
+      method: 'GET',
+    });
+  }
+
+  async createInvoice(data: {
+    quotation?: string;
+    customerName: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    customerAddress?: string;
+    invoiceDate?: string;
+    dueDate?: string;
+    items: Array<{
+      product: string;
+      quantity: number;
+      rate: number;
+    }>;
+    discount?: number;
+    discountType?: 'percentage' | 'fixed';
+    taxRate?: number;
+    notes?: string;
+    terms?: string;
+    status?: string;
+  }) {
+    return this.request('/invoices', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateInvoice(id: string, data: {
+    customerName?: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    customerAddress?: string;
+    invoiceDate?: string;
+    dueDate?: string;
+    items?: Array<{
+      product: string;
+      quantity: number;
+      rate: number;
+    }>;
+    discount?: number;
+    discountType?: 'percentage' | 'fixed';
+    taxRate?: number;
+    notes?: string;
+    terms?: string;
+    status?: string;
+  }) {
+    return this.request(`/invoices/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async markInvoiceAsPaid(id: string, data: {
+    paymentMethod?: string;
+    paidAmount?: number;
+    paidDate?: string;
+  }) {
+    return this.request(`/invoices/${id}/pay`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteInvoice(id: string) {
+    return this.request(`/invoices/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getInvoiceStats() {
+    return this.request('/invoices/stats/summary', {
       method: 'GET',
     });
   }

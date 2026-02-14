@@ -1,26 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Plus, Trash2, Receipt, Save, X as XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
-// Mock products data
-const productsData = [
-  { id: "1", name: "Amaze Grey Polished", rate: 45.50 },
-  { id: "2", name: "Amaze Luxury Matt", rate: 42.00 },
-  { id: "3", name: "Artic Apricot Matt", rate: 38.75 },
-  { id: "4", name: "Artic Cloud Matt", rate: 40.00 },
-  { id: "5", name: "Aspen Ash Grey", rate: 35.50 },
-  { id: "6", name: "Bianco Matt", rate: 48.00 },
-];
+type Product = {
+  _id: string;
+  name: string;
+  price: number;
+  sku: string;
+  stock: number;
+};
 
 type InvoiceItem = {
   id: string;
-  productId: string;
+  product: string;
   productName: string;
   quantity: number;
   rate: number;
@@ -29,17 +28,24 @@ type InvoiceItem = {
 
 export default function CreateInvoicePage() {
   const router = useRouter();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [terms, setTerms] = useState("");
   const [items, setItems] = useState<InvoiceItem[]>([
     {
       id: "1",
-      productId: "",
+      product: "",
       productName: "",
       quantity: 0,
       rate: 0,
@@ -47,10 +53,30 @@ export default function CreateInvoicePage() {
     },
   ]);
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setIsLoadingData(true);
+      const productsResponse = await api.getProducts({ status: "active" });
+      
+      if (productsResponse.success && productsResponse.products) {
+        setProducts(productsResponse.products);
+      }
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      toast.error("Failed to load products");
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
   const handleAddItem = () => {
     const newItem: InvoiceItem = {
       id: Date.now().toString(),
-      productId: "",
+      product: "",
       productName: "",
       quantity: 0,
       rate: 0,
@@ -68,7 +94,7 @@ export default function CreateInvoicePage() {
   };
 
   const handleProductChange = (itemId: string, productId: string) => {
-    const product = productsData.find((p) => p.id === productId);
+    const product = products.find((p) => p._id === productId);
     if (!product) return;
 
     setItems(
@@ -76,10 +102,10 @@ export default function CreateInvoicePage() {
         item.id === itemId
           ? {
               ...item,
-              productId: product.id,
+              product: product._id,
               productName: product.name,
-              rate: product.rate,
-              lineTotal: item.quantity * product.rate,
+              rate: product.price,
+              lineTotal: item.quantity * product.price,
             }
           : item
       )
@@ -118,7 +144,7 @@ export default function CreateInvoicePage() {
     return items.reduce((sum, item) => sum + item.lineTotal, 0);
   };
 
-  const handleSaveInvoice = (e: React.FormEvent) => {
+  const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!customerName.trim()) {
@@ -127,7 +153,7 @@ export default function CreateInvoicePage() {
     }
 
     const validItems = items.filter(
-      (item) => item.productId && item.quantity > 0 && item.rate >= 0
+      (item) => item.product && item.quantity > 0 && item.rate >= 0
     );
 
     if (validItems.length === 0) {
@@ -135,17 +161,43 @@ export default function CreateInvoicePage() {
       return;
     }
 
-    // Generate invoice ID
-    const invoiceId = `INV-2024-${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`;
+    try {
+      setIsSaving(true);
+      
+      const invoiceData = {
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim() || undefined,
+        customerEmail: customerEmail.trim() || undefined,
+        customerAddress: customerAddress.trim() || undefined,
+        invoiceDate,
+        dueDate: dueDate || undefined,
+        items: validItems.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          rate: item.rate,
+        })),
+        notes: notes.trim() || undefined,
+        terms: terms.trim() || undefined,
+        status: "draft",
+      };
 
-    // TODO: Save to backend
-    toast.success("Invoice created successfully", {
-      description: `Invoice ${invoiceId} has been generated`,
-    });
+      const response = await api.createInvoice(invoiceData);
 
-    setTimeout(() => {
-      router.push(`/invoices/${invoiceId}`);
-    }, 1000);
+      if (response.success && response.invoice) {
+        toast.success("Invoice created successfully", {
+          description: `Invoice ${response.invoice.invoiceNumber} has been generated`,
+        });
+        
+        setTimeout(() => {
+          router.push(`/invoices/${response.invoice._id}`);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error("Failed to create invoice:", error);
+      toast.error("Failed to create invoice");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -224,6 +276,7 @@ export default function CreateInvoicePage() {
                     placeholder="Enter customer name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
+                    disabled={isLoadingData || isSaving}
                     required
                   />
                 </div>
@@ -244,6 +297,7 @@ export default function CreateInvoicePage() {
                       placeholder="Enter phone number"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
+                      disabled={isLoadingData || isSaving}
                     />
                   </div>
 
@@ -262,25 +316,65 @@ export default function CreateInvoicePage() {
                       placeholder="Enter email address"
                       value={customerEmail}
                       onChange={(e) => setCustomerEmail(e.target.value)}
+                      disabled={isLoadingData || isSaving}
                     />
                   </div>
                 </div>
 
-                {/* Invoice Date */}
+                {/* Customer Address */}
                 <div className="grid gap-2">
                   <label
-                    htmlFor="invoiceDate"
+                    htmlFor="customerAddress"
                     className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                   >
-                    Invoice Date <span className="text-red-500">*</span>
+                    Customer Address{" "}
+                    <span className="text-neutral-400">(Optional)</span>
                   </label>
                   <Input
-                    id="invoiceDate"
-                    type="date"
-                    value={invoiceDate}
-                    onChange={(e) => setInvoiceDate(e.target.value)}
-                    required
+                    id="customerAddress"
+                    placeholder="Enter customer address"
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                    disabled={isLoadingData || isSaving}
                   />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Invoice Date */}
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="invoiceDate"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Invoice Date <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      id="invoiceDate"
+                      type="date"
+                      value={invoiceDate}
+                      onChange={(e) => setInvoiceDate(e.target.value)}
+                      disabled={isLoadingData || isSaving}
+                      required
+                    />
+                  </div>
+
+                  {/* Due Date */}
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="dueDate"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Due Date{" "}
+                      <span className="text-neutral-400">(Optional)</span>
+                    </label>
+                    <Input
+                      id="dueDate"
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      disabled={isLoadingData || isSaving}
+                    />
+                  </div>
                 </div>
 
                 {/* Notes */}
@@ -297,6 +391,27 @@ export default function CreateInvoicePage() {
                     placeholder="Add any additional notes..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
+                    disabled={isLoadingData || isSaving}
+                    className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
+                  />
+                </div>
+
+                {/* Terms */}
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="terms"
+                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                  >
+                    Terms & Conditions{" "}
+                    <span className="text-neutral-400">(Optional)</span>
+                  </label>
+                  <textarea
+                    id="terms"
+                    rows={3}
+                    placeholder="Add terms and conditions..."
+                    value={terms}
+                    onChange={(e) => setTerms(e.target.value)}
+                    disabled={isLoadingData || isSaving}
                     className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                   />
                 </div>
@@ -336,102 +451,111 @@ export default function CreateInvoicePage() {
 
               {/* Items Table */}
               <div className="p-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                        <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Product
-                        </th>
-                        <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Quantity
-                        </th>
-                        <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Rate
-                        </th>
-                        <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Line Total
-                        </th>
-                        <th className="pb-3 w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item, index) => (
-                        <tr
-                          key={item.id}
-                          className="border-b border-neutral-100 dark:border-neutral-800"
-                        >
-                          <td className="py-4 pr-4">
-                            <select
-                              value={item.productId}
-                              onChange={(e) =>
-                                handleProductChange(item.id, e.target.value)
-                              }
-                              className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
-                              required
-                            >
-                              <option value="">Select product</option>
-                              {productsData.map((product) => (
-                                <option key={product.id} value={product.id}>
-                                  {product.name}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="py-4 pr-4">
-                            <Input
-                              type="number"
-                              min="1"
-                              step="1"
-                              placeholder="0"
-                              value={item.quantity || ""}
-                              onChange={(e) =>
-                                handleQuantityChange(
-                                  item.id,
-                                  parseInt(e.target.value) || 0
-                                )
-                              }
-                              className="w-24"
-                              required
-                            />
-                          </td>
-                          <td className="py-4 pr-4">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={item.rate || ""}
-                              onChange={(e) =>
-                                handleRateChange(
-                                  item.id,
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              className="w-32"
-                              required
-                            />
-                          </td>
-                          <td className="py-4 pr-4 text-right font-semibold text-neutral-900 dark:text-white">
-                            {formatCurrency(item.lineTotal)}
-                          </td>
-                          <td className="py-4">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveItem(item.id)}
-                              className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
-                              disabled={items.length === 1}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </td>
+                {isLoadingData ? (
+                  <div className="flex h-48 items-center justify-center">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-neutral-200 dark:border-neutral-700">
+                          <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                            Product
+                          </th>
+                          <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                            Quantity
+                          </th>
+                          <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                            Rate
+                          </th>
+                          <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                            Line Total
+                          </th>
+                          <th className="pb-3 w-10"></th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {items.map((item, index) => (
+                          <tr
+                            key={item.id}
+                            className="border-b border-neutral-100 dark:border-neutral-800"
+                          >
+                            <td className="py-4 pr-4">
+                              <select
+                                value={item.product}
+                                onChange={(e) =>
+                                  handleProductChange(item.id, e.target.value)
+                                }
+                                disabled={isSaving}
+                                className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+                                required
+                              >
+                                <option value="">Select product</option>
+                                {products.map((product) => (
+                                  <option key={product._id} value={product._id}>
+                                    {product.name} - {product.sku} (Stock: {product.stock})
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="py-4 pr-4">
+                              <Input
+                                type="number"
+                                min="1"
+                                step="1"
+                                placeholder="0"
+                                value={item.quantity || ""}
+                                onChange={(e) =>
+                                  handleQuantityChange(
+                                    item.id,
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
+                                disabled={isSaving}
+                                className="w-24"
+                                required
+                              />
+                            </td>
+                            <td className="py-4 pr-4">
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={item.rate || ""}
+                                onChange={(e) =>
+                                  handleRateChange(
+                                    item.id,
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                                disabled={isSaving}
+                                className="w-32"
+                                required
+                              />
+                            </td>
+                            <td className="py-4 pr-4 text-right font-semibold text-neutral-900 dark:text-white">
+                              {formatCurrency(item.lineTotal)}
+                            </td>
+                            <td className="py-4">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemoveItem(item.id)}
+                                className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                                disabled={items.length === 1 || isSaving}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>
@@ -478,9 +602,14 @@ export default function CreateInvoicePage() {
 
               {/* Action Buttons */}
               <div className="space-y-3">
-                <Button type="submit" className="w-full gap-2" size="lg">
+                <Button 
+                  type="submit" 
+                  className="w-full gap-2" 
+                  size="lg"
+                  disabled={isLoadingData || isSaving}
+                >
                   <Save className="h-4 w-4" />
-                  Save Invoice
+                  {isSaving ? "Saving..." : "Save Invoice"}
                 </Button>
                 <Button
                   type="button"
@@ -488,6 +617,7 @@ export default function CreateInvoicePage() {
                   className="w-full gap-2"
                   size="lg"
                   onClick={handleCancel}
+                  disabled={isSaving}
                 >
                   <XIcon className="h-4 w-4" />
                   Cancel

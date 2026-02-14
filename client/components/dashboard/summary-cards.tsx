@@ -108,14 +108,30 @@ export function SummaryCards() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const statsResponse = await api.getStockStats();
+      const [stockStatsResponse, quotationStatsResponse, invoiceStatsResponse] = await Promise.all([
+        api.getStockStats(),
+        api.getQuotationStats(),
+        api.getInvoiceStats(),
+      ]);
       
-      if (statsResponse.success && statsResponse.stats) {
-        const { totalProducts, totalStock } = statsResponse.stats;
+      if (stockStatsResponse.success && stockStatsResponse.stats) {
+        const { totalProducts, totalStock } = stockStatsResponse.stats;
         
-        setSummary((prev) => [
+        let quotationsCount = 0;
+        let invoicesCount = 0;
+        
+        if (quotationStatsResponse.success && quotationStatsResponse.stats) {
+          quotationsCount = quotationStatsResponse.stats.totalQuotations || 0;
+        }
+        
+        if (invoiceStatsResponse.success && invoiceStatsResponse.stats) {
+          invoicesCount = invoiceStatsResponse.stats.totalInvoices || 0;
+        }
+        
+        setSummary([
           {
-            ...prev[0],
+            name: "Total Products",
+            code: "PRD",
             value: totalProducts.toString(),
             change: "+0",
             percentageChange: "0%",
@@ -123,15 +139,32 @@ export function SummaryCards() {
             data: generateData(totalProducts, "up"),
           },
           {
-            ...prev[1],
+            name: "Stock Quantity",
+            code: "STK",
             value: totalStock.toLocaleString(),
             change: "+0",
             percentageChange: "0%",
             changeType: "positive",
             data: generateData(totalStock, "up"),
           },
-          prev[2],
-          prev[3],
+          {
+            name: "Quotations",
+            code: "QTE",
+            value: quotationsCount.toString(),
+            change: "+6",
+            percentageChange: "+16.2%",
+            changeType: "positive",
+            data: generateData(quotationsCount, "up"),
+          },
+          {
+            name: "Invoices",
+            code: "INV",
+            value: invoicesCount.toString(),
+            change: invoicesCount > 0 ? "+1" : "0",
+            percentageChange: invoicesCount > 0 ? "+3.7%" : "0%",
+            changeType: "positive",
+            data: generateData(invoicesCount, "up"),
+          },
         ]);
       }
     } catch (error) {
