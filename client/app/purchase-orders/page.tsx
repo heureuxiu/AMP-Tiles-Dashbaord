@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
 type POStatus = "draft" | "sent" | "received" | "cancelled";
 
@@ -54,6 +55,8 @@ export default function PurchaseOrdersPage() {
     received: 0,
     cancelled: 0,
   });
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [poToDelete, setPoToDelete] = useState<PurchaseOrder | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -123,24 +126,31 @@ export default function PurchaseOrdersPage() {
     router.push("/purchase-orders/create");
   };
 
-  const handleDeletePurchaseOrder = async (po: PurchaseOrder) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${po.poNumber}? This cannot be undone.`
-    );
-    if (!confirmed) return;
+  const openDeleteModal = (po: PurchaseOrder) => {
+    setPoToDelete(po);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDeletePurchaseOrder = async () => {
+    if (!poToDelete) return;
     try {
-      const response = await api.deletePurchaseOrder(po._id);
+      const response = await api.deletePurchaseOrder(poToDelete._id);
       if (response.success) {
         toast.success("Purchase order deleted", {
-          description: `${po.poNumber} has been removed`,
+          description: `${poToDelete.poNumber} has been removed`,
         });
         fetchData();
+      } else {
+        toast.error("Failed to delete purchase order");
+        throw new Error();
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete purchase order";
-      toast.error("Failed to delete purchase order", {
-        description: errorMessage,
-      });
+      if (error instanceof Error && error.message !== "") {
+        toast.error("Failed to delete purchase order", {
+          description: error.message,
+        });
+      }
+      throw error;
     }
   };
 
@@ -453,7 +463,7 @@ export default function PurchaseOrdersPage() {
                                   ? "cursor-not-allowed opacity-50"
                                   : "hover:bg-red-100 dark:hover:bg-red-900/20"
                               }`}
-                              onClick={() => handleDeletePurchaseOrder(po)}
+                              onClick={() => openDeleteModal(po)}
                               disabled={po.status !== "draft"}
                               aria-label={`Delete ${po.poNumber}`}
                               title={po.status === "draft" ? "Delete Purchase Order" : "Only draft orders can be deleted"}
@@ -501,6 +511,21 @@ export default function PurchaseOrdersPage() {
           </motion.div>
         )}
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={deleteModalOpen}
+        onOpenChange={(open) => {
+          setDeleteModalOpen(open);
+          if (!open) setPoToDelete(null);
+        }}
+        title="Delete Purchase Order?"
+        description={
+          poToDelete
+            ? `Are you sure you want to delete ${poToDelete.poNumber}? This cannot be undone.`
+            : ""
+        }
+        onConfirm={handleConfirmDeletePurchaseOrder}
+      />
     </div>
   );
 }

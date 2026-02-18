@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
 export default function EditSupplierPage() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function EditSupplierPage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     supplierNumber: "",
     name: "",
@@ -135,26 +136,23 @@ export default function EditSupplierPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete ${formData.name}? This action cannot be undone.`)) {
-      return;
-    }
-
+  const handleConfirmDelete = async () => {
     try {
-      setIsDeleting(true);
       const response = await api.deleteSupplier(supplierId);
-
       if (response.success) {
         toast.success("Supplier deleted successfully");
         router.push("/suppliers");
+      } else {
+        toast.error("Failed to delete supplier");
+        throw new Error();
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete supplier";
-      toast.error("Failed to delete supplier", {
-        description: errorMessage,
-      });
-    } finally {
-      setIsDeleting(false);
+      if (error instanceof Error && error.message !== "") {
+        toast.error("Failed to delete supplier", {
+          description: error.message,
+        });
+      }
+      throw error;
     }
   };
 
@@ -463,17 +461,25 @@ export default function EditSupplierPage() {
               <Button
                 type="button"
                 variant="destructive"
-                onClick={handleDelete}
-                disabled={isSaving || isDeleting}
+                onClick={() => setDeleteModalOpen(true)}
+                disabled={isSaving}
                 className="flex items-center gap-2"
               >
                 <Trash2 className="h-4 w-4" />
-                {isDeleting ? "Deleting..." : "Delete Supplier"}
+                Delete Supplier
               </Button>
             </div>
           </div>
         </form>
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={deleteModalOpen}
+        onOpenChange={setDeleteModalOpen}
+        title="Delete Supplier?"
+        description={`Are you sure you want to delete ${formData.name}? This action cannot be undone.`}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

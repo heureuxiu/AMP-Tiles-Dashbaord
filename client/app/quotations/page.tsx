@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
 type QuotationStatus = "draft" | "sent" | "converted" | "expired" | "cancelled";
 
@@ -42,6 +43,8 @@ export default function QuotationsPage() {
     expired: 0,
     cancelled: 0,
   });
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [quotationToDelete, setQuotationToDelete] = useState<Quotation | null>(null);
 
   useEffect(() => {
     fetchQuotations();
@@ -115,24 +118,31 @@ export default function QuotationsPage() {
     router.push(`/quotations/${id}`);
   };
 
-  const handleDeleteQuotation = async (quotation: Quotation) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${quotation.quotationNumber}? This cannot be undone.`
-    );
-    if (!confirmed) return;
+  const openDeleteModal = (quotation: Quotation) => {
+    setQuotationToDelete(quotation);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDeleteQuotation = async () => {
+    if (!quotationToDelete) return;
     try {
-      const response = await api.deleteQuotation(quotation._id);
+      const response = await api.deleteQuotation(quotationToDelete._id);
       if (response.success) {
         toast.success("Quotation deleted", {
-          description: `${quotation.quotationNumber} has been removed`,
+          description: `${quotationToDelete.quotationNumber} has been removed`,
         });
         fetchQuotations();
+      } else {
+        toast.error("Failed to delete quotation");
+        throw new Error();
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete quotation";
-      toast.error("Failed to delete quotation", {
-        description: errorMessage,
-      });
+      if (error instanceof Error && error.message !== "") {
+        toast.error("Failed to delete quotation", {
+          description: error.message,
+        });
+      }
+      throw error;
     }
   };
 
@@ -376,7 +386,7 @@ export default function QuotationsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20"
-                            onClick={() => handleDeleteQuotation(quotation)}
+                            onClick={() => openDeleteModal(quotation)}
                             aria-label={`Delete ${quotation.quotationNumber}`}
                             title="Delete Quotation"
                           >
@@ -438,6 +448,21 @@ export default function QuotationsPage() {
           </motion.div>
         )}
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={deleteModalOpen}
+        onOpenChange={(open) => {
+          setDeleteModalOpen(open);
+          if (!open) setQuotationToDelete(null);
+        }}
+        title="Delete Quotation?"
+        description={
+          quotationToDelete
+            ? `Are you sure you want to delete ${quotationToDelete.quotationNumber}? This cannot be undone.`
+            : ""
+        }
+        onConfirm={handleConfirmDeleteQuotation}
+      />
     </div>
   );
 }

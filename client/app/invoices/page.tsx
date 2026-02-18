@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
 type Invoice = {
   _id: string;
@@ -74,6 +75,8 @@ export default function InvoicesPage() {
     totalRevenue: 0,
     pendingAmount: 0,
   });
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
 
   useEffect(() => {
     fetchInvoices();
@@ -117,24 +120,31 @@ export default function InvoicesPage() {
     // TODO: Implement PDF generation
   };
 
-  const handleDeleteInvoice = async (invoice: Invoice) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${invoice.invoiceNumber}? This cannot be undone.`
-    );
-    if (!confirmed) return;
+  const openDeleteModal = (invoice: Invoice) => {
+    setInvoiceToDelete(invoice);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
     try {
-      const response = await api.deleteInvoice(invoice._id);
+      const response = await api.deleteInvoice(invoiceToDelete._id);
       if (response.success) {
         toast.success("Invoice deleted", {
-          description: `${invoice.invoiceNumber} has been removed`,
+          description: `${invoiceToDelete.invoiceNumber} has been removed`,
         });
         fetchInvoices();
+      } else {
+        toast.error("Failed to delete invoice");
+        throw new Error();
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete invoice";
-      toast.error("Failed to delete invoice", {
-        description: errorMessage,
-      });
+      if (error instanceof Error && error.message !== "") {
+        toast.error("Failed to delete invoice", {
+          description: error.message,
+        });
+      }
+      throw error;
     }
   };
 
@@ -433,7 +443,7 @@ export default function InvoicesPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20"
-                              onClick={() => handleDeleteInvoice(invoice)}
+                              onClick={() => openDeleteModal(invoice)}
                               aria-label={`Delete ${invoice.invoiceNumber}`}
                               title="Delete Invoice"
                             >
@@ -494,6 +504,21 @@ export default function InvoicesPage() {
           </motion.div>
         )}
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={deleteModalOpen}
+        onOpenChange={(open) => {
+          setDeleteModalOpen(open);
+          if (!open) setInvoiceToDelete(null);
+        }}
+        title="Delete Invoice?"
+        description={
+          invoiceToDelete
+            ? `Are you sure you want to delete ${invoiceToDelete.invoiceNumber}? This cannot be undone.`
+            : ""
+        }
+        onConfirm={handleConfirmDeleteInvoice}
+      />
     </div>
   );
 }

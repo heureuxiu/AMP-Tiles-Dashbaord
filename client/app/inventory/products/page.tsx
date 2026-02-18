@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -64,6 +65,8 @@ export default function ProductsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedFinishes, setSelectedFinishes] = useState<string[]>([]);
@@ -207,22 +210,29 @@ export default function ProductsPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDeleteProduct = async (productId: string) => {
-    if (!confirm("Are you sure you want to delete this product?")) {
-      return;
-    }
+  const openDeleteModal = (product: Product) => {
+    setProductToDelete(product);
+    setDeleteModalOpen(true);
+  };
 
+  const handleConfirmDeleteProduct = async () => {
+    if (!productToDelete) return;
     try {
-      const response = await api.deleteProduct(productId);
+      const response = await api.deleteProduct(productToDelete._id);
       if (response.success) {
         toast.success("Product deleted successfully");
-        fetchProducts(); // Refresh list
+        fetchProducts();
+      } else {
+        toast.error("Failed to delete product");
+        throw new Error();
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete product";
-      toast.error("Failed to delete product", {
-        description: errorMessage,
-      });
+      if (error instanceof Error && error.message !== "") {
+        toast.error("Failed to delete product", {
+          description: error.message,
+        });
+      }
+      throw error;
     }
   };
 
@@ -711,11 +721,11 @@ export default function ProductsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 shrink-0 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                                onClick={() => handleDeleteProduct(item._id)}
+                                className="h-8 w-8 shrink-0 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20"
+                                onClick={() => openDeleteModal(item)}
                                 aria-label={`product-${item._id}-remove`}
                               >
-                                <Trash2Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                <Trash2Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-600 dark:text-red-400" />
                               </Button>
                             </motion.div>
                           </div>
@@ -1051,6 +1061,21 @@ export default function ProductsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmDialog
+        open={deleteModalOpen}
+        onOpenChange={(open) => {
+          setDeleteModalOpen(open);
+          if (!open) setProductToDelete(null);
+        }}
+        title="Delete Product?"
+        description={
+          productToDelete
+            ? `Are you sure you want to delete ${productToDelete.name} (${productToDelete.sku})? This cannot be undone.`
+            : ""
+        }
+        onConfirm={handleConfirmDeleteProduct}
+      />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
 type Supplier = {
   _id: string;
@@ -37,6 +38,8 @@ export default function SuppliersPage() {
     active: 0,
     inactive: 0,
   });
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
 
   useEffect(() => {
     fetchSuppliers();
@@ -81,24 +84,31 @@ export default function SuppliersPage() {
     router.push("/suppliers/create");
   };
 
-  const handleDeleteSupplier = async (supplier: Supplier) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${supplier.name} (${supplier.supplierNumber})? This cannot be undone.`
-    );
-    if (!confirmed) return;
+  const openDeleteModal = (supplier: Supplier) => {
+    setSupplierToDelete(supplier);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDeleteSupplier = async () => {
+    if (!supplierToDelete) return;
     try {
-      const response = await api.deleteSupplier(supplier._id);
+      const response = await api.deleteSupplier(supplierToDelete._id);
       if (response.success) {
         toast.success("Supplier deleted", {
-          description: `${supplier.name} has been removed`,
+          description: `${supplierToDelete.name} has been removed`,
         });
         fetchSuppliers();
+      } else {
+        toast.error("Failed to delete supplier");
+        throw new Error();
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete supplier";
-      toast.error("Failed to delete supplier", {
-        description: errorMessage,
-      });
+      if (error instanceof Error && error.message !== "") {
+        toast.error("Failed to delete supplier", {
+          description: error.message,
+        });
+      }
+      throw error;
     }
   };
 
@@ -287,7 +297,7 @@ export default function SuppliersPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20"
-                              onClick={() => handleDeleteSupplier(supplier)}
+                              onClick={() => openDeleteModal(supplier)}
                               aria-label={`Delete ${supplier.name}`}
                               title="Delete Supplier"
                             >
@@ -332,6 +342,21 @@ export default function SuppliersPage() {
           </motion.div>
         )}
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={deleteModalOpen}
+        onOpenChange={(open) => {
+          setDeleteModalOpen(open);
+          if (!open) setSupplierToDelete(null);
+        }}
+        title="Delete Supplier?"
+        description={
+          supplierToDelete
+            ? `Are you sure you want to delete ${supplierToDelete.name} (${supplierToDelete.supplierNumber})? This cannot be undone.`
+            : ""
+        }
+        onConfirm={handleConfirmDeleteSupplier}
+      />
     </div>
   );
 }
