@@ -628,6 +628,35 @@ class ApiClient {
     });
   }
 
+  /**
+   * Fetch invoice PDF as blob (for download). Uses same auth as other requests.
+   */
+  async getInvoicePdfBlob(id: string): Promise<Blob> {
+    const token = localStorage.getItem('amp_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${this.baseURL}/invoices/${id}/pdf`, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let message = `HTTP ${response.status}`;
+      try {
+        const j = JSON.parse(errText);
+        if (j.message) message = j.message;
+      } catch {
+        if (errText) message = errText;
+      }
+      throw new Error(message);
+    }
+
+    return response.blob();
+  }
+
   async getInvoiceStats() {
     return this.request('/invoices/stats/summary', {
       method: 'GET',

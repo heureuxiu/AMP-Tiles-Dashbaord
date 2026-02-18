@@ -1,5 +1,6 @@
 const Invoice = require('../models/Invoice');
 const Product = require('../models/Product');
+const { generateInvoicePdf } = require('../utils/invoicePdf');
 
 // @desc    Get all invoices
 // @route   GET /api/invoices
@@ -337,6 +338,39 @@ exports.markInvoiceAsPaid = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while marking invoice as paid',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get invoice as PDF
+// @route   GET /api/invoices/:id/pdf
+// @access  Private
+exports.getInvoicePdf = async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id)
+      .populate('quotation', 'quotationNumber')
+      .lean();
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found',
+      });
+    }
+
+    const pdfBuffer = await generateInvoicePdf(invoice);
+    const filename = `invoice-${invoice.invoiceNumber || invoice._id}.pdf`.replace(/\s/g, '-');
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Get invoice PDF error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate invoice PDF',
       error: error.message,
     });
   }

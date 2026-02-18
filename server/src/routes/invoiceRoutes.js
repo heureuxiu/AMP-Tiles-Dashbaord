@@ -2,6 +2,7 @@ const express = require('express');
 const {
   getInvoices,
   getInvoice,
+  getInvoicePdf,
   createInvoice,
   updateInvoice,
   markInvoiceAsPaid,
@@ -20,6 +21,9 @@ router.get('/stats/summary', getInvoiceStats);
 
 // Main routes
 router.route('/').get(getInvoices).post(createInvoice);
+
+// PDF route (must be before /:id so /:id/pdf is matched)
+router.get('/:id/pdf', getInvoicePdf);
 
 // Individual invoice routes
 router.route('/:id').get(getInvoice).put(updateInvoice).delete(deleteInvoice);

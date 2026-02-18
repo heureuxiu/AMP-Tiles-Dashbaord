@@ -115,9 +115,23 @@ export default function InvoicesPage() {
     router.push(`/invoices/${id}`);
   };
 
-  const handleDownloadPDF = (invoice: Invoice) => {
-    toast.info(`Generating PDF for ${invoice.invoiceNumber}...`);
-    // TODO: Implement PDF generation
+  const handleDownloadPDF = async (invoice: Invoice) => {
+    try {
+      toast.info(`Generating PDF for ${invoice.invoiceNumber}...`);
+      const blob = await api.getInvoicePdfBlob(invoice._id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${invoice.invoiceNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded", {
+        description: `${invoice.invoiceNumber}.pdf`,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to download PDF";
+      toast.error("Failed to download PDF", { description: errorMessage });
+    }
   };
 
   const openDeleteModal = (invoice: Invoice) => {

@@ -1,38 +1,39 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Receipt, Download, Printer, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
-// Mock invoice data
-const mockInvoiceData = {
-  id: "INV-2024-001",
-  quotationId: "QT-2024-003",
-  customerName: "Mike Wilson",
-  customerPhone: "+61 400 987 654",
-  customerAddress: "123 Main Street, Sydney NSW 2000",
-  invoiceDate: "2024-01-26",
-  items: [
-    {
-      id: "1",
-      productName: "Amaze Grey Polished",
-      quantity: 30,
-      rate: 45.50,
-      lineTotal: 1365.00,
-    },
-    {
-      id: "2",
-      productName: "Artic Cloud Matt",
-      quantity: 15,
-      rate: 40.00,
-      lineTotal: 600.00,
-    },
-  ],
+type InvoiceItem = {
+  _id: string;
+  productName: string;
+  quantity: number;
+  rate: number;
+  lineTotal: number;
 };
 
-// Company Info (in real app, fetch from settings)
+type InvoiceData = {
+  _id: string;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  customerAddress?: string;
+  invoiceDate: string;
+  dueDate?: string;
+  quotation?: { quotationNumber: string };
+  items: InvoiceItem[];
+  subtotal: number;
+  discountAmount?: number;
+  tax?: number;
+  grandTotal: number;
+  status: string;
+};
+
 const companyInfo = {
   name: "AMP Tiles Australia",
   address: "456 Business Park Drive, Melbourne VIC 3000",
@@ -45,12 +46,29 @@ export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const invoiceId = params.id as string;
+  const [invoice, setInvoice] = useState<InvoiceData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPdfLoading, setIsPdfLoading] = useState(false);
 
-  // In real app, fetch invoice data based on ID
-  const invoice = mockInvoiceData;
-
-  const subtotal = invoice.items.reduce((sum, item) => sum + item.lineTotal, 0);
-  const grandTotal = subtotal;
+  useEffect(() => {
+    const fetchInvoice = async () => {
+      try {
+        const response = await api.getInvoice(invoiceId);
+        if (response.success && response.invoice) {
+          setInvoice(response.invoice);
+        } else {
+          toast.error("Invoice not found");
+          router.push("/invoices");
+        }
+      } catch {
+        toast.error("Failed to load invoice");
+        router.push("/invoices");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchInvoice();
+  }, [invoiceId, router]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-AU", {
@@ -67,14 +85,43 @@ export default function InvoiceDetailPage() {
     });
   };
 
-  const handleDownloadPDF = () => {
-    toast.info(`Generating PDF for ${invoiceId}...`);
-    // TODO: Implement PDF generation
+  const handleDownloadPDF = async () => {
+    if (!invoice) return;
+    try {
+      setIsPdfLoading(true);
+      toast.info("Generating PDF...");
+      const blob = await api.getInvoicePdfBlob(invoice._id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${invoice.invoiceNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded", {
+        description: `${invoice.invoiceNumber}.pdf`,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to download PDF";
+      toast.error("Failed to download PDF", { description: msg });
+    } finally {
+      setIsPdfLoading(false);
+    }
   };
 
   const handlePrint = () => {
     window.print();
   };
+
+  if (isLoading || !invoice) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center p-8">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+      </div>
+    );
+  }
+
+  const subtotal = invoice.subtotal ?? invoice.items.reduce((sum, i) => sum + i.lineTotal, 0);
+  const grandTotal = invoice.grandTotal ?? subtotal;
 
   return (
     <>
@@ -91,7 +138,7 @@ export default function InvoiceDetailPage() {
             </Button>
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-                {invoiceId}
+                {invoice.invoiceNumber}
               </h1>
               <p className="mt-1 text-neutral-600 dark:text-neutral-400">
                 Invoice details
@@ -99,9 +146,14 @@ export default function InvoiceDetailPage() {
             </div>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
+            <Button
+              variant="outline"
+              onClick={handleDownloadPDF}
+              className="gap-2"
+              disabled={isPdfLoading}
+            >
               <Download className="h-4 w-4" />
-              Download PDF
+              {isPdfLoading ? "Generating..." : "Download PDF"}
             </Button>
             <Button onClick={handlePrint} className="gap-2">
               <Printer className="h-4 w-4" />
@@ -158,12 +210,21 @@ export default function InvoiceDetailPage() {
                   <p className="font-semibold text-neutral-900 dark:text-white">
                     {invoice.customerName}
                   </p>
-                  <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                    {invoice.customerAddress}
-                  </p>
-                  <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                    {invoice.customerPhone}
-                  </p>
+                  {invoice.customerAddress && (
+                    <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                      {invoice.customerAddress}
+                    </p>
+                  )}
+                  {invoice.customerPhone && (
+                    <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                      {invoice.customerPhone}
+                    </p>
+                  )}
+                  {invoice.customerEmail && (
+                    <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                      {invoice.customerEmail}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="text-right">
@@ -173,7 +234,7 @@ export default function InvoiceDetailPage() {
                       Invoice Number:
                     </span>
                     <span className="font-mono text-neutral-900 dark:text-white">
-                      {invoice.id}
+                      {invoice.invoiceNumber}
                     </span>
                   </div>
                   <div className="flex justify-end gap-3">
@@ -184,14 +245,16 @@ export default function InvoiceDetailPage() {
                       {formatDate(invoice.invoiceDate)}
                     </span>
                   </div>
-                  <div className="flex justify-end gap-3">
-                    <span className="font-semibold text-neutral-700 dark:text-neutral-300">
-                      Quote Reference:
-                    </span>
-                    <span className="font-mono text-neutral-600 dark:text-neutral-400">
-                      {invoice.quotationId}
-                    </span>
-                  </div>
+                  {invoice.quotation?.quotationNumber && (
+                    <div className="flex justify-end gap-3">
+                      <span className="font-semibold text-neutral-700 dark:text-neutral-300">
+                        Quote Reference:
+                      </span>
+                      <span className="font-mono text-neutral-600 dark:text-neutral-400">
+                        {invoice.quotation.quotationNumber}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -218,14 +281,14 @@ export default function InvoiceDetailPage() {
                 <tbody>
                   {invoice.items.map((item) => (
                     <tr
-                      key={item.id}
+                      key={item._id}
                       className="border-b border-neutral-200 dark:border-neutral-700"
                     >
                       <td className="py-4 text-neutral-900 dark:text-white">
                         {item.productName}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
-                        {item.quantity} boxes
+                        {item.quantity}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                         {formatCurrency(item.rate)}
@@ -250,6 +313,22 @@ export default function InvoiceDetailPage() {
                     {formatCurrency(subtotal)}
                   </span>
                 </div>
+                {(invoice.discountAmount ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-700 dark:text-neutral-300">Discount:</span>
+                    <span className="font-semibold text-neutral-900 dark:text-white">
+                      -{formatCurrency(invoice.discountAmount)}
+                    </span>
+                  </div>
+                )}
+                {(invoice.tax ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-700 dark:text-neutral-300">Tax (GST):</span>
+                    <span className="font-semibold text-neutral-900 dark:text-white">
+                      {formatCurrency(invoice.tax)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between border-t-2 border-neutral-300 pt-3 dark:border-neutral-600">
                   <span className="text-lg font-bold text-neutral-900 dark:text-white">
                     TOTAL:
