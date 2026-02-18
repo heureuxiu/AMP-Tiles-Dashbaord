@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Plus, FileText, Receipt, Package, RefreshCw } from "lucide-react";
+import { FileText, Receipt, Package, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export function QuickActions() {
@@ -39,22 +39,17 @@ export function QuickActions() {
   ];
 
   return (
-    <div className="w-full max-w-full rounded-lg border border-neutral-200/60 bg-white p-3 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:rounded-xl sm:p-4 lg:rounded-2xl lg:p-6">
+    <div className="w-full rounded-xl border border-neutral-200/60 bg-white p-4 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:p-5 lg:rounded-2xl lg:p-6">
       {/* Header */}
-      <div className="mb-3 flex items-center justify-between sm:mb-4 lg:mb-6">
-        <div>
-          <h2 className="text-sm font-bold text-neutral-900 dark:text-white sm:text-base lg:text-lg">Quick Actions</h2>
-          <p className="mt-0.5 text-[10px] text-neutral-500 dark:text-neutral-400 sm:mt-1 sm:text-xs lg:text-sm">
-            Common tasks for quick access
-          </p>
-        </div>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#c7a864] to-[#c7a864]/80 sm:h-9 sm:w-9 lg:h-10 lg:w-10 lg:rounded-xl">
-          <Plus className="h-3.5 w-3.5 text-white sm:h-4 sm:w-4 lg:h-5 lg:w-5" strokeWidth={2.5} />
-        </div>
+      <div className="mb-4 sm:mb-5 lg:mb-6">
+        <h2 className="text-base font-bold text-neutral-900 dark:text-white sm:text-lg lg:text-xl">Quick Actions</h2>
+        <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400 sm:mt-1 sm:text-sm">
+          Common tasks for quick access
+        </p>
       </div>
 
       {/* Actions Grid */}
-      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 sm:gap-4 lg:grid-cols-4">
         {actions.map((action, index) => {
           const Icon = action.icon;
           return (
@@ -66,21 +61,21 @@ export function QuickActions() {
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
               onClick={action.action}
-              className="group relative rounded-md border border-neutral-200/60 bg-neutral-50/50 p-3 text-left transition-all hover:border-neutral-300 hover:bg-white hover:shadow-sm dark:border-neutral-700/60 dark:bg-neutral-900/50 dark:hover:border-neutral-600 dark:hover:bg-neutral-800 sm:rounded-lg sm:p-4 lg:rounded-xl lg:p-5"
+              className="group relative rounded-xl border border-neutral-200/60 bg-neutral-50/50 p-3 text-left transition-all hover:border-neutral-300 hover:bg-white hover:shadow-sm active:scale-95 dark:border-neutral-700/60 dark:bg-neutral-900/50 dark:hover:border-neutral-600 dark:hover:bg-neutral-800 sm:p-4 lg:p-5"
             >
-              <div className="space-y-2 sm:space-y-3 lg:space-y-4">
+              <div className="space-y-2 sm:space-y-3">
                 {/* Icon */}
                 <div 
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-md transition-transform group-hover:scale-110 sm:h-10 sm:w-10 sm:rounded-lg lg:h-12 lg:w-12 lg:rounded-xl"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:scale-110 sm:h-11 sm:w-11 lg:h-12 lg:w-12"
                   style={{ backgroundColor: `${action.color}15` }}
                 >
-                  <Icon className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6" style={{ color: action.color }} strokeWidth={2} />
+                  <Icon className="h-5 w-5 sm:h-5 sm:w-5 lg:h-6 lg:w-6" style={{ color: action.color }} strokeWidth={2} />
                 </div>
 
                 {/* Content */}
                 <div>
-                  <h3 className="text-xs font-semibold text-neutral-900 dark:text-white sm:text-sm lg:text-base">{action.title}</h3>
-                  <p className="mt-0.5 text-[10px] text-neutral-500 dark:text-neutral-400 sm:mt-1 sm:text-xs lg:text-sm">{action.description}</p>
+                  <h3 className="text-sm font-semibold text-neutral-900 dark:text-white sm:text-sm lg:text-base">{action.title}</h3>
+                  <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400 sm:text-xs lg:text-sm">{action.description}</p>
                 </div>
               </div>
             </motion.button>

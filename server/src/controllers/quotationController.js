@@ -1,5 +1,6 @@
 const Quotation = require('../models/Quotation');
 const Product = require('../models/Product');
+const Invoice = require('../models/Invoice');
 
 // @desc    Get all quotations
 // @route   GET /api/quotations
@@ -325,12 +326,9 @@ exports.deleteQuotation = async (req, res) => {
       });
     }
 
-    // Check if converted
-    if (quotation.status === 'converted') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot delete converted quotation',
-      });
+    // If converted, unlink the invoice so it stays but no longer references this quotation
+    if (quotation.status === 'converted' && quotation.invoiceId) {
+      await Invoice.findByIdAndUpdate(quotation.invoiceId, { $unset: { quotation: 1 } });
     }
 
     await quotation.deleteOne();
@@ -352,7 +350,8 @@ exports.deleteQuotation = async (req, res) => {
 // @access  Private
 exports.convertToInvoice = async (req, res) => {
   try {
-    const quotation = await Quotation.findById(req.params.id);
+    const quotation = await Quotation.findById(req.params.id)
+      .populate('items.product', 'name sku');
 
     if (!quotation) {
       return res.status(404).json({
@@ -368,16 +367,50 @@ exports.convertToInvoice = async (req, res) => {
       });
     }
 
-    // TODO: Create Invoice (when Invoice model is ready)
-    // For now, just mark as converted
+    // Build invoice items (product may be ObjectId or populated)
+    const invoiceItems = quotation.items.map((item) => ({
+      product: item.product._id || item.product,
+      productName: item.productName || (item.product && item.product.name) || 'Product',
+      quantity: item.quantity,
+      rate: item.rate,
+      lineTotal: item.lineTotal,
+    }));
+
+    // Create actual Invoice from quotation data
+    const invoice = await Invoice.create({
+      quotation: quotation._id,
+      customerName: quotation.customerName,
+      customerPhone: quotation.customerPhone,
+      customerEmail: quotation.customerEmail,
+      customerAddress: quotation.customerAddress,
+      invoiceDate: quotation.quotationDate || new Date(),
+      dueDate: quotation.validUntil,
+      items: invoiceItems,
+      discount: quotation.discount || 0,
+      discountType: quotation.discountType || 'fixed',
+      taxRate: quotation.taxRate || 10,
+      notes: quotation.notes,
+      terms: quotation.terms,
+      status: 'draft',
+      createdBy: req.user.id,
+    });
+
+    // Mark quotation as converted and link to invoice
     quotation.status = 'converted';
     quotation.convertedToInvoice = true;
+    quotation.invoiceId = invoice._id;
     await quotation.save();
+
+    const populatedInvoice = await Invoice.findById(invoice._id)
+      .populate('createdBy', 'name email')
+      .populate('items.product', 'name sku')
+      .populate('quotation', 'quotationNumber');
 
     res.status(200).json({
       success: true,
       message: 'Quotation converted to invoice successfully',
       quotation,
+      invoice: populatedInvoice,
     });
   } catch (error) {
     res.status(400).json({

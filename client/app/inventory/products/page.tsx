@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
 import {
@@ -44,70 +44,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
-// Initial products data
-const initialProductsData = [
-  {
-    id: "1",
-    productName: "Amaze Grey Polished",
-    model: "Marble Look Porcelain Tile",
-    src: "/assets/products/amaze-grey.jpg",
-    fallback: "AGP",
-    category: "Royal Series",
-    finish: "Polished",
-    stock: 245,
-  },
-  {
-    id: "2",
-    productName: "Amaze Luxury Matt",
-    model: "Marble Look Porcelain Tile",
-    src: "/assets/products/amaze-luxury.jpg",
-    fallback: "ALM",
-    category: "Royal Series",
-    finish: "Matt",
-    stock: 156,
-  },
-  {
-    id: "3",
-    productName: "Artic Apricot Matt",
-    model: "Porcelain Tile",
-    src: "/assets/products/artic-apricot.jpg",
-    fallback: "AAM",
-    category: "Artic Series",
-    finish: "Matt",
-    stock: 89,
-  },
-  {
-    id: "4",
-    productName: "Artic Cloud Matt",
-    model: "Porcelain Tile",
-    src: "/assets/products/artic-cloud.jpg",
-    fallback: "ACM",
-    category: "Artic Series",
-    finish: "Matt",
-    stock: 23,
-  },
-  {
-    id: "5",
-    productName: "Aspen Ash Grey",
-    model: "Steel Matt Porcelain",
-    src: "/assets/products/aspen-ash.jpg",
-    fallback: "AAG",
-    category: "Galaxy Series",
-    finish: "Matt",
-    stock: 12,
-  },
-  {
-    id: "6",
-    productName: "Bianco Matt",
-    model: "Marble Look Porcelain",
-    src: "/assets/products/bianco-matt.jpg",
-    fallback: "BMM",
-    category: "Marella Series",
-    finish: "Matt",
-    stock: 0,
-  },
-];
-
 type Product = {
   _id: string;
   name: string;
@@ -124,7 +60,6 @@ type Product = {
 };
 
 export default function ProductsPage() {
-  const id = useId();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -362,20 +297,20 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
+    <div className="w-full min-w-0 space-y-4 p-4 sm:space-y-6 sm:p-6 lg:p-8">
       {/* Top Bar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+      <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-2xl lg:text-3xl">
             Products
           </h1>
-          <p className="mt-1 text-neutral-600 dark:text-neutral-400">
+          <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400 sm:text-sm">
             Manage your product inventory
           </p>
         </div>
-        <Button onClick={handleAddProduct} className="gap-2">
+        <Button onClick={handleAddProduct} className="w-full shrink-0 gap-2 sm:w-auto">
           <Plus className="h-4 w-4" />
-          Add Product
+          <span className="text-sm">Add Product</span>
         </Button>
       </div>
 
@@ -384,21 +319,21 @@ export default function ProductsPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800"
+        className="w-full min-w-0 overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl"
       >
         {/* Header */}
-        <div className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <div className="w-full border-b border-neutral-200/60 p-3 dark:border-neutral-700/60 sm:p-4 lg:p-5">
+          <div className="flex w-full min-w-0 items-center justify-between">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
               <div
-                className="flex h-10 w-10 items-center justify-center rounded-xl"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-9 sm:w-9 lg:rounded-xl"
                 style={{ backgroundColor: "#c7a86415" }}
               >
-                <Package className="h-5 w-5" style={{ color: "#c7a864" }} strokeWidth={2} />
+                <Package className="h-4 w-4 sm:h-4 sm:w-4 lg:h-5 lg:w-5" style={{ color: "#c7a864" }} strokeWidth={2} />
               </div>
-              <div>
-                <h3 className="font-bold text-neutral-900 dark:text-white">Stock Overview</h3>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate text-xs font-bold text-neutral-900 dark:text-white sm:text-sm lg:text-base">Stock Overview</h3>
+                <p className="truncate text-[10px] text-neutral-500 dark:text-neutral-400 sm:text-xs">
                   Current inventory status
                 </p>
               </div>
@@ -411,30 +346,30 @@ export default function ProductsPage() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60"
+          className="w-full border-b border-neutral-200/60 p-3 dark:border-neutral-700/60 sm:p-4 lg:p-5"
         >
           {/* Search Bar */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: 0.2 }}
-            className="mb-4"
+            className="mb-2.5 w-full sm:mb-3"
           >
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <div className="relative w-full">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400 sm:left-3 sm:h-4 sm:w-4" />
               <Input
                 type="text"
                 placeholder="Search products..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="h-9 w-full pl-8 pr-9 text-xs sm:h-10 sm:pl-10 sm:pr-10 sm:text-sm"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 sm:right-3"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </button>
               )}
             </div>
@@ -445,25 +380,26 @@ export default function ProductsPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: 0.3 }}
-            className="flex flex-wrap items-center gap-3"
+            className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:gap-2"
           >
-            <Filter className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+            <Filter className="h-3.5 w-3.5 shrink-0 text-neutral-500 dark:text-neutral-400 sm:h-4 sm:w-4" />
 
             {/* Category Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  Category
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs sm:h-9 sm:gap-2 sm:text-sm">
+                  <span className="hidden sm:inline">Category</span>
+                  <span className="sm:hidden">Cat</span>
                   {selectedCategories.length > 0 && (
                     <Badge
                       variant="secondary"
-                      className="ml-1 h-5 px-1.5"
+                      className="ml-0.5 h-4 px-1 text-[10px] sm:ml-1 sm:h-5 sm:px-1.5 sm:text-xs"
                       style={{ backgroundColor: "#c7a864", color: "white" }}
                     >
                       {selectedCategories.length}
                     </Badge>
                   )}
-                  <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                  <ChevronDown className="h-3 w-3 opacity-50 sm:h-3.5 sm:w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
@@ -476,8 +412,11 @@ export default function ProductsPage() {
                       toggleCategory(category);
                     }}
                   >
-                    <Checkbox checked={selectedCategories.includes(category)} readOnly />
-                    <span>{category}</span>
+                  <Checkbox 
+                    checked={selectedCategories.includes(category)} 
+                    onChange={() => {}}
+                  />
+                  <span>{category}</span>
                   </DropdownMenuItem>
                 ))}
                 {selectedCategories.length > 0 && (
@@ -498,18 +437,19 @@ export default function ProductsPage() {
             {/* Finish Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  Finish
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs sm:h-9 sm:gap-2 sm:text-sm">
+                  <span className="hidden sm:inline">Finish</span>
+                  <span className="sm:hidden">Fin</span>
                   {selectedFinishes.length > 0 && (
                     <Badge
                       variant="secondary"
-                      className="ml-1 h-5 px-1.5"
+                      className="ml-0.5 h-4 px-1 text-[10px] sm:ml-1 sm:h-5 sm:px-1.5 sm:text-xs"
                       style={{ backgroundColor: "#c7a864", color: "white" }}
                     >
                       {selectedFinishes.length}
                     </Badge>
                   )}
-                  <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                  <ChevronDown className="h-3 w-3 opacity-50 sm:h-3.5 sm:w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
@@ -522,7 +462,10 @@ export default function ProductsPage() {
                       toggleFinish(finish);
                     }}
                   >
-                    <Checkbox checked={selectedFinishes.includes(finish)} readOnly />
+                    <Checkbox 
+                      checked={selectedFinishes.includes(finish)} 
+                      onChange={() => {}}
+                    />
                     <span>{finish}</span>
                   </DropdownMenuItem>
                 ))}
@@ -544,18 +487,19 @@ export default function ProductsPage() {
             {/* Status Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  Status
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs sm:h-9 sm:gap-2 sm:text-sm">
+                  <span className="hidden sm:inline">Status</span>
+                  <span className="sm:hidden">Stat</span>
                   {selectedStatus.length > 0 && (
                     <Badge
                       variant="secondary"
-                      className="ml-1 h-5 px-1.5"
+                      className="ml-0.5 h-4 px-1 text-[10px] sm:ml-1 sm:h-5 sm:px-1.5 sm:text-xs"
                       style={{ backgroundColor: "#c7a864", color: "white" }}
                     >
                       {selectedStatus.length}
                     </Badge>
                   )}
-                  <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                  <ChevronDown className="h-3 w-3 opacity-50 sm:h-3.5 sm:w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
@@ -566,7 +510,10 @@ export default function ProductsPage() {
                     toggleStatus("in-stock");
                   }}
                 >
-                  <Checkbox checked={selectedStatus.includes("in-stock")} readOnly />
+                  <Checkbox 
+                    checked={selectedStatus.includes("in-stock")} 
+                    onChange={() => {}}
+                  />
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-green-500" />
                     <span>In Stock</span>
@@ -579,7 +526,10 @@ export default function ProductsPage() {
                     toggleStatus("low-stock");
                   }}
                 >
-                  <Checkbox checked={selectedStatus.includes("low-stock")} readOnly />
+                  <Checkbox 
+                    checked={selectedStatus.includes("low-stock")} 
+                    onChange={() => {}}
+                  />
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-amber-500" />
                     <span>Low Stock</span>
@@ -592,7 +542,10 @@ export default function ProductsPage() {
                     toggleStatus("out-of-stock");
                   }}
                 >
-                  <Checkbox checked={selectedStatus.includes("out-of-stock")} readOnly />
+                  <Checkbox 
+                    checked={selectedStatus.includes("out-of-stock")} 
+                    onChange={() => {}}
+                  />
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-red-500" />
                     <span>Out of Stock</span>
@@ -642,7 +595,7 @@ export default function ProductsPage() {
         </motion.div>
 
         {/* Table Content */}
-        <div className="p-6">
+        <div className="p-4 sm:p-5 lg:p-6">
           {isLoading ? (
             <div className="flex h-64 items-center justify-center">
               <div className="flex flex-col items-center gap-3">
@@ -651,20 +604,19 @@ export default function ProductsPage() {
               </div>
             </div>
           ) : (
-            <div className="[&>div]:rounded-lg [&>div]:border [&>div]:border-neutral-200/60 dark:[&>div]:border-neutral-700/60">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead>
-                      <Checkbox id={id} aria-label="select-all" />
-                    </TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Finish</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead className="w-0">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
+            <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <div className="inline-block min-w-full align-middle">
+                <div className="overflow-hidden rounded-xl border border-neutral-200/60 dark:border-neutral-700/60">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="min-w-[180px] sm:min-w-[200px]">Product</TableHead>
+                        <TableHead className="hidden md:table-cell">Category</TableHead>
+                        <TableHead className="hidden lg:table-cell">Finish</TableHead>
+                        <TableHead>Stock</TableHead>
+                        <TableHead className="w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
                 <TableBody>
                   {filteredData.length === 0 ? (
                   <TableRow>
@@ -697,42 +649,37 @@ export default function ProductsPage() {
                         className="border-b transition-colors hover:bg-neutral-100/50 data-[state=selected]:bg-neutral-100 dark:hover:bg-neutral-800/50 dark:data-[state=selected]:bg-neutral-800"
                       >
                         <TableCell>
-                          <Checkbox
-                            id={`table-checkbox-${item._id}`}
-                            aria-label={`product-checkbox-${item._id}`}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="rounded-lg h-12 w-12">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <Avatar className="h-10 w-10 shrink-0 rounded-lg sm:h-12 sm:w-12">
                               <AvatarImage src={item.image || "/assets/products/placeholder.jpg"} alt={item.name} />
-                              <AvatarFallback className="text-xs rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
+                              <AvatarFallback className="flex items-center justify-center rounded-lg bg-neutral-200 text-xs dark:bg-neutral-700">
                                 <Package
-                                  className="h-6 w-6 text-neutral-500"
+                                  className="h-5 w-5 text-neutral-500 sm:h-6 sm:w-6"
                                   strokeWidth={1.5}
                                 />
                               </AvatarFallback>
                             </Avatar>
-                            <div>
-                              <div className="font-medium text-neutral-900 dark:text-white">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium text-neutral-900 dark:text-white sm:text-base">
                                 {item.name}
                               </div>
-                              <span className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                              <span className="mt-0.5 block text-[10px] text-neutral-500 dark:text-neutral-400 md:hidden sm:text-xs">{item.category}</span>
+                              <span className="mt-0.5 block text-[10px] text-neutral-500 dark:text-neutral-400 sm:text-xs">
                                 {item.sku}
                               </span>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-neutral-700 dark:text-neutral-300">
+                        <TableCell className="hidden text-neutral-700 dark:text-neutral-300 md:table-cell">
                           {item.category}
                         </TableCell>
-                        <TableCell className="text-neutral-700 dark:text-neutral-300">
+                        <TableCell className="hidden text-neutral-700 dark:text-neutral-300 lg:table-cell">
                           {item.finish}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 sm:gap-2">
                             <span
-                              className={`text-lg font-bold ${
+                              className={`text-base font-bold sm:text-lg ${
                                 stockStatus === "out"
                                   ? "text-red-600 dark:text-red-400"
                                   : stockStatus === "low"
@@ -742,34 +689,36 @@ export default function ProductsPage() {
                             >
                               {item.stock}
                             </span>
-                            <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 sm:text-xs">
                               {item.unit}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="flex items-center gap-1">
-                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                              onClick={() => handleEditProduct(item)}
-                              aria-label={`product-${item._id}-edit`}
-                            >
-                              <PencilIcon className="h-4 w-4" />
-                            </Button>
-                          </motion.div>
-                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                              onClick={() => handleDeleteProduct(item._id)}
-                              aria-label={`product-${item._id}-remove`}
-                            >
-                              <Trash2Icon className="h-4 w-4" />
-                            </Button>
-                          </motion.div>
+                        <TableCell>
+                          <div className="flex items-center gap-0.5 sm:gap-1">
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                                onClick={() => handleEditProduct(item)}
+                                aria-label={`product-${item._id}-edit`}
+                              >
+                                <PencilIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                              </Button>
+                            </motion.div>
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                                onClick={() => handleDeleteProduct(item._id)}
+                                aria-label={`product-${item._id}-remove`}
+                              >
+                                <Trash2Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                              </Button>
+                            </motion.div>
+                          </div>
                         </TableCell>
                       </motion.tr>
                     );
@@ -778,6 +727,8 @@ export default function ProductsPage() {
                 </TableBody>
               </Table>
             </div>
+          </div>
+        </div>
           )}
         </div>
 
@@ -786,30 +737,30 @@ export default function ProductsPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="border-t border-neutral-200/60 p-6 dark:border-neutral-700/60"
+          className="w-full border-t border-neutral-200/60 p-3 dark:border-neutral-700/60 sm:p-4 lg:p-5"
         >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-green-500" />
-                <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+          <div className="flex w-full min-w-0 flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5 sm:gap-3 lg:gap-4">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <div className="h-2 w-2 shrink-0 rounded-full bg-green-500 sm:h-2.5 sm:w-2.5" />
+                <span className="text-[10px] font-semibold text-neutral-700 dark:text-neutral-300 sm:text-xs">
                   In Stock: {inStock}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-amber-500" />
-                <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <div className="h-2 w-2 shrink-0 rounded-full bg-amber-500 sm:h-2.5 sm:w-2.5" />
+                <span className="text-[10px] font-semibold text-neutral-700 dark:text-neutral-300 sm:text-xs">
                   Low Stock: {lowStock}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-red-500" />
-                <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <div className="h-2 w-2 shrink-0 rounded-full bg-red-500 sm:h-2.5 sm:w-2.5" />
+                <span className="text-[10px] font-semibold text-neutral-700 dark:text-neutral-300 sm:text-xs">
                   Out of Stock: {outOfStock}
                 </span>
               </div>
             </div>
-            <span className="font-bold text-neutral-900 dark:text-white">
+            <span className="text-xs font-bold text-neutral-900 dark:text-white sm:text-sm">
               Total: {filteredData.length}{" "}
               {activeFiltersCount > 0 ? `of ${products.length}` : ""} Products
             </span>
@@ -819,32 +770,32 @@ export default function ProductsPage() {
 
       {/* Add/Edit Product Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[500px]">
           <form onSubmit={handleSaveProduct}>
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className="text-lg sm:text-xl">
                 {editingProduct ? "Edit Product" : "Add New Product"}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-xs sm:text-sm">
                 {editingProduct
                   ? "Update the product details below."
                   : "Fill in the details to add a new product."}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-3 py-4 sm:gap-4">
               {/* Product Image Upload */}
               <div className="grid gap-2">
                 <label
                   htmlFor="imageUpload"
-                  className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                  className="text-xs font-medium text-neutral-700 dark:text-neutral-300 sm:text-sm"
                 >
                   Product Image
                 </label>
                 
                 {/* Image Preview */}
-                <div className="flex flex-col items-center gap-3">
-                  <div className="relative h-32 w-32 overflow-hidden rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-800">
+                <div className="flex flex-col items-center gap-2 sm:gap-3">
+                  <div className="relative h-24 w-24 overflow-hidden rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-800 sm:h-32 sm:w-32">
                     {formData.image ? (
                       <Avatar className="h-full w-full rounded-xl">
                         <AvatarImage
@@ -853,12 +804,12 @@ export default function ProductsPage() {
                           className="object-cover"
                         />
                         <AvatarFallback className="rounded-xl bg-neutral-200 dark:bg-neutral-700">
-                          <Package className="h-12 w-12 text-neutral-500" strokeWidth={1.5} />
+                          <Package className="h-10 w-10 text-neutral-500 sm:h-12 sm:w-12" strokeWidth={1.5} />
                         </AvatarFallback>
                       </Avatar>
                     ) : (
                       <div className="flex h-full w-full items-center justify-center">
-                        <Package className="h-12 w-12 text-neutral-400" strokeWidth={1.5} />
+                        <Package className="h-10 w-10 text-neutral-400 sm:h-12 sm:w-12" strokeWidth={1.5} />
                       </div>
                     )}
                   </div>
@@ -867,9 +818,9 @@ export default function ProductsPage() {
                   <div className="flex flex-col items-center gap-2">
                     <label
                       htmlFor="imageUpload"
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700 sm:px-4 sm:py-2 sm:text-sm"
                     >
-                      <Upload className="h-4 w-4" />
+                      <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       Choose Image
                     </label>
                     <input
@@ -1021,7 +972,7 @@ export default function ProductsPage() {
                 </datalist>
                 {formData.category && !categories.includes(formData.category) && (
                   <p className="text-xs text-amber-600 dark:text-amber-400">
-                    ⚠️ This will create a new category: "{formData.category}"
+                    ⚠️ This will create a new category: &ldquo;{formData.category}&rdquo;
                   </p>
                 )}
               </div>
@@ -1049,7 +1000,7 @@ export default function ProductsPage() {
                 </datalist>
                 {formData.finish && !finishes.includes(formData.finish) && (
                   <p className="text-xs text-amber-600 dark:text-amber-400">
-                    ⚠️ This will create a new finish: "{formData.finish}"
+                    ⚠️ This will create a new finish: &ldquo;{formData.finish}&rdquo;
                   </p>
                 )}
               </div>

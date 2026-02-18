@@ -7,18 +7,37 @@ import { cn } from "@/lib/utils";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { api } from "@/lib/api";
 
-// Generate sample data for each stat
+// Generate sample data for each stat with realistic trend
 const generateData = (baseValue: number, trend: "up" | "down") => {
   const data = [];
-  let currentValue = baseValue * 0.7;
+  
+  // If baseValue is 0, show a flat line at low value
+  if (baseValue === 0) {
+    for (let i = 0; i < 15; i++) {
+      data.push({ 
+        index: i,
+        value: 0.5 + Math.random() * 0.3 // Small random variation
+      });
+    }
+    return data;
+  }
+  
+  // For non-zero values, generate realistic trend
+  let currentValue = baseValue * 0.65; // Start at 65% of current value
   
   for (let i = 0; i < 15; i++) {
-    const randomChange = (Math.random() - 0.5) * (baseValue * 0.1);
-    const trendChange = trend === "up" ? baseValue * 0.02 : -baseValue * 0.02;
+    const randomChange = (Math.random() - 0.5) * (baseValue * 0.08); // 8% random variation
+    const trendChange = trend === "up" ? baseValue * 0.025 : -baseValue * 0.025; // 2.5% trend
     currentValue += randomChange + trendChange;
+    
+    // Ensure we end near the actual value
+    if (i === 14) {
+      currentValue = baseValue + (Math.random() - 0.5) * (baseValue * 0.05);
+    }
+    
     data.push({ 
       index: i,
-      value: Math.max(0, currentValue) 
+      value: Math.max(0.5, currentValue) // Minimum value for visibility
     });
   }
   
@@ -71,16 +90,29 @@ export function SummaryCards() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const [stockStatsResponse, quotationStatsResponse, invoiceStatsResponse] = await Promise.all([
+      const [stockStatsResponse, quotationStatsResponse, invoiceStatsResponse, supplierStatsResponse, purchaseOrderStatsResponse] = await Promise.all([
         api.getStockStats(),
         api.getQuotationStats(),
         api.getInvoiceStats(),
+        api.getSupplierStats(),
+        api.getPurchaseOrderStats(),
       ]);
       
       const totalProducts = stockStatsResponse.success && stockStatsResponse.stats ? stockStatsResponse.stats.totalProducts : 0;
-      const totalStock = stockStatsResponse.success && stockStatsResponse.stats ? stockStatsResponse.stats.totalStock : 0;
-      const quotationsCount = quotationStatsResponse.success && quotationStatsResponse.stats ? quotationStatsResponse.stats.totalQuotations || 0 : 0;
-      const invoicesCount = invoiceStatsResponse.success && invoiceStatsResponse.stats ? invoiceStatsResponse.stats.totalInvoices || 0 : 0;
+      const totalSuppliers = supplierStatsResponse.success && supplierStatsResponse.stats ? supplierStatsResponse.stats.totalSuppliers || 0 : 0;
+      
+      // Fix: Backend returns 'total' not 'totalQuotations'
+      const quotationsCount = quotationStatsResponse.success && quotationStatsResponse.stats ? quotationStatsResponse.stats.total || 0 : 0;
+      const invoicesCount = invoiceStatsResponse.success && invoiceStatsResponse.stats ? invoiceStatsResponse.stats.totalInvoices || invoiceStatsResponse.stats.total || 0 : 0;
+      const purchaseOrdersCount = purchaseOrderStatsResponse.success && purchaseOrderStatsResponse.stats ? purchaseOrderStatsResponse.stats.totalPurchaseOrders || 0 : 0;
+      
+      console.log('Dashboard Stats:', {
+        products: totalProducts,
+        suppliers: totalSuppliers,
+        quotations: quotationsCount,
+        invoices: invoicesCount,
+        purchaseOrders: purchaseOrdersCount,
+      });
       
       setSummary([
         {
@@ -89,17 +121,17 @@ export function SummaryCards() {
           value: totalProducts.toString(),
           change: "—",
           percentageChange: "—",
-          changeType: "positive",
-          data: generateData(totalProducts || 1, "up"),
+          changeType: totalProducts > 0 ? "positive" : "positive",
+          data: generateData(totalProducts || 1, totalProducts > 0 ? "up" : "up"),
         },
         {
-          name: "Stock Quantity",
-          code: "STK",
-          value: totalStock.toLocaleString(),
+          name: "Total Suppliers",
+          code: "SUP",
+          value: totalSuppliers.toString(),
           change: "—",
           percentageChange: "—",
-          changeType: "positive",
-          data: generateData(totalStock || 1, "up"),
+          changeType: totalSuppliers > 0 ? "positive" : "positive",
+          data: generateData(totalSuppliers || 1, totalSuppliers > 0 ? "up" : "up"),
         },
         {
           name: "Quotations",
@@ -107,8 +139,8 @@ export function SummaryCards() {
           value: quotationsCount.toString(),
           change: "—",
           percentageChange: "—",
-          changeType: "positive",
-          data: generateData(quotationsCount || 1, "up"),
+          changeType: quotationsCount > 0 ? "positive" : "positive",
+          data: generateData(quotationsCount || 1, quotationsCount > 0 ? "up" : "up"),
         },
         {
           name: "Invoices",
@@ -116,8 +148,17 @@ export function SummaryCards() {
           value: invoicesCount.toString(),
           change: "—",
           percentageChange: "—",
-          changeType: "positive",
-          data: generateData(invoicesCount || 1, "up"),
+          changeType: invoicesCount > 0 ? "positive" : "positive",
+          data: generateData(invoicesCount || 1, invoicesCount > 0 ? "up" : "up"),
+        },
+        {
+          name: "Purchase Orders",
+          code: "PO",
+          value: purchaseOrdersCount.toString(),
+          change: "—",
+          percentageChange: "—",
+          changeType: purchaseOrdersCount > 0 ? "positive" : "positive",
+          data: generateData(purchaseOrdersCount || 1, purchaseOrdersCount > 0 ? "up" : "up"),
         },
       ]);
     } catch (error) {
@@ -134,8 +175,8 @@ export function SummaryCards() {
           data: generateData(1, "up"),
         },
         {
-          name: "Stock Quantity",
-          code: "STK",
+          name: "Total Suppliers",
+          code: "SUP",
           value: "0",
           change: "—",
           percentageChange: "—",
@@ -160,6 +201,15 @@ export function SummaryCards() {
           changeType: "positive",
           data: generateData(1, "up"),
         },
+        {
+          name: "Purchase Orders",
+          code: "PO",
+          value: "0",
+          change: "—",
+          percentageChange: "—",
+          changeType: "positive",
+          data: generateData(1, "up"),
+        },
       ]);
     } finally {
       setIsLoading(false);
@@ -167,10 +217,10 @@ export function SummaryCards() {
   };
 
   return (
-    <div className="grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
+    <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5 lg:gap-6">
       {isLoading ? (
         // Loading skeletons
-        Array.from({ length: 4 }).map((_, index) => (
+        Array.from({ length: 5 }).map((_, index) => (
           <motion.div
             key={`skeleton-${index}`}
             initial={{ opacity: 0, y: 20 }}
@@ -180,25 +230,25 @@ export function SummaryCards() {
               delay: index * 0.1,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
-            className="w-full min-w-0"
+            className="w-full"
           >
-            <Card className="relative h-full overflow-hidden rounded-lg border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:rounded-xl lg:rounded-2xl">
+            <Card className="h-full overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl">
               <CardContent className="p-3 pb-2.5 sm:p-4 sm:pb-3 lg:p-5 lg:pb-4">
                 <div className="animate-pulse">
                   <div className="mb-1.5 sm:mb-2 lg:mb-3">
-                    <div className="h-3 w-24 rounded bg-neutral-200 dark:bg-neutral-700 sm:h-4" />
-                    <div className="mt-1 h-2 w-16 rounded bg-neutral-200 dark:bg-neutral-700" />
+                    <div className="h-3 w-20 rounded bg-neutral-200 dark:bg-neutral-700 sm:h-4 sm:w-24" />
+                    <div className="mt-1 h-2 w-12 rounded bg-neutral-200 dark:bg-neutral-700 sm:w-16" />
                   </div>
                   <div className="flex items-baseline justify-between">
-                    <div className="h-8 w-16 rounded bg-neutral-200 dark:bg-neutral-700 sm:h-10 lg:h-12" />
+                    <div className="h-7 w-12 rounded bg-neutral-200 dark:bg-neutral-700 sm:h-8 sm:w-16 lg:h-10 lg:w-20" />
                     <div className="flex flex-col items-end gap-1">
-                      <div className="h-3 w-10 rounded bg-neutral-200 dark:bg-neutral-700" />
-                      <div className="h-2 w-12 rounded bg-neutral-200 dark:bg-neutral-700" />
+                      <div className="h-2.5 w-8 rounded bg-neutral-200 dark:bg-neutral-700 sm:h-3 sm:w-10" />
+                      <div className="h-2 w-10 rounded bg-neutral-200 dark:bg-neutral-700 sm:w-12" />
                     </div>
                   </div>
-                  <div className="mt-2 h-10 w-full rounded bg-neutral-200 dark:bg-neutral-700 sm:mt-3 sm:h-12 lg:mt-4 lg:h-16" />
+                  <div className="mt-2 h-8 w-full rounded bg-neutral-200 dark:bg-neutral-700 sm:mt-3 sm:h-10 lg:mt-4 lg:h-14" />
                   <div className="mt-1.5 border-t border-neutral-100 pt-1.5 dark:border-neutral-700 sm:mt-2 sm:pt-2 lg:mt-3 lg:pt-3">
-                    <div className="h-2 w-20 rounded bg-neutral-200 dark:bg-neutral-700" />
+                    <div className="h-2 w-16 rounded bg-neutral-200 dark:bg-neutral-700 sm:w-20" />
                   </div>
                 </div>
               </CardContent>
@@ -232,9 +282,9 @@ export function SummaryCards() {
                 ease: "easeOut"
               }
             }}
-            className="w-full min-w-0"
+            className="w-full"
           >
-            <Card className="group relative h-full overflow-hidden rounded-lg border border-neutral-200/60 bg-white shadow-sm transition-all duration-300 hover:border-neutral-300/60 hover:shadow-lg dark:border-neutral-700/60 dark:bg-neutral-800 dark:hover:border-neutral-600/60 sm:rounded-xl lg:rounded-2xl">
+            <Card className="group h-full overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm transition-all duration-300 hover:border-neutral-300/60 hover:shadow-lg dark:border-neutral-700/60 dark:bg-neutral-800 dark:hover:border-neutral-600/60 lg:rounded-2xl">
               <CardContent className="p-3 pb-2.5 sm:p-4 sm:pb-3 lg:p-5 lg:pb-4">
                 {/* Header */}
                 <div className="mb-1.5 sm:mb-2 lg:mb-3">

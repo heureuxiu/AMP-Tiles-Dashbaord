@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Receipt, Eye, Download, Search, X, ChevronDown } from "lucide-react";
+import { Receipt, Eye, Download, Search, X, ChevronDown, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -115,6 +115,27 @@ export default function InvoicesPage() {
   const handleDownloadPDF = (invoice: Invoice) => {
     toast.info(`Generating PDF for ${invoice.invoiceNumber}...`);
     // TODO: Implement PDF generation
+  };
+
+  const handleDeleteInvoice = async (invoice: Invoice) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${invoice.invoiceNumber}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      const response = await api.deleteInvoice(invoice._id);
+      if (response.success) {
+        toast.success("Invoice deleted", {
+          description: `${invoice.invoiceNumber} has been removed`,
+        });
+        fetchInvoices();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete invoice";
+      toast.error("Failed to delete invoice", {
+        description: errorMessage,
+      });
+    }
   };
 
   const handleStatusChange = async (invoiceId: string, newStatus: "draft" | "sent" | "paid" | "overdue" | "cancelled") => {
@@ -403,6 +424,20 @@ export default function InvoicesPage() {
                               title="Download PDF"
                             >
                               <Download className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                            </Button>
+                          </motion.div>
+
+                          {/* Delete Button */}
+                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20"
+                              onClick={() => handleDeleteInvoice(invoice)}
+                              aria-label={`Delete ${invoice.invoiceNumber}`}
+                              title="Delete Invoice"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                             </Button>
                           </motion.div>
                         </TableCell>

@@ -47,20 +47,44 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
 
+  // Close sidebar on escape key
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && open) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [open, setOpen]);
+
+  // Prevent body scroll when sidebar is open on mobile
+  React.useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
   return (
     <>
+      {/* Backdrop */}
       {open && (
-        <button
-          type="button"
-          aria-label="Close sidebar"
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity md:hidden"
           onClick={() => setOpen(false)}
+          aria-hidden="true"
         />
       )}
 
+      {/* Sidebar */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col overflow-hidden border-r border-amp-footer-light bg-amp-footer px-3 py-3 text-amp-footer-text transition-transform duration-300 ease-in-out sm:w-[300px] sm:px-4 sm:py-4 md:translate-x-0",
+          "fixed left-0 top-0 z-50 flex h-full w-[280px] flex-col overflow-hidden border-r border-amp-footer-light bg-amp-footer shadow-2xl transition-transform duration-300 ease-in-out md:translate-x-0 md:shadow-none lg:w-[300px]",
           open ? "translate-x-0" : "-translate-x-full",
           className
         )}
@@ -69,10 +93,11 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
           children
         ) : (
           <>
-            <div className="flex h-12 items-center justify-between shrink-0 sm:h-14">
+            {/* Header */}
+            <div className="flex h-16 shrink-0 items-center justify-between border-b border-amp-footer-light px-4 lg:h-18 lg:px-5">
               <Link
                 href="/dashboard"
-                className="flex items-center gap-2"
+                className="flex items-center"
                 onClick={() => setOpen(false)}
               >
                 <Image
@@ -80,21 +105,23 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
                   alt="AMP Tiles"
                   width={160}
                   height={54}
-                  className="h-10 w-auto object-contain sm:h-12"
+                  className="h-11 w-auto object-contain lg:h-12"
                   priority
                 />
               </Link>
               <button
                 type="button"
                 aria-label="Close menu"
-                className="rounded-lg p-2 text-amp-footer-text transition-colors hover:bg-amp-footer-light active:scale-95 md:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-amp-footer-text transition-all hover:bg-amp-footer-light active:scale-95 md:hidden"
                 onClick={() => setOpen(false)}
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" strokeWidth={2.5} />
               </button>
             </div>
-            <nav className="scrollbar-hide flex-1 overflow-y-auto py-3 sm:py-4">
-              <ul className="space-y-0.5 sm:space-y-1">
+
+            {/* Navigation */}
+            <nav className="scrollbar-thin scrollbar-thumb-amp-footer-light scrollbar-track-transparent flex-1 overflow-y-auto px-3 py-4 lg:px-4 lg:py-5">
+              <ul className="space-y-1">
                 {sidebarNav.map((section) => (
                   <SidebarSection
                     key={section.label}
@@ -105,10 +132,13 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
                 ))}
               </ul>
             </nav>
-            <div className="shrink-0 space-y-2.5 border-t border-amp-footer-light pt-3 sm:space-y-3 sm:pt-4">
+
+            {/* Footer */}
+            <div className="shrink-0 space-y-3 border-t border-amp-footer-light px-3 py-4 lg:px-4 lg:py-5">
+              {/* Logout Button */}
               <button
                 type="button"
-                className="flex w-full items-center gap-2.5 rounded-lg bg-red-500/10 px-2.5 py-2 text-left text-sm font-bold text-red-500 transition-all hover:bg-red-500/15 hover:text-red-500 active:scale-[0.98] sm:gap-3 sm:px-3 sm:py-2.5"
+                className="flex w-full items-center gap-3 rounded-xl bg-red-500/10 px-3 py-2.5 text-left font-bold text-red-500 transition-all hover:bg-red-500/20 active:scale-[0.98] lg:px-4 lg:py-3"
                 onClick={() => {
                   setOpen(false);
                   logout();
@@ -118,18 +148,20 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
                   router.push("/login");
                 }}
               >
-                <LogOut className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
-                <span className="text-xs sm:text-sm">Logout</span>
+                <LogOut className="h-5 w-5 shrink-0" strokeWidth={2.5} />
+                <span className="text-sm lg:text-base">Logout</span>
               </button>
-              <div className="flex items-center gap-2.5 rounded-lg bg-neutral-200 px-2.5 py-2.5 dark:bg-neutral-600 sm:gap-3 sm:px-3 sm:py-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black text-white sm:h-10 sm:w-10">
-                  <User className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
+
+              {/* User Info */}
+              <div className="flex items-center gap-3 rounded-xl bg-neutral-200/80 px-3 py-3 dark:bg-neutral-600/80 lg:px-4 lg:py-3.5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white lg:h-11 lg:w-11">
+                  <User className="h-5 w-5 shrink-0 lg:h-6 lg:w-6" strokeWidth={2.5} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-bold text-neutral-900 dark:text-neutral-100 sm:text-sm">
+                  <p className="truncate text-sm font-bold text-neutral-900 dark:text-neutral-100 lg:text-base">
                     {user?.name || "Admin User"}
                   </p>
-                  <p className="truncate text-[10px] font-normal text-neutral-600 dark:text-neutral-400 sm:text-xs">
+                  <p className="truncate text-xs font-normal text-neutral-600 dark:text-neutral-400 lg:text-sm">
                     {user?.email || "admin@amptiles.com.au"}
                   </p>
                 </div>
@@ -218,20 +250,21 @@ function SidebarSection({
     <li>
       <button
         type="button"
-        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm font-medium text-amp-footer-text transition-all hover:bg-amp-footer-light hover:text-amp-primary active:scale-[0.98] sm:gap-3 sm:py-2.5"
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left font-semibold text-amp-footer-text transition-all hover:bg-amp-footer-light hover:text-amp-primary active:scale-[0.98] lg:px-4 lg:py-3"
         onClick={() => setExpanded((e) => !e)}
       >
-        {Icon && <Icon className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />}
-        <span className="flex-1 text-xs sm:text-sm">{section.label}</span>
+        {Icon && <Icon className="h-5 w-5 shrink-0" strokeWidth={2.5} />}
+        <span className="flex-1 text-sm lg:text-base">{section.label}</span>
         <ChevronDown
           className={cn(
-            "h-3.5 w-3.5 shrink-0 transition-transform duration-200 sm:h-4 sm:w-4",
+            "h-4 w-4 shrink-0 transition-transform duration-200",
             expanded && "rotate-180"
           )}
+          strokeWidth={2.5}
         />
       </button>
       {expanded && (
-        <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-amp-footer-light pl-2.5 sm:ml-4 sm:mt-1 sm:pl-3">
+        <ul className="ml-4 mt-1 space-y-0.5 border-l-2 border-amp-footer-light pl-3 lg:ml-5 lg:pl-4">
           {section.items.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -240,10 +273,10 @@ function SidebarSection({
                   href={item.href}
                   onClick={onNavigate}
                   className={cn(
-                    "block rounded-md px-2 py-1.5 text-xs transition-all sm:py-2 sm:text-sm",
+                    "block rounded-lg px-3 py-2 text-sm transition-all lg:px-4 lg:py-2.5 lg:text-base",
                     isActive
-                      ? "bg-amp-primary/15 font-medium text-amp-primary"
-                      : "text-amp-footer-text/90 hover:bg-amp-footer-light hover:text-amp-primary active:scale-[0.98]"
+                      ? "bg-amp-primary/20 font-semibold text-amp-primary shadow-sm"
+                      : "font-medium text-amp-footer-text/90 hover:bg-amp-footer-light hover:text-amp-primary active:scale-[0.98]"
                   )}
                 >
                   {item.label}

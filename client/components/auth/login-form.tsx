@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -16,17 +15,39 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("amp_remembered_email");
+    const savedRememberMe = localStorage.getItem("amp_remember_me") === "true";
+    
+    if (savedEmail && savedRememberMe) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
     try {
       await login(email, password);
+      
+      // Handle remember me
+      if (rememberMe) {
+        localStorage.setItem("amp_remembered_email", email);
+        localStorage.setItem("amp_remember_me", "true");
+      } else {
+        localStorage.removeItem("amp_remembered_email");
+        localStorage.removeItem("amp_remember_me");
+      }
+      
       toast.success("Logged in successfully", {
         description: "Welcome to AMP Tiles Admin.",
       });
       router.push("/dashboard");
-    } catch (error) {
+    } catch {
       toast.error("Login failed", {
         description: "Please check your credentials and try again.",
       });
@@ -64,13 +85,18 @@ export function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
         />
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <Checkbox name="remember-me" label="Remember me" />
-          <Link
+          <Checkbox 
+            name="remember-me" 
+            label="Remember me"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+          />
+          {/* <Link
             href="/forgot-password"
             className="text-sm font-medium text-amp-primary hover:underline"
           >
             Forgot your password?
-          </Link>
+          </Link> */}
         </div>
       </div>
 

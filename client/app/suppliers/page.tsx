@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Users, Edit, Search, X, Plus } from "lucide-react";
+import { Users, Edit, Search, X, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -79,6 +79,27 @@ export default function SuppliersPage() {
 
   const handleAddSupplier = () => {
     router.push("/suppliers/create");
+  };
+
+  const handleDeleteSupplier = async (supplier: Supplier) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${supplier.name} (${supplier.supplierNumber})? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      const response = await api.deleteSupplier(supplier._id);
+      if (response.success) {
+        toast.success("Supplier deleted", {
+          description: `${supplier.name} has been removed`,
+        });
+        fetchSuppliers();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete supplier";
+      toast.error("Failed to delete supplier", {
+        description: errorMessage,
+      });
+    }
   };
 
   return (
@@ -258,6 +279,19 @@ export default function SuppliersPage() {
                               title="Edit Supplier"
                             >
                               <Edit className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                            </Button>
+                          </motion.div>
+                          {/* Delete Button */}
+                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20"
+                              onClick={() => handleDeleteSupplier(supplier)}
+                              aria-label={`Delete ${supplier.name}`}
+                              title="Delete Supplier"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                             </Button>
                           </motion.div>
                         </TableCell>

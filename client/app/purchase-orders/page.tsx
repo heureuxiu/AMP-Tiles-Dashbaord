@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, Eye, CheckCircle, Edit, Plus, Filter, X } from "lucide-react";
+import { ShoppingCart, Eye, CheckCircle, Edit, Plus, Filter, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -121,6 +121,27 @@ export default function PurchaseOrdersPage() {
 
   const handleCreatePO = () => {
     router.push("/purchase-orders/create");
+  };
+
+  const handleDeletePurchaseOrder = async (po: PurchaseOrder) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${po.poNumber}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      const response = await api.deletePurchaseOrder(po._id);
+      if (response.success) {
+        toast.success("Purchase order deleted", {
+          description: `${po.poNumber} has been removed`,
+        });
+        fetchData();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete purchase order";
+      toast.error("Failed to delete purchase order", {
+        description: errorMessage,
+      });
+    }
   };
 
   const getStatusBadge = (status: POStatus) => {
@@ -422,6 +443,24 @@ export default function PurchaseOrdersPage() {
                               </Button>
                             </motion.div>
                           )}
+                          {/* Delete Button (backend allows only draft) */}
+                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-8 w-8 rounded-full ${
+                                po.status !== "draft"
+                                  ? "cursor-not-allowed opacity-50"
+                                  : "hover:bg-red-100 dark:hover:bg-red-900/20"
+                              }`}
+                              onClick={() => handleDeletePurchaseOrder(po)}
+                              disabled={po.status !== "draft"}
+                              aria-label={`Delete ${po.poNumber}`}
+                              title={po.status === "draft" ? "Delete Purchase Order" : "Only draft orders can be deleted"}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            </Button>
+                          </motion.div>
                         </TableCell>
                       </motion.tr>
                     ))

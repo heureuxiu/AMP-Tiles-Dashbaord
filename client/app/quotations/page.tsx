@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, PencilIcon, FileText, Eye, ArrowRight, Search, X } from "lucide-react";
+import { Plus, PencilIcon, FileText, Eye, ArrowRight, Search, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -113,6 +113,27 @@ export default function QuotationsPage() {
 
   const handleViewQuotation = (id: string) => {
     router.push(`/quotations/${id}`);
+  };
+
+  const handleDeleteQuotation = async (quotation: Quotation) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${quotation.quotationNumber}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      const response = await api.deleteQuotation(quotation._id);
+      if (response.success) {
+        toast.success("Quotation deleted", {
+          description: `${quotation.quotationNumber} has been removed`,
+        });
+        fetchQuotations();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete quotation";
+      toast.error("Failed to delete quotation", {
+        description: errorMessage,
+      });
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -346,6 +367,20 @@ export default function QuotationsPage() {
                             title="View Quotation"
                           >
                             <Eye className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+
+                        {/* Delete Button */}
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20"
+                            onClick={() => handleDeleteQuotation(quotation)}
+                            aria-label={`Delete ${quotation.quotationNumber}`}
+                            title="Delete Quotation"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                           </Button>
                         </motion.div>
                       </TableCell>
