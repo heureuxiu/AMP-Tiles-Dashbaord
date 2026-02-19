@@ -223,7 +223,7 @@ export function StockOverview() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="w-full overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl"
+      className="w-full min-w-0 overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl"
     >
       {/* Header */}
       <div className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-5 lg:p-6">

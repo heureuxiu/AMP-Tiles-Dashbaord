@@ -81,10 +81,10 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - on mobile: max 85vw with safe-area; on md+: full width */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-full w-[280px] flex-col overflow-hidden border-r border-amp-footer-light bg-amp-footer shadow-2xl transition-transform duration-300 ease-in-out md:translate-x-0 md:shadow-none lg:w-[300px]",
+          "fixed left-0 top-0 z-50 flex h-full max-h-dvh w-[min(280px,85vw)] max-w-[280px] flex-col overflow-hidden border-r border-amp-footer-light bg-amp-footer shadow-2xl transition-transform duration-300 ease-in-out pl-[env(safe-area-inset-left)] md:translate-x-0 md:w-[280px] md:max-w-none md:shadow-none lg:w-[300px]",
           open ? "translate-x-0" : "-translate-x-full",
           className
         )}
@@ -93,8 +93,8 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
           children
         ) : (
           <>
-            {/* Header */}
-            <div className="flex h-16 shrink-0 items-center justify-between border-b border-amp-footer-light px-4 lg:h-18 lg:px-5">
+            {/* Header - touch-friendly height on mobile */}
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-amp-footer-light px-3 sm:h-16 sm:px-4 lg:h-18 lg:px-5">
               <Link
                 href="/dashboard"
                 className="flex items-center"
@@ -112,15 +112,15 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
               <button
                 type="button"
                 aria-label="Close menu"
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-amp-footer-text transition-all hover:bg-amp-footer-light active:scale-95 md:hidden"
+                className="flex h-10 w-10 touch-manipulation items-center justify-center rounded-xl text-amp-footer-text transition-all hover:bg-amp-footer-light active:scale-95 md:hidden"
                 onClick={() => setOpen(false)}
               >
-                <X className="h-5 w-5" strokeWidth={2.5} />
+                <X className="h-5 w-5" strokeWidth={2.5} aria-hidden />
               </button>
             </div>
 
-            {/* Navigation */}
-            <nav className="scrollbar-thin scrollbar-thumb-amp-footer-light scrollbar-track-transparent flex-1 overflow-y-auto px-3 py-4 lg:px-4 lg:py-5">
+            {/* Navigation - overflow for small screens */}
+            <nav className="scrollbar-thin scrollbar-thumb-amp-footer-light scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-4 lg:px-4 lg:py-5">
               <ul className="space-y-1">
                 {sidebarNav.map((section) => (
                   <SidebarSection
@@ -133,8 +133,8 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
               </ul>
             </nav>
 
-            {/* Footer */}
-            <div className="shrink-0 space-y-3 border-t border-amp-footer-light px-3 py-4 lg:px-4 lg:py-5">
+            {/* Footer - touch-friendly padding */}
+            <div className="shrink-0 space-y-3 border-t border-amp-footer-light px-3 py-4 sm:px-4 lg:px-4 lg:py-5 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {/* Logout Button */}
               <button
                 type="button"

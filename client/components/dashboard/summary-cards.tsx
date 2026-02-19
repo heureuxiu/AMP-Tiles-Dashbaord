@@ -217,7 +217,7 @@ export function SummaryCards() {
   };
 
   return (
-    <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5 lg:gap-6">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5 lg:gap-6">
       {isLoading ? (
         // Loading skeletons
         Array.from({ length: 5 }).map((_, index) => (

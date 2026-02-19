@@ -137,39 +137,39 @@ export default function StockUpdatePage() {
     : 0;
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
+    <div className="min-w-0 w-full space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8">
       {/* Top Bar */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+        <h1 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-3xl">
           Stock Update
         </h1>
-        <p className="mt-1 text-neutral-600 dark:text-neutral-400">
+        <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400 sm:text-sm">
           Manage inventory stock levels
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Stock Update Form */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="lg:col-span-2 rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800"
+          className="min-w-0 rounded-xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:col-span-2 lg:rounded-2xl"
         >
           {/* Header */}
-          <div className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60">
+          <div className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6">
             <div className="flex items-center gap-3">
               <div
-                className="flex h-10 w-10 items-center justify-center rounded-xl"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10"
                 style={{ backgroundColor: "#c7a86415" }}
               >
-                <Package className="h-5 w-5" style={{ color: "#c7a864" }} strokeWidth={2} />
+                <Package className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "#c7a864" }} strokeWidth={2} />
               </div>
-              <div>
-                <h3 className="font-bold text-neutral-900 dark:text-white">
+              <div className="min-w-0">
+                <h3 className="font-bold text-neutral-900 dark:text-white sm:text-base">
                   Update Stock Form
                 </h3>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 sm:text-sm">
                   Add or remove stock quantities
                 </p>
               </div>
@@ -177,8 +177,8 @@ export default function StockUpdatePage() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleUpdateStock} className="p-6">
-            <div className="space-y-6">
+          <form onSubmit={handleUpdateStock} className="p-4 sm:p-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* Product Selection */}
               <div className="grid gap-2">
                 <label
@@ -213,32 +213,32 @@ export default function StockUpdatePage() {
                 >
                   Action Type <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <button
                     type="button"
                     onClick={() => setActionType("stock-in")}
                     disabled={isSubmitting}
-                    className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    className={`flex items-center justify-center gap-1.5 rounded-xl border-2 p-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed sm:gap-2 sm:p-4 ${
                       actionType === "stock-in"
                         ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400"
                         : "border-neutral-200 bg-white hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-800 dark:hover:border-neutral-600"
                     }`}
                   >
-                    <TrendingUp className="h-5 w-5" />
-                    <span className="font-semibold">Stock In</span>
+                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="text-sm font-semibold sm:text-base">Stock In</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setActionType("stock-out")}
                     disabled={isSubmitting}
-                    className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    className={`flex items-center justify-center gap-1.5 rounded-xl border-2 p-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed sm:gap-2 sm:p-4 ${
                       actionType === "stock-out"
                         ? "border-red-500 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400"
                         : "border-neutral-200 bg-white hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-800 dark:hover:border-neutral-600"
                     }`}
                   >
-                    <TrendingDown className="h-5 w-5" />
-                    <span className="font-semibold">Stock Out</span>
+                    <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="text-sm font-semibold sm:text-base">Stock Out</span>
                   </button>
                 </div>
               </div>
@@ -283,8 +283,8 @@ export default function StockUpdatePage() {
               </div>
 
               {/* Buttons */}
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" className="flex-1" disabled={isSubmitting}>
+              <div className="flex flex-wrap gap-2 pt-2 sm:gap-3">
+                <Button type="submit" className="min-w-0 flex-1" disabled={isSubmitting}>
                   {isSubmitting ? "Updating..." : "Update Stock"}
                 </Button>
                 <Button
@@ -307,16 +307,16 @@ export default function StockUpdatePage() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="lg:col-span-1 space-y-4"
+          className="min-w-0 space-y-4 lg:col-span-1"
         >
           {/* Current Stock Card */}
-          <div className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800">
-            <div className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60">
+          <div className="rounded-xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl">
+            <div className="border-b border-neutral-200/60 p-3 dark:border-neutral-700/60 sm:p-4">
               <h3 className="font-semibold text-neutral-900 dark:text-white">
                 Stock Preview
               </h3>
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-8">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
@@ -433,7 +433,7 @@ export default function StockUpdatePage() {
           </div>
 
           {/* Quick Stats */}
-          <div className="rounded-2xl border border-neutral-200/60 bg-white p-4 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800">
+          <div className="min-w-0 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl lg:p-4">
             <h4 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-white">
               Quick Stats
             </h4>

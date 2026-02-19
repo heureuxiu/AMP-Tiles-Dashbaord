@@ -39,7 +39,7 @@ export function QuickActions() {
   ];
 
   return (
-    <div className="w-full rounded-xl border border-neutral-200/60 bg-white p-4 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:p-5 lg:rounded-2xl lg:p-6">
+    <div className="w-full min-w-0 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:p-5 lg:rounded-2xl lg:p-6">
       {/* Header */}
       <div className="mb-4 sm:mb-5 lg:mb-6">
         <h2 className="text-base font-bold text-neutral-900 dark:text-white sm:text-lg lg:text-xl">Quick Actions</h2>
@@ -48,8 +48,8 @@ export function QuickActions() {
         </p>
       </div>
 
-      {/* Actions Grid */}
-      <div className="grid gap-3 grid-cols-2 sm:gap-4 lg:grid-cols-4">
+      {/* Actions Grid - 2 cols on mobile, 4 on lg */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
         {actions.map((action, index) => {
           const Icon = action.icon;
           return (

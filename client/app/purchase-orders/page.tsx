@@ -202,20 +202,20 @@ export default function PurchaseOrdersPage() {
   const hasActiveFilters = supplierFilter !== "all" || statusFilter !== "all";
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
+    <div className="min-w-0 w-full space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8">
       {/* Top Bar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-3xl">
             Purchase Orders
           </h1>
-          <p className="mt-1 text-neutral-600 dark:text-neutral-400">
+          <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400 sm:text-sm">
             Track and manage purchase orders
           </p>
         </div>
         <Button
           onClick={handleCreatePO}
-          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
+          className="w-full shrink-0 gap-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700 sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           Create Purchase Order
@@ -227,26 +227,24 @@ export default function PurchaseOrdersPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800"
+        className="min-w-0 overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl"
       >
         {/* Header */}
-        <div className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-xl"
-                style={{ backgroundColor: "#8b5cf615" }}
-              >
-                <ShoppingCart className="h-5 w-5" style={{ color: "#8b5cf6" }} strokeWidth={2} />
-              </div>
-              <div>
-                <h3 className="font-bold text-neutral-900 dark:text-white">
-                  All Purchase Orders
-                </h3>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  Manage supplier purchase orders
-                </p>
-              </div>
+        <div className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10"
+              style={{ backgroundColor: "#8b5cf615" }}
+            >
+              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "#8b5cf6" }} strokeWidth={2} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-neutral-900 dark:text-white sm:text-base">
+                All Purchase Orders
+              </h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 sm:text-sm">
+                Manage supplier purchase orders
+              </p>
             </div>
           </div>
         </div>
@@ -256,9 +254,9 @@ export default function PurchaseOrdersPage() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60"
+          className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6"
         >
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Filter className="h-4 w-4 text-neutral-400" />
             <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
               Filters:
@@ -347,7 +345,8 @@ export default function PurchaseOrdersPage() {
         </motion.div>
 
         {/* Table Content */}
-        <div className="p-6">
+        <div className="overflow-x-auto p-3 sm:p-6">
+          <div className="inline-block min-w-full align-middle">
           {isLoading ? (
             <div className="flex h-64 items-center justify-center">
               <div className="flex flex-col items-center gap-3">
@@ -479,6 +478,7 @@ export default function PurchaseOrdersPage() {
               </Table>
             </div>
           )}
+          </div>
         </div>
 
         {/* Footer Summary */}
@@ -487,7 +487,7 @@ export default function PurchaseOrdersPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.2 }}
-            className="border-t border-neutral-200/60 p-6 dark:border-neutral-700/60"
+            className="border-t border-neutral-200/60 p-4 sm:p-6 dark:border-neutral-700/60"
           >
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-600 dark:text-neutral-400">

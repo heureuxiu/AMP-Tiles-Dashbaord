@@ -5,13 +5,13 @@ import { StockOverview } from "@/components/dashboard/stock-overview";
 
 export default function DashboardPage() {
   return (
-    <div className="w-full space-y-6 p-4 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
-      {/* Header */}
-      <header className="space-y-1.5 sm:space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-3xl lg:text-4xl">
+    <div className="min-w-0 w-full space-y-4 p-3 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
+      {/* Header - responsive typography */}
+      <header className="space-y-1 sm:space-y-2">
+        <h1 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-3xl lg:text-4xl">
           Dashboard
         </h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400 sm:text-base lg:text-lg">
+        <p className="text-xs text-neutral-600 dark:text-neutral-400 sm:text-base lg:text-lg">
           Welcome back! Here&apos;s what&apos;s happening with your business today.
         </p>
       </header>

@@ -183,18 +183,18 @@ export default function QuotationsPage() {
   };
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
+    <div className="min-w-0 w-full space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8">
       {/* Top Bar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-3xl">
             Quotations
           </h1>
-          <p className="mt-1 text-neutral-600 dark:text-neutral-400">
+          <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400 sm:text-sm">
             Manage customer quotations and convert to invoices
           </p>
         </div>
-        <Button onClick={handleCreateQuotation} className="gap-2">
+        <Button onClick={handleCreateQuotation} className="w-full shrink-0 gap-2 sm:w-auto" size="sm">
           <Plus className="h-4 w-4" />
           Create Quotation
         </Button>
@@ -205,26 +205,24 @@ export default function QuotationsPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800"
+        className="min-w-0 overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl"
       >
         {/* Header */}
-        <div className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-xl"
-                style={{ backgroundColor: "#3b82f615" }}
-              >
-                <FileText className="h-5 w-5" style={{ color: "#3b82f6" }} strokeWidth={2} />
-              </div>
-              <div>
-                <h3 className="font-bold text-neutral-900 dark:text-white">
-                  All Quotations
-                </h3>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  View and manage customer quotes
-                </p>
-              </div>
+        <div className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10"
+              style={{ backgroundColor: "#3b82f615" }}
+            >
+              <FileText className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "#3b82f6" }} strokeWidth={2} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-neutral-900 dark:text-white sm:text-base">
+                All Quotations
+              </h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 sm:text-sm">
+                View and manage customer quotes
+              </p>
             </div>
           </div>
         </div>
@@ -234,7 +232,7 @@ export default function QuotationsPage() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60"
+          className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6"
         >
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
@@ -262,7 +260,8 @@ export default function QuotationsPage() {
         </motion.div>
 
         {/* Table Content */}
-        <div className="p-6">
+        <div className="overflow-x-auto p-3 sm:p-6">
+          <div className="inline-block min-w-full align-middle">
           {isLoading ? (
             <div className="flex h-64 items-center justify-center">
               <div className="flex flex-col items-center gap-3">
@@ -401,7 +400,8 @@ export default function QuotationsPage() {
             </Table>
           </div>
         )}
-      </div>
+          </div>
+        </div>
 
         {/* Footer Summary */}
         {quotations.length > 0 && (
@@ -409,9 +409,9 @@ export default function QuotationsPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.2 }}
-            className="border-t border-neutral-200/60 p-6 dark:border-neutral-700/60"
+            className="border-t border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6"
           >
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-amber-500" />

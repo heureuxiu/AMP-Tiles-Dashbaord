@@ -307,7 +307,7 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="w-full min-w-0 space-y-4 p-4 sm:space-y-6 sm:p-6 lg:p-8">
+    <div className="w-full min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8">
       {/* Top Bar */}
       <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1">

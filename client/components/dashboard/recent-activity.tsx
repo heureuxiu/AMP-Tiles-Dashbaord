@@ -91,7 +91,7 @@ export function RecentActivity() {
   };
 
   return (
-    <div className="grid w-full gap-4 sm:gap-5 lg:grid-cols-2 lg:gap-6">
+    <div className="grid w-full min-w-0 gap-4 sm:gap-5 lg:grid-cols-2 lg:gap-6">
       {/* Recent Quotations */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}

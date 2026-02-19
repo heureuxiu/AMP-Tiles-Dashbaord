@@ -236,17 +236,15 @@ export default function InvoicesPage() {
   };
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
+    <div className="min-w-0 w-full space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8">
       {/* Top Bar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-            Invoices
-          </h1>
-          <p className="mt-1 text-neutral-600 dark:text-neutral-400">
-            View and manage customer invoices
-          </p>
-        </div>
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-3xl">
+          Invoices
+        </h1>
+        <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400 sm:text-sm">
+          View and manage customer invoices
+        </p>
       </div>
 
       {/* Main Card */}
@@ -254,26 +252,24 @@ export default function InvoicesPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800"
+        className="min-w-0 overflow-hidden rounded-xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl"
       >
         {/* Header */}
-        <div className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-xl"
-                style={{ backgroundColor: "#8b5cf615" }}
-              >
-                <Receipt className="h-5 w-5" style={{ color: "#8b5cf6" }} strokeWidth={2} />
-              </div>
-              <div>
-                <h3 className="font-bold text-neutral-900 dark:text-white">
-                  All Invoices
-                </h3>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  Generated from converted quotations
-                </p>
-              </div>
+        <div className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10"
+              style={{ backgroundColor: "#8b5cf615" }}
+            >
+              <Receipt className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "#8b5cf6" }} strokeWidth={2} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-neutral-900 dark:text-white sm:text-base">
+                All Invoices
+              </h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 sm:text-sm">
+                Generated from converted quotations
+              </p>
             </div>
           </div>
         </div>
@@ -283,7 +279,7 @@ export default function InvoicesPage() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60"
+          className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6"
         >
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
@@ -311,7 +307,8 @@ export default function InvoicesPage() {
         </motion.div>
 
         {/* Table Content */}
-        <div className="p-6">
+        <div className="overflow-x-auto p-3 sm:p-6">
+          <div className="inline-block min-w-full align-middle">
           {isLoading ? (
             <div className="flex h-64 items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
@@ -472,6 +469,7 @@ export default function InvoicesPage() {
               </Table>
             </div>
           )}
+          </div>
         </div>
 
         {/* Footer Summary */}
@@ -480,9 +478,9 @@ export default function InvoicesPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.2 }}
-            className="border-t border-neutral-200/60 p-6 dark:border-neutral-700/60"
+            className="border-t border-neutral-200/60 p-4 sm:p-6 dark:border-neutral-700/60"
           >
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-600 dark:text-neutral-400">
                 <div>
                   Total Revenue:{" "}
