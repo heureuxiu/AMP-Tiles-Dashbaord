@@ -54,29 +54,32 @@ type SummaryItem = {
   data: Array<{ index: number; value: number }>;
 };
 
+type StockStats = {
+  totalProducts?: number;
+};
+
+type QuotationStats = {
+  total?: number;
+};
+
+type InvoiceStats = {
+  totalInvoices?: number;
+  total?: number;
+};
+
+type SupplierStats = {
+  totalSuppliers?: number;
+};
+
+type PurchaseOrderStats = {
+  totalPurchaseOrders?: number;
+};
+
 const sanitizeName = (name: string) => {
   return name
     .replace(/\s+/g, "-")
     .replace(/[^a-zA-Z0-9-]/g, "_")
     .toLowerCase();
-};
-
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-  },
 };
 
 export function SummaryCards() {
@@ -97,14 +100,20 @@ export function SummaryCards() {
         api.getSupplierStats(),
         api.getPurchaseOrderStats(),
       ]);
-      
-      const totalProducts = stockStatsResponse.success && stockStatsResponse.stats ? stockStatsResponse.stats.totalProducts : 0;
-      const totalSuppliers = supplierStatsResponse.success && supplierStatsResponse.stats ? supplierStatsResponse.stats.totalSuppliers || 0 : 0;
-      
+
+      const stockStats = (stockStatsResponse.success ? stockStatsResponse.stats : undefined) as StockStats | undefined;
+      const quotationStats = (quotationStatsResponse.success ? quotationStatsResponse.stats : undefined) as QuotationStats | undefined;
+      const invoiceStats = (invoiceStatsResponse.success ? invoiceStatsResponse.stats : undefined) as InvoiceStats | undefined;
+      const supplierStats = (supplierStatsResponse.success ? supplierStatsResponse.stats : undefined) as SupplierStats | undefined;
+      const purchaseOrderStats = (purchaseOrderStatsResponse.success ? purchaseOrderStatsResponse.stats : undefined) as PurchaseOrderStats | undefined;
+
+      const totalProducts = stockStats?.totalProducts ?? 0;
+      const totalSuppliers = supplierStats?.totalSuppliers ?? 0;
+
       // Fix: Backend returns 'total' not 'totalQuotations'
-      const quotationsCount = quotationStatsResponse.success && quotationStatsResponse.stats ? quotationStatsResponse.stats.total || 0 : 0;
-      const invoicesCount = invoiceStatsResponse.success && invoiceStatsResponse.stats ? invoiceStatsResponse.stats.totalInvoices || invoiceStatsResponse.stats.total || 0 : 0;
-      const purchaseOrdersCount = purchaseOrderStatsResponse.success && purchaseOrderStatsResponse.stats ? purchaseOrderStatsResponse.stats.totalPurchaseOrders || 0 : 0;
+      const quotationsCount = quotationStats?.total ?? 0;
+      const invoicesCount = invoiceStats?.totalInvoices ?? invoiceStats?.total ?? 0;
+      const purchaseOrdersCount = purchaseOrderStats?.totalPurchaseOrders ?? 0;
       
       console.log('Dashboard Stats:', {
         products: totalProducts,

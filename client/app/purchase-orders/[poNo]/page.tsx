@@ -58,7 +58,7 @@ export default function PurchaseOrderDetailPage() {
       try {
         const response = await api.getPurchaseOrder(poId);
         if (response.success && response.purchaseOrder) {
-          setPoData(response.purchaseOrder);
+          setPoData(response.purchaseOrder as PurchaseOrderDetail);
         } else {
           toast.error("Purchase order not found");
           router.push("/purchase-orders");
@@ -79,7 +79,7 @@ export default function PurchaseOrderDetailPage() {
       setIsMarkingReceived(true);
       const response = await api.receivePurchaseOrder(poData._id);
       if (response.success && response.purchaseOrder) {
-        setPoData(response.purchaseOrder);
+        setPoData(response.purchaseOrder as PurchaseOrderDetail);
         toast.success("Purchase order marked as received", {
           description: `${poData.poNumber} has been received and stock updated`,
         });

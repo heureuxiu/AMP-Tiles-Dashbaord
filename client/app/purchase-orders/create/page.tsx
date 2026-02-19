@@ -68,7 +68,7 @@ export default function CreatePurchaseOrderPage() {
       ]);
 
       if (suppliersResponse.success && suppliersResponse.suppliers) {
-        setSuppliers(suppliersResponse.suppliers);
+        setSuppliers(suppliersResponse.suppliers as Supplier[]);
       }
 
       if (productsResponse.success && productsResponse.products) {
@@ -178,8 +178,11 @@ export default function CreatePurchaseOrderPage() {
       const response = await api.createPurchaseOrder(poData);
 
       if (response.success) {
+        const createdPO = response.purchaseOrder as { poNumber: string } | undefined;
         toast.success("Purchase order created successfully", {
-          description: `PO ${response.purchaseOrder.poNumber} has been created`,
+          description: createdPO
+            ? `PO ${createdPO.poNumber} has been created`
+            : "Purchase order has been created",
         });
         router.push("/purchase-orders");
       }

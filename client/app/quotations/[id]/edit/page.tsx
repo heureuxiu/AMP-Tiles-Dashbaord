@@ -28,6 +28,27 @@ type QuotationItem = {
   lineTotal: number;
 };
 
+type Quotation = {
+  _id: string;
+  quotationNumber: string;
+  customerName: string;
+  customerPhone?: string;
+  quotationDate: string;
+  notes?: string;
+  status: QuotationStatus;
+  items: {
+    _id?: string;
+    product: {
+      _id: string;
+      name: string;
+    } | string;
+    productName: string;
+    quantity: number;
+    rate: number;
+    lineTotal: number;
+  }[];
+};
+
 export default function EditQuotationPage() {
   const params = useParams();
   const router = useRouter();
@@ -66,7 +87,7 @@ export default function EditQuotationPage() {
       }
 
       if (quotationResponse.success && quotationResponse.quotation) {
-        const q = quotationResponse.quotation;
+        const q = quotationResponse.quotation as Quotation;
         setQuotationNumber(q.quotationNumber);
         setCustomerName(q.customerName);
         setCustomerPhone(q.customerPhone || "");

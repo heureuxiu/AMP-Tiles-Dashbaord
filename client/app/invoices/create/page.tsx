@@ -184,12 +184,13 @@ export default function CreateInvoicePage() {
       const response = await api.createInvoice(invoiceData);
 
       if (response.success && response.invoice) {
+        const createdInvoice = response.invoice as { _id: string; invoiceNumber: string };
         toast.success("Invoice created successfully", {
-          description: `Invoice ${response.invoice.invoiceNumber} has been generated`,
+          description: `Invoice ${createdInvoice.invoiceNumber} has been generated`,
         });
         
         setTimeout(() => {
-          router.push(`/invoices/${response.invoice._id}`);
+          router.push(`/invoices/${createdInvoice._id}`);
         }, 1000);
       }
     } catch (error) {

@@ -55,7 +55,7 @@ export default function InvoiceDetailPage() {
       try {
         const response = await api.getInvoice(invoiceId);
         if (response.success && response.invoice) {
-          setInvoice(response.invoice);
+          setInvoice(response.invoice as InvoiceData);
         } else {
           toast.error("Invoice not found");
           router.push("/invoices");
@@ -317,7 +317,7 @@ export default function InvoiceDetailPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-700 dark:text-neutral-300">Discount:</span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
-                      -{formatCurrency(invoice.discountAmount)}
+                      -{formatCurrency(invoice.discountAmount ?? 0)}
                     </span>
                   </div>
                 )}
@@ -325,7 +325,7 @@ export default function InvoiceDetailPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-700 dark:text-neutral-300">Tax (GST):</span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
-                      {formatCurrency(invoice.tax)}
+                      {formatCurrency(invoice.tax ?? 0)}
                     </span>
                   </div>
                 )}

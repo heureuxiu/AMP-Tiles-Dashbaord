@@ -18,6 +18,7 @@ export default function EditSupplierPage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     supplierNumber: "",
@@ -47,7 +48,24 @@ export default function EditSupplierPage() {
       const response = await api.getSupplier(supplierId);
       
       if (response.success && response.supplier) {
-        const supplier = response.supplier;
+        const supplier = response.supplier as {
+          supplierNumber?: string;
+          name?: string;
+          contactPerson?: string;
+          phone?: string;
+          email?: string;
+          website?: string;
+          abn?: string;
+          address?: {
+            street?: string;
+            city?: string;
+            state?: string;
+            postcode?: string;
+          };
+          paymentTerms?: string;
+          status?: string;
+          notes?: string;
+        };
         setFormData({
           supplierNumber: supplier.supplierNumber || "",
           name: supplier.name || "",

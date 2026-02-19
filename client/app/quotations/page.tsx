@@ -55,14 +55,21 @@ export default function QuotationsPage() {
       setIsLoading(true);
       const response = await api.getQuotations();
       if (response.success && response.quotations) {
-        setQuotations(response.quotations);
+        setQuotations(response.quotations as Quotation[]);
         if (response.stats) {
+          const stats = response.stats as {
+            draft?: number;
+            sent?: number;
+            converted?: number;
+            expired?: number;
+            cancelled?: number;
+          };
           setStats({
-            draft: response.stats.draft || 0,
-            sent: response.stats.sent || 0,
-            converted: response.stats.converted || 0,
-            expired: response.stats.expired || 0,
-            cancelled: response.stats.cancelled || 0,
+            draft: stats.draft ?? 0,
+            sent: stats.sent ?? 0,
+            converted: stats.converted ?? 0,
+            expired: stats.expired ?? 0,
+            cancelled: stats.cancelled ?? 0,
           });
         }
       }

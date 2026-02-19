@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, Eye, CheckCircle, Edit, Plus, Filter, X, Trash2 } from "lucide-react";
+import { ShoppingCart, Eye, CheckCircle, Plus, Filter, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,15 +30,33 @@ type PurchaseOrder = {
   _id: string;
   poNumber: string;
   supplierName: string;
+  // Optional populated supplier reference (used for filtering by supplier id)
+  supplier?: {
+    _id: string;
+    name: string;
+  };
   poDate: string;
   status: POStatus;
-  items: any[];
+  items: {
+    product: string;
+    quantity: number;
+    rate: number;
+    lineTotal?: number;
+  }[];
   grandTotal: number;
 };
 
 type Supplier = {
   _id: string;
   name: string;
+};
+
+type Stats = {
+  total: number;
+  draft: number;
+  sent: number;
+  received: number;
+  cancelled: number;
 };
 
 export default function PurchaseOrdersPage() {
@@ -48,7 +66,7 @@ export default function PurchaseOrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | POStatus>("all");
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<Stats>({
     total: 0,
     draft: 0,
     sent: 0,
@@ -71,14 +89,14 @@ export default function PurchaseOrdersPage() {
       ]);
 
       if (poResponse.success && poResponse.purchaseOrders) {
-        setPurchaseOrders(poResponse.purchaseOrders);
+        setPurchaseOrders(poResponse.purchaseOrders as PurchaseOrder[]);
         if (poResponse.stats) {
-          setStats(poResponse.stats);
+          setStats(poResponse.stats as Stats);
         }
       }
 
       if (suppliersResponse.success && suppliersResponse.suppliers) {
-        setSuppliers(suppliersResponse.suppliers);
+        setSuppliers(suppliersResponse.suppliers as Supplier[]);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to load data";
@@ -99,10 +117,6 @@ export default function PurchaseOrdersPage() {
 
   const handleView = (id: string) => {
     router.push(`/purchase-orders/${id}`);
-  };
-
-  const handleEdit = (id: string) => {
-    router.push(`/purchase-orders/${id}/edit`);
   };
 
   const handleMarkReceived = async (id: string, poNumber: string) => {

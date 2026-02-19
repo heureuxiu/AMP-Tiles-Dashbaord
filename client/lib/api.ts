@@ -37,6 +37,21 @@ interface ApiResponse<T = unknown> {
   products?: Product[];
   product?: Product;
   count?: number;
+  // Generic stats payload used across dashboard, lists, and stock pages
+  stats?: unknown;
+  // Quotation payloads (list + single)
+  quotations?: unknown[];
+  quotation?: unknown;
+  // Invoice payloads (list + single) – use loose typing because different endpoints
+  // can return slightly different invoice shapes, and UI files define their own types.
+  invoices?: unknown[];
+  invoice?: unknown;
+  // Purchase order payloads (list + single)
+  purchaseOrders?: unknown[];
+  purchaseOrder?: unknown;
+  // Supplier payloads (list + single)
+  suppliers?: unknown[];
+  supplier?: unknown;
 }
 
 class ApiClient {
@@ -74,7 +89,7 @@ class ApiClient {
       let data;
       try {
         data = await response.json();
-      } catch (jsonError) {
+      } catch {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }

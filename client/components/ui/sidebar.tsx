@@ -24,7 +24,7 @@ import { useAuth } from "@/contexts/auth-context";
 
 const sectionIcons: Record<
   string,
-  React.ComponentType<{ className?: string }>
+  React.ComponentType<{ className?: string; strokeWidth?: number }>
 > = {
   Dashboard: LayoutDashboard,
   Inventory: Package,

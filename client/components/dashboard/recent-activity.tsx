@@ -42,11 +42,11 @@ export function RecentActivity() {
       ]);
       
       if (quotationsResponse.success && quotationsResponse.quotations) {
-        setRecentQuotations(quotationsResponse.quotations.slice(0, 5));
+        setRecentQuotations(quotationsResponse.quotations.slice(0, 5) as Quotation[]);
       }
       
       if (invoicesResponse.success && invoicesResponse.invoices) {
-        setRecentInvoices(invoicesResponse.invoices.slice(0, 5));
+        setRecentInvoices(invoicesResponse.invoices.slice(0, 5) as Invoice[]);
       }
     } catch (error) {
       console.error("Failed to fetch recent data:", error);

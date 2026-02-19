@@ -67,7 +67,7 @@ export default function StockUpdatePage() {
       }
 
       if (statsResponse.success && statsResponse.stats) {
-        setStats(statsResponse.stats);
+        setStats(statsResponse.stats as StockStats);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to fetch data";

@@ -88,9 +88,9 @@ export default function InvoicesPage() {
       const response = await api.getInvoices({ sortBy: 'createdAt', sortOrder: 'desc' });
       
       if (response.success && response.invoices) {
-        setInvoices(response.invoices);
+        setInvoices(response.invoices as Invoice[]);
         if (response.stats) {
-          setStats(response.stats);
+          setStats(response.stats as Stats);
         }
       }
     } catch (error) {

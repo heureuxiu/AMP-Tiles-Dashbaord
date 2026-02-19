@@ -31,6 +31,7 @@ type QuotationData = {
   items: QuotationItem[];
   subtotal: number;
   tax: number;
+  taxRate?: number;
   grandTotal: number;
 };
 
@@ -42,17 +43,13 @@ export default function ViewQuotationPage() {
   const [quotation, setQuotation] = useState<QuotationData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchQuotation();
-  }, [quotationId]);
-
   const fetchQuotation = async () => {
     try {
       setIsLoading(true);
       const response = await api.getQuotation(quotationId);
       
       if (response.success && response.quotation) {
-        setQuotation(response.quotation);
+        setQuotation(response.quotation as QuotationData);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to load quotation";
@@ -63,6 +60,11 @@ export default function ViewQuotationPage() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchQuotation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotationId]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-AU", {

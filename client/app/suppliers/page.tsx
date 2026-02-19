@@ -28,12 +28,18 @@ type Supplier = {
   notes?: string;
 };
 
+type Stats = {
+  total: number;
+  active: number;
+  inactive: number;
+};
+
 export default function SuppliersPage() {
   const router = useRouter();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<Stats>({
     total: 0,
     active: 0,
     inactive: 0,
@@ -51,9 +57,9 @@ export default function SuppliersPage() {
       const response = await api.getSuppliers();
       
       if (response.success && response.suppliers) {
-        setSuppliers(response.suppliers);
+        setSuppliers(response.suppliers as Supplier[]);
         if (response.stats) {
-          setStats(response.stats);
+          setStats(response.stats as Stats);
         }
       }
     } catch (error) {
