@@ -15,193 +15,83 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
+import { api } from "@/lib/api";
 
-type POStatus = "draft" | "received";
+type POStatus = "draft" | "sent" | "received" | "cancelled";
 
 type POItem = {
-  id: string;
-  productSku: string;
+  _id: string;
+  product?: { name: string; sku: string; unit?: string };
+  productName: string;
   quantity: number;
-  rate?: number;
-  lineTotal?: number;
+  rate: number;
+  lineTotal: number;
 };
 
 type PurchaseOrderDetail = {
-  poNo: string;
+  _id: string;
+  poNumber: string;
+  supplier?: { name: string; supplierNumber?: string };
   supplierName: string;
   poDate: string;
+  expectedDeliveryDate?: string;
   status: POStatus;
   notes?: string;
   items: POItem[];
-};
-
-// Mock data
-const mockPOData: Record<string, PurchaseOrderDetail> = {
-  "PO-2024-001": {
-    poNo: "PO-2024-001",
-    supplierName: "Tiles International Pty Ltd",
-    poDate: "2024-01-28",
-    status: "received",
-    notes: "Premium tiles order for new project",
-    items: [
-      {
-        id: "1",
-        productSku: "CERAMIC-WHITE-60X60",
-        quantity: 100,
-        rate: 45.0,
-        lineTotal: 4500,
-      },
-      {
-        id: "2",
-        productSku: "PORCELAIN-GREY-80X80",
-        quantity: 50,
-        rate: 85.0,
-        lineTotal: 4250,
-      },
-      {
-        id: "3",
-        productSku: "MARBLE-CLASSIC-60X120",
-        quantity: 30,
-        rate: 150.0,
-        lineTotal: 4500,
-      },
-      {
-        id: "4",
-        productSku: "GRANITE-BLACK-30X30",
-        quantity: 75,
-        rate: 25.0,
-        lineTotal: 1875,
-      },
-      {
-        id: "5",
-        productSku: "TILES-WOOD-LOOK-20X120",
-        quantity: 40,
-        rate: 95.0,
-        lineTotal: 3800,
-      },
-    ],
-  },
-  "PO-2024-002": {
-    poNo: "PO-2024-002",
-    supplierName: "Stone & Marble Wholesale",
-    poDate: "2024-01-29",
-    status: "draft",
-    notes: "Natural stone collection",
-    items: [
-      {
-        id: "1",
-        productSku: "STONE-NATURAL-40X40",
-        quantity: 80,
-        rate: 55.0,
-        lineTotal: 4400,
-      },
-      {
-        id: "2",
-        productSku: "MARBLE-CLASSIC-60X120",
-        quantity: 45,
-        rate: 150.0,
-        lineTotal: 6750,
-      },
-      {
-        id: "3",
-        productSku: "GRANITE-BLACK-30X30",
-        quantity: 60,
-        rate: 25.0,
-        lineTotal: 1500,
-      },
-    ],
-  },
-  "PO-2024-003": {
-    poNo: "PO-2024-003",
-    supplierName: "Ceramic Pro Supplies",
-    poDate: "2024-01-30",
-    status: "draft",
-    notes: "",
-    items: [
-      {
-        id: "1",
-        productSku: "CERAMIC-WHITE-60X60",
-        quantity: 150,
-        rate: 42.0,
-        lineTotal: 6300,
-      },
-      {
-        id: "2",
-        productSku: "PORCELAIN-GREY-80X80",
-        quantity: 80,
-        rate: 82.0,
-        lineTotal: 6560,
-      },
-      {
-        id: "3",
-        productSku: "MOSAIC-GLASS-30X30",
-        quantity: 100,
-        rate: 35.0,
-        lineTotal: 3500,
-      },
-      {
-        id: "4",
-        productSku: "TILES-WOOD-LOOK-20X120",
-        quantity: 60,
-        rate: 92.0,
-        lineTotal: 5520,
-      },
-    ],
-  },
-  "PO-2024-004": {
-    poNo: "PO-2024-004",
-    supplierName: "Porcelain World",
-    poDate: "2024-01-26",
-    status: "received",
-    notes: "Imported porcelain tiles",
-    items: [
-      {
-        id: "1",
-        productSku: "PORCELAIN-GREY-80X80",
-        quantity: 120,
-        rate: 88.0,
-        lineTotal: 10560,
-      },
-      {
-        id: "2",
-        productSku: "CERAMIC-WHITE-60X60",
-        quantity: 90,
-        rate: 46.0,
-        lineTotal: 4140,
-      },
-    ],
-  },
+  subtotal: number;
+  tax?: number;
+  grandTotal: number;
+  receivedDate?: string;
 };
 
 export default function PurchaseOrderDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const poNo = params.poNo as string;
+  const poId = params.poNo as string; // From list we pass _id, so URL is /purchase-orders/:id
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isMarkingReceived, setIsMarkingReceived] = useState(false);
   const [poData, setPoData] = useState<PurchaseOrderDetail | null>(null);
 
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const data = mockPOData[poNo];
-      if (data) {
-        setPoData(data);
-      } else {
-        toast.error("Purchase Order not found");
+    const fetchPO = async () => {
+      try {
+        const response = await api.getPurchaseOrder(poId);
+        if (response.success && response.purchaseOrder) {
+          setPoData(response.purchaseOrder);
+        } else {
+          toast.error("Purchase order not found");
+          router.push("/purchase-orders");
+        }
+      } catch {
+        toast.error("Failed to load purchase order");
         router.push("/purchase-orders");
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    }, 500);
-  }, [poNo, router]);
+    };
+    fetchPO();
+  }, [poId, router]);
 
-  const handleMarkReceived = () => {
+  const handleMarkReceived = async () => {
     if (!poData) return;
-
-    setPoData({ ...poData, status: "received" });
-    toast.success("Purchase Order marked as received", {
-      description: `${poNo} has been marked as received`,
-    });
+    try {
+      setIsMarkingReceived(true);
+      const response = await api.receivePurchaseOrder(poData._id);
+      if (response.success && response.purchaseOrder) {
+        setPoData(response.purchaseOrder);
+        toast.success("Purchase order marked as received", {
+          description: `${poData.poNumber} has been received and stock updated`,
+        });
+      } else {
+        toast.error("Failed to mark as received");
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to mark as received";
+      toast.error(msg);
+    } finally {
+      setIsMarkingReceived(false);
+    }
   };
 
   const handleBack = () => {
@@ -209,18 +99,32 @@ export default function PurchaseOrderDetailPage() {
   };
 
   const getStatusBadge = (status: POStatus) => {
-    if (status === "received") {
-      return (
-        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
-          Received
-        </Badge>
-      );
+    switch (status) {
+      case "received":
+        return (
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
+            Received
+          </Badge>
+        );
+      case "sent":
+        return (
+          <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
+            Sent
+          </Badge>
+        );
+      case "cancelled":
+        return (
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">
+            Cancelled
+          </Badge>
+        );
+      default:
+        return (
+          <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
+            Draft
+          </Badge>
+        );
     }
-    return (
-      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
-        Draft
-      </Badge>
-    );
   };
 
   const formatDate = (dateString: string) => {
@@ -232,23 +136,24 @@ export default function PurchaseOrderDetailPage() {
   };
 
   const formatCurrency = (amount?: number) => {
-    if (!amount) return "-";
+    if (amount == null) return "-";
     return new Intl.NumberFormat("en-AU", {
       style: "currency",
       currency: "AUD",
     }).format(amount);
   };
 
-  const calculateGrandTotal = () => {
-    if (!poData) return 0;
-    return poData.items.reduce((sum, item) => sum + (item.lineTotal || 0), 0);
+  const getProductDisplay = (item: POItem) => {
+    const name = item.productName || item.product?.name;
+    const sku = item.product?.sku;
+    return sku ? `${name} (${sku})` : name || "—";
   };
 
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-600 border-t-transparent"></div>
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-600 border-t-transparent" />
           <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
             Loading purchase order...
           </p>
@@ -276,20 +181,21 @@ export default function PurchaseOrderDetailPage() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-              PO #{poNo}
+              {poData.poNumber}
             </h1>
             <p className="mt-1 text-neutral-600 dark:text-neutral-400">
               Purchase order details
             </p>
           </div>
         </div>
-        {poData.status === "draft" && (
+        {(poData.status === "draft" || poData.status === "sent") && (
           <Button
             onClick={handleMarkReceived}
+            disabled={isMarkingReceived}
             className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
           >
             <CheckCircle className="h-4 w-4" />
-            Mark as Received
+            {isMarkingReceived ? "Marking..." : "Mark as Received"}
           </Button>
         )}
       </div>
@@ -331,7 +237,7 @@ export default function PurchaseOrderDetailPage() {
                 Supplier Name
               </p>
               <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">
-                {poData.supplierName}
+                {poData.supplierName || poData.supplier?.name}
               </p>
             </div>
             <div>
@@ -342,18 +248,38 @@ export default function PurchaseOrderDetailPage() {
                 {formatDate(poData.poDate)}
               </p>
             </div>
+            {poData.expectedDeliveryDate && (
+              <div>
+                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                  Expected Delivery
+                </p>
+                <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">
+                  {formatDate(poData.expectedDeliveryDate)}
+                </p>
+              </div>
+            )}
             <div>
               <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
                 Status
               </p>
               <div className="mt-1">{getStatusBadge(poData.status)}</div>
             </div>
+            {poData.status === "received" && poData.receivedDate && (
+              <div>
+                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                  Received On
+                </p>
+                <p className="mt-1 text-lg font-semibold text-green-600 dark:text-green-400">
+                  {formatDate(poData.receivedDate)}
+                </p>
+              </div>
+            )}
             <div>
               <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
                 Total Items
               </p>
               <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">
-                {poData.items.reduce((sum, item) => sum + item.quantity, 0)} items
+                {poData.items?.length ?? 0} line items
               </p>
             </div>
             {poData.notes && (
@@ -394,10 +320,10 @@ export default function PurchaseOrderDetailPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {poData.items.map((item) => (
-                  <TableRow key={item.id}>
+                {(poData.items || []).map((item) => (
+                  <TableRow key={item._id}>
                     <TableCell className="font-medium text-neutral-900 dark:text-white">
-                      {item.productSku}
+                      {getProductDisplay(item)}
                     </TableCell>
                     <TableCell className="font-semibold text-neutral-900 dark:text-white">
                       {item.quantity}
@@ -419,7 +345,7 @@ export default function PurchaseOrderDetailPage() {
             <div className="text-right">
               <p className="text-sm text-neutral-600 dark:text-neutral-400">Grand Total</p>
               <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                {formatCurrency(calculateGrandTotal())}
+                {formatCurrency(poData.grandTotal)}
               </p>
             </div>
           </div>
@@ -439,13 +365,16 @@ export default function PurchaseOrderDetailPage() {
           </div>
           <div>
             <h4 className="font-bold text-amber-900 dark:text-amber-200">
-              How to Update Stock (Phase-0)
+              {poData.status === "received"
+                ? "Stock from this PO"
+                : "How to Update Stock (Phase-0)"}
             </h4>
             <p className="mt-2 text-sm text-amber-800 dark:text-amber-300">
-              Stock is not auto-updated in this phase. To add received stock, go to{" "}
-              <span className="font-semibold">Inventory → Stock Update</span> and enter
-              the quantity manually. You may mention this PO number ({poNo}) in remarks
-              for tracking purposes.
+              {poData.status === "received"
+                ? "This purchase order has been marked as received. You can still view its details above. Stock updates are reflected in Inventory → Stock Update."
+                : "Stock is not auto-updated in this phase. After marking as received, go to Inventory → Stock Update and enter the quantity manually. You may mention this PO number (" +
+                  poData.poNumber +
+                  ") in remarks for tracking."}
             </p>
             <Button
               variant="outline"
