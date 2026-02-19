@@ -261,6 +261,7 @@ function SidebarSection({
             expanded && "rotate-180"
           )}
           strokeWidth={2.5}
+          
         />
       </button>
       {expanded && (
