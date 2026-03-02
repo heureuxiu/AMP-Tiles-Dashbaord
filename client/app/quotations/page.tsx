@@ -14,12 +14,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
-type QuotationStatus = "draft" | "sent" | "converted" | "expired" | "cancelled";
+type QuotationStatus = "draft" | "sent" | "accepted" | "rejected" | "expired" | "converted" | "cancelled";
 
 type Quotation = {
   _id: string;
@@ -39,6 +45,8 @@ export default function QuotationsPage() {
   const [stats, setStats] = useState({
     draft: 0,
     sent: 0,
+    accepted: 0,
+    rejected: 0,
     converted: 0,
     expired: 0,
     cancelled: 0,
@@ -60,6 +68,8 @@ export default function QuotationsPage() {
           const stats = response.stats as {
             draft?: number;
             sent?: number;
+            accepted?: number;
+            rejected?: number;
             converted?: number;
             expired?: number;
             cancelled?: number;
@@ -67,6 +77,8 @@ export default function QuotationsPage() {
           setStats({
             draft: stats.draft ?? 0,
             sent: stats.sent ?? 0,
+            accepted: stats.accepted ?? 0,
+            rejected: stats.rejected ?? 0,
             converted: stats.converted ?? 0,
             expired: stats.expired ?? 0,
             cancelled: stats.cancelled ?? 0,
@@ -153,6 +165,26 @@ export default function QuotationsPage() {
     }
   };
 
+  const handleStatusChange = async (id: string, newStatus: QuotationStatus) => {
+    try {
+      const response = await api.updateQuotation(id, { status: newStatus });
+      if (response.success) {
+        toast.success("Status updated", {
+          description: `Quotation marked as ${getStatusLabel(newStatus)}`,
+        });
+        fetchQuotations();
+      } else {
+        toast.error("Failed to update quotation status");
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update quotation status";
+      toast.error("Failed to update quotation status", {
+        description: errorMessage,
+      });
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-AU", {
       style: "currency",
@@ -174,6 +206,10 @@ export default function QuotationsPage() {
         return "bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-400";
       case "sent":
         return "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-400";
+      case "accepted":
+        return "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-400";
+      case "rejected":
+        return "bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/40 dark:text-red-400";
       case "converted":
         return "bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/40 dark:text-green-400";
       case "expired":
@@ -339,6 +375,80 @@ export default function QuotationsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="flex items-center gap-1">
+                        {/* Status change dropdown in Actions */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 shrink-0 gap-1.5 rounded-full border-neutral-200 px-3 text-xs font-medium dark:border-neutral-700"
+                            >
+                              <span
+                                className={`h-2 w-2 rounded-full ${
+                                  quotation.status === "draft"
+                                    ? "bg-amber-500"
+                                    : quotation.status === "sent"
+                                    ? "bg-blue-500"
+                                    : quotation.status === "accepted"
+                                    ? "bg-emerald-500"
+                                    : quotation.status === "rejected"
+                                    ? "bg-red-500"
+                                    : quotation.status === "expired"
+                                    ? "bg-neutral-500"
+                                    : quotation.status === "converted"
+                                    ? "bg-green-500"
+                                    : "bg-neutral-400"
+                                }`}
+                              />
+                              <span>{getStatusLabel(quotation.status)}</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-[190px] rounded-lg p-1">
+                            <DropdownMenuItem
+                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+                              onClick={() => handleStatusChange(quotation._id, "draft")}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-amber-500" />
+                              Draft
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+                              onClick={() => handleStatusChange(quotation._id, "sent")}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-blue-500" />
+                              Sent
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+                              onClick={() => handleStatusChange(quotation._id, "accepted")}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                              Accepted
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+                              onClick={() => handleStatusChange(quotation._id, "rejected")}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-red-500" />
+                              Rejected
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+                              onClick={() => handleStatusChange(quotation._id, "expired")}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-neutral-500" />
+                              Expired
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+                              onClick={() => handleStatusChange(quotation._id, "converted")}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-green-500" />
+                              Converted to Invoice
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+
                         {/* Edit Button */}
                         <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                           <Button
@@ -419,7 +529,7 @@ export default function QuotationsPage() {
             className="border-t border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6"
           >
             <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
-              <div className="flex items-center gap-6">
+              <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-amber-500" />
                   <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
@@ -430,6 +540,18 @@ export default function QuotationsPage() {
                   <div className="h-3 w-3 rounded-full bg-blue-500" />
                   <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                     Sent: {stats.sent}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-emerald-500" />
+                  <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                    Accepted: {stats.accepted}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-red-500" />
+                  <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                    Rejected: {stats.rejected}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

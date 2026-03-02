@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Plus, Trash2, FileText, Save, X as XIcon, ArrowLeft } from "lucide-react";
@@ -10,22 +10,41 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 
+const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
+
 type Product = {
   _id: string;
   name: string;
   sku: string;
-  price: number;
+  price?: number;
+  retailPrice?: number;
+  tilesPerBox?: number | null;
+  coveragePerBox?: number | null;
+  coveragePerBoxUnit?: string;
+  stock?: number;
+  taxPercent?: number | null;
 };
 
-type QuotationStatus = "draft" | "sent" | "converted" | "expired" | "cancelled";
+type QuotationStatus =
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "rejected"
+  | "expired"
+  | "converted"
+  | "cancelled";
 
 type QuotationItem = {
   id: string;
   product: string;
   productName: string;
+  unitType: string;
   quantity: number;
   rate: number;
+  discountPercent: number;
+  taxPercent: number;
   lineTotal: number;
+  coverageInput: string;
 };
 
 type Quotation = {
@@ -33,21 +52,51 @@ type Quotation = {
   quotationNumber: string;
   customerName: string;
   customerPhone?: string;
+  customerEmail?: string;
+  customerAddress?: string;
   quotationDate: string;
+  validUntil?: string;
   notes?: string;
+  terms?: string;
   status: QuotationStatus;
-  items: {
+  items: Array<{
     _id?: string;
-    product: {
-      _id: string;
-      name: string;
-    } | string;
+    product:
+      | {
+          _id: string;
+          name: string;
+        }
+      | string;
     productName: string;
+    unitType?: string;
     quantity: number;
     rate: number;
+    discountPercent?: number;
+    taxPercent?: number;
     lineTotal: number;
-  }[];
+    coverageSqm?: number;
+  }>;
 };
+
+function calcLineTotal(item: QuotationItem): number {
+  const base = item.quantity * item.rate;
+  const afterDisc = base * (1 - (item.discountPercent || 0) / 100);
+  return Math.round(afterDisc * (1 + (item.taxPercent || 0) / 100) * 100) / 100;
+}
+
+function getBoxesFromCoverage(
+  coverageValue: number,
+  unitType: string,
+  product: Product
+): number {
+  const cov = product.coveragePerBox;
+  const covUnit = (product.coveragePerBoxUnit || "sqft").toLowerCase();
+  if (!cov || cov <= 0) return 0;
+  let coverageInSqm = coverageValue;
+  if (unitType === "Sq Ft") coverageInSqm = coverageValue / 10.764;
+  const sqmPerBox = covUnit === "sqm" ? cov : cov / 10.764;
+  return Math.ceil(coverageInSqm / sqmPerBox) || 0;
+}
 
 export default function EditQuotationPage() {
   const params = useParams();
@@ -57,65 +106,99 @@ export default function EditQuotationPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   const [quotationNumber, setQuotationNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [quotationDate, setQuotationDate] = useState("");
+  const [validUntil, setValidUntil] = useState("");
   const [notes, setNotes] = useState("");
+  const [terms, setTerms] = useState("");
   const [status, setStatus] = useState<QuotationStatus>("draft");
   const [items, setItems] = useState<QuotationItem[]>([]);
 
   const isReadOnly = status === "converted";
 
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoadingData(true);
+        const [productsResponse, quotationResponse] = await Promise.all([
+          api.getProducts({ status: "active" }),
+          api.getQuotation(quotationId),
+        ]);
+
+        if (productsResponse.success && productsResponse.products) {
+          setProducts(productsResponse.products as Product[]);
+        }
+
+        if (quotationResponse.success && quotationResponse.quotation) {
+          const q = quotationResponse.quotation as Quotation;
+          setQuotationNumber(q.quotationNumber);
+          setCustomerName(q.customerName || "");
+          setCustomerPhone(q.customerPhone || "");
+          setCustomerEmail(q.customerEmail || "");
+          setCustomerAddress(q.customerAddress || "");
+          setQuotationDate(
+            q.quotationDate ? q.quotationDate.split("T")[0] : new Date().toISOString().split("T")[0]
+          );
+          setValidUntil(q.validUntil ? q.validUntil.split("T")[0] : "");
+          setNotes(q.notes || "");
+          setTerms(q.terms || "");
+          setStatus(q.status);
+
+          const mappedItems: QuotationItem[] = (q.items || []).map((item, index) => {
+            const productId =
+              typeof item.product === "string" ? item.product : item.product?._id;
+            return {
+              id: `${item._id || index}`,
+              product: productId || "",
+              productName: item.productName || "",
+              unitType: item.unitType || "Box",
+              quantity: item.quantity || 0,
+              rate: item.rate || 0,
+              discountPercent: item.discountPercent ?? 0,
+              taxPercent: item.taxPercent ?? 0,
+              lineTotal: item.lineTotal || 0,
+              coverageInput: "",
+            };
+          });
+          setItems(
+            mappedItems.length
+              ? mappedItems
+              : [
+                  {
+                    id: "1",
+                    product: "",
+                    productName: "",
+                    unitType: "Box",
+                    quantity: 0,
+                    rate: 0,
+                    discountPercent: 0,
+                    taxPercent: 0,
+                    lineTotal: 0,
+                    coverageInput: "",
+                  },
+                ]
+          );
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to load data";
+        toast.error("Failed to load quotation", {
+          description: errorMessage,
+        });
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
     fetchData();
   }, [quotationId]);
 
-  const fetchData = async () => {
-    try {
-      setIsLoadingData(true);
-      
-      // Fetch products and quotation in parallel
-      const [productsResponse, quotationResponse] = await Promise.all([
-        api.getProducts(),
-        api.getQuotation(quotationId),
-      ]);
-
-      if (productsResponse.success && productsResponse.products) {
-        setProducts(productsResponse.products);
-      }
-
-      if (quotationResponse.success && quotationResponse.quotation) {
-        const q = quotationResponse.quotation as Quotation;
-        setQuotationNumber(q.quotationNumber);
-        setCustomerName(q.customerName);
-        setCustomerPhone(q.customerPhone || "");
-        setQuotationDate(q.quotationDate.split("T")[0]); // Format date
-        setNotes(q.notes || "");
-        setStatus(q.status);
-        
-        // Map items to frontend format
-        const mappedItems = q.items.map((item: any, index: number) => ({
-          id: `${item._id || index}`,
-          product: item.product._id || item.product,
-          productName: item.productName,
-          quantity: item.quantity,
-          rate: item.rate,
-          lineTotal: item.lineTotal,
-        }));
-        
-        setItems(mappedItems);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to load data";
-      toast.error("Failed to load quotation", {
-        description: errorMessage,
-      });
-    } finally {
-      setIsLoadingData(false);
-    }
-  };
+  const getProduct = (id: string) => products.find((p) => p._id === id);
 
   const handleAddItem = () => {
     if (isReadOnly) return;
@@ -123,68 +206,112 @@ export default function EditQuotationPage() {
       id: Date.now().toString(),
       product: "",
       productName: "",
+      unitType: "Box",
       quantity: 0,
       rate: 0,
+      discountPercent: 0,
+      taxPercent: 0,
       lineTotal: 0,
+      coverageInput: "",
     };
-    setItems([...items, newItem]);
+    setItems((prev) => [...prev, newItem]);
   };
 
   const handleRemoveItem = (id: string) => {
     if (isReadOnly) return;
-    if (items.length === 1) {
-      toast.error("At least one item is required");
-      return;
-    }
-    setItems(items.filter((item) => item.id !== id));
+    setItems((prev) => {
+      if (prev.length === 1) {
+        toast.error("At least one item is required");
+        return prev;
+      }
+      return prev.filter((item) => item.id !== id);
+    });
   };
 
   const handleProductChange = (itemId: string, productId: string) => {
     if (isReadOnly) return;
     const product = products.find((p) => p._id === productId);
     if (!product) return;
+    const rate = product.retailPrice ?? product.price ?? 0;
+    const taxPercent = product.taxPercent ?? 0;
 
-    setItems(
-      items.map((item) =>
+    setItems((prev) =>
+      prev.map((item) =>
         item.id === itemId
           ? {
               ...item,
               product: product._id,
               productName: product.name,
-              rate: product.price,
-              lineTotal: item.quantity * product.price,
-            }
-          : item
-      )
-    );
-  };
-
-  const handleQuantityChange = (itemId: string, quantity: number) => {
-    if (isReadOnly) return;
-    setItems(
-      items.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              quantity,
-              lineTotal: quantity * item.rate,
-            }
-          : item
-      )
-    );
-  };
-
-  const handleRateChange = (itemId: string, rate: number) => {
-    if (isReadOnly) return;
-    setItems(
-      items.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
               rate,
-              lineTotal: item.quantity * rate,
+              taxPercent,
+              lineTotal: calcLineTotal({
+                ...item,
+                rate,
+                taxPercent,
+              }),
             }
           : item
+      )
+    );
+  };
+
+  const handleItemChange = (
+    itemId: string,
+    field: keyof QuotationItem,
+    value: string | number
+  ) => {
+    if (isReadOnly) return;
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const next = { ...item, [field]: value };
+        if (
+          field === "quantity" ||
+          field === "rate" ||
+          field === "discountPercent" ||
+          field === "taxPercent"
+        ) {
+          next.lineTotal = calcLineTotal(next);
+        }
+        if (field === "coverageInput" && typeof value === "string") {
+          const num = parseFloat(value) || 0;
+          const product = getProduct(item.product);
+          if (
+            product &&
+            (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") &&
+            num > 0
+          ) {
+            next.quantity = getBoxesFromCoverage(num, item.unitType, product);
+            next.lineTotal = calcLineTotal({ ...next, quantity: next.quantity });
+          }
+        }
+        return next;
+      })
+    );
+  };
+
+  const handleCoverageBlur = (itemId: string) => {
+    if (isReadOnly) return;
+    const item = items.find((i) => i.id === itemId);
+    if (!item?.coverageInput) return;
+    const product = getProduct(item.product);
+    if (
+      !product ||
+      (item.unitType !== "Sq Meter" && item.unitType !== "Sq Ft")
+    )
+      return;
+    const num = parseFloat(item.coverageInput) || 0;
+    if (num <= 0) return;
+    const boxes = getBoxesFromCoverage(num, item.unitType, product);
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === itemId
+          ? {
+              ...i,
+              quantity: boxes,
+              lineTotal: calcLineTotal({ ...i, quantity: boxes }),
+            }
+          : i
       )
     );
   };
@@ -210,7 +337,7 @@ export default function EditQuotationPage() {
       (item) => item.product && item.quantity > 0
     );
 
-    if (validItems.length === 0) {
+    if (!isReadOnly && validItems.length === 0) {
       toast.error("Please add at least one item with quantity");
       return;
     }
@@ -218,17 +345,28 @@ export default function EditQuotationPage() {
     try {
       setIsSaving(true);
 
-      const quotationData = {
-        customerName,
-        customerPhone,
+      const quotationData: Parameters<typeof api.updateQuotation>[1] = {
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim() || undefined,
+        customerEmail: customerEmail.trim() || undefined,
+        customerAddress: customerAddress.trim() || undefined,
         quotationDate,
-        notes,
-        items: validItems.map(item => ({
+        validUntil: validUntil || undefined,
+        notes: notes.trim() || undefined,
+        terms: terms.trim() || undefined,
+        status,
+      };
+
+      if (!isReadOnly && validItems.length > 0) {
+        quotationData.items = validItems.map((item) => ({
           product: item.product,
+          unitType: item.unitType,
           quantity: item.quantity,
           rate: item.rate,
-        })),
-      };
+          discountPercent: item.discountPercent || 0,
+          taxPercent: item.taxPercent || 0,
+        }));
+      }
 
       const response = await api.updateQuotation(quotationId, quotationData);
 
@@ -381,15 +519,16 @@ export default function EditQuotationPage() {
                     />
                 </div>
 
-                {/* Customer Phone */}
-                <div className="grid gap-2">
-                  <label
-                    htmlFor="customerPhone"
-                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
-                  >
-                    Customer Phone{" "}
-                    <span className="text-neutral-400">(Optional)</span>
-                  </label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Customer Phone */}
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="customerPhone"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Customer Phone{" "}
+                      <span className="text-neutral-400">(Optional)</span>
+                    </label>
                     <Input
                       id="customerPhone"
                       type="tel"
@@ -398,16 +537,54 @@ export default function EditQuotationPage() {
                       onChange={(e) => setCustomerPhone(e.target.value)}
                       disabled={isReadOnly || isSaving}
                     />
+                  </div>
+                  {/* Customer Email */}
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="customerEmail"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Customer Email{" "}
+                      <span className="text-neutral-400">(Optional)</span>
+                    </label>
+                    <Input
+                      id="customerEmail"
+                      type="email"
+                      placeholder="Enter email"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      disabled={isReadOnly || isSaving}
+                    />
+                  </div>
                 </div>
 
-                {/* Quotation Date */}
+                {/* Address */}
                 <div className="grid gap-2">
                   <label
-                    htmlFor="quotationDate"
+                    htmlFor="customerAddress"
                     className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                   >
-                    Quotation Date <span className="text-red-500">*</span>
+                    Customer Address{" "}
+                    <span className="text-neutral-400">(Optional)</span>
                   </label>
+                  <Input
+                    id="customerAddress"
+                    placeholder="Enter address"
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                    disabled={isReadOnly || isSaving}
+                  />
+                </div>
+
+                {/* Dates */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="quotationDate"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Quotation Date <span className="text-red-500">*</span>
+                    </label>
                     <Input
                       id="quotationDate"
                       type="date"
@@ -416,6 +593,22 @@ export default function EditQuotationPage() {
                       disabled={isReadOnly || isSaving}
                       required
                     />
+                  </div>
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="validUntil"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Valid Until / Expiry Date
+                    </label>
+                    <Input
+                      id="validUntil"
+                      type="date"
+                      value={validUntil}
+                      onChange={(e) => setValidUntil(e.target.value)}
+                      disabled={isReadOnly || isSaving}
+                    />
+                  </div>
                 </div>
 
                 {/* Notes */}
@@ -435,6 +628,26 @@ export default function EditQuotationPage() {
                       disabled={isReadOnly || isSaving}
                       className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                     />
+                </div>
+
+                {/* Terms */}
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="terms"
+                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                  >
+                    Terms & Conditions{" "}
+                    <span className="text-neutral-400">(Optional)</span>
+                  </label>
+                  <textarea
+                    id="terms"
+                    rows={3}
+                    placeholder="Add terms and conditions..."
+                    value={terms}
+                    onChange={(e) => setTerms(e.target.value)}
+                    disabled={isReadOnly || isSaving}
+                    className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
+                  />
                 </div>
               </div>
             </motion.div>
@@ -494,84 +707,209 @@ export default function EditQuotationPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item, index) => (
-                        <tr
-                          key={item.id}
-                          className="border-b border-neutral-100 dark:border-neutral-800"
-                        >
-                          <td className="py-4 pr-4">
-                            <select
-                              value={item.product}
-                              onChange={(e) =>
-                                handleProductChange(item.id, e.target.value)
-                              }
-                              disabled={isReadOnly || isSaving}
-                              className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
-                              required
-                            >
-                              <option value="">Select product</option>
-                              {products.map((product) => (
-                                <option key={product._id} value={product._id}>
-                                  {product.name} ({product.sku})
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="py-4 pr-4">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="1"
-                              placeholder="0"
-                              value={item.quantity || ""}
-                              onChange={(e) =>
-                                handleQuantityChange(
-                                  item.id,
-                                  parseInt(e.target.value) || 0
-                                )
-                              }
-                              disabled={isReadOnly || isSaving}
-                              className="w-24"
-                              required
-                            />
-                          </td>
-                          <td className="py-4 pr-4">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={item.rate || ""}
-                              onChange={(e) =>
-                                handleRateChange(
-                                  item.id,
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              disabled={isReadOnly || isSaving}
-                              className="w-32"
-                              required
-                            />
-                          </td>
-                          <td className="py-4 pr-4 text-right font-semibold text-neutral-900 dark:text-white">
-                            {formatCurrency(item.lineTotal)}
-                          </td>
-                          {!isReadOnly && (
-                            <td className="py-4">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRemoveItem(item.id)}
-                                className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
-                                disabled={items.length === 1}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
+                      {items.map((item) => {
+                        const product = getProduct(item.product);
+                        const hasTileInfo =
+                          product &&
+                          ((product.tilesPerBox ?? 0) > 0 ||
+                            (product.coveragePerBox ?? 0) > 0 ||
+                            (product.stock ?? 0) > 0);
+                        const showCoverageInput =
+                          (item.unitType === "Sq Meter" ||
+                            item.unitType === "Sq Ft") &&
+                          product &&
+                          (product.coveragePerBox ?? 0) > 0;
+                        return (
+                          <Fragment key={item.id}>
+                            <tr className="border-b border-neutral-100 dark:border-neutral-800">
+                              <td className="py-3 pr-2 align-top">
+                                <select
+                                  value={item.product}
+                                  onChange={(e) =>
+                                    handleProductChange(item.id, e.target.value)
+                                  }
+                                  disabled={isReadOnly || isSaving}
+                                  className="flex h-9 w-full min-w-[160px] rounded-lg border border-neutral-200 bg-white px-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+                                  required
+                                >
+                                  <option value="">Select product</option>
+                                  {products.map((product) => (
+                                    <option key={product._id} value={product._id}>
+                                      {product.name} ({product.sku})
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-3 pr-2 align-top">
+                                <select
+                                  value={item.unitType}
+                                  onChange={(e) =>
+                                    handleItemChange(item.id, "unitType", e.target.value)
+                                  }
+                                  disabled={isReadOnly || isSaving}
+                                  className="h-9 min-w-[90px] rounded-lg border border-neutral-200 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
+                                >
+                                  {UNIT_TYPES.map((u) => (
+                                    <option key={u} value={u}>
+                                      {u}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-3 pr-2 align-top">
+                                {showCoverageInput ? (
+                                  <div className="space-y-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      placeholder={
+                                        item.unitType === "Sq Meter" ? "e.g. 20" : "e.g. 215"
+                                      }
+                                      value={item.coverageInput}
+                                      onChange={(e) =>
+                                        handleItemChange(
+                                          item.id,
+                                          "coverageInput",
+                                          e.target.value
+                                        )
+                                      }
+                                      onBlur={() => handleCoverageBlur(item.id)}
+                                      disabled={isReadOnly || isSaving}
+                                      className="h-9 w-20 text-sm"
+                                    />
+                                    <span className="text-xs text-neutral-500">
+                                      → {item.quantity} box
+                                      {item.quantity === 1 ? "" : "es"}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    placeholder="0"
+                                    value={item.quantity || ""}
+                                    onChange={(e) =>
+                                      handleItemChange(
+                                        item.id,
+                                        "quantity",
+                                        parseFloat(e.target.value) || 0
+                                      )
+                                    }
+                                    disabled={isReadOnly || isSaving}
+                                    className="h-9 w-20 text-sm"
+                                    required
+                                  />
+                                )}
+                              </td>
+                              <td className="py-3 pr-2 align-top">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  value={item.rate || ""}
+                                  onChange={(e) =>
+                                    handleItemChange(
+                                      item.id,
+                                      "rate",
+                                      parseFloat(e.target.value) || 0
+                                    )
+                                  }
+                                  disabled={isReadOnly || isSaving}
+                                  className="h-9 w-24 text-sm"
+                                  required
+                                />
+                              </td>
+                              <td className="py-3 pr-2 align-top">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.5"
+                                  value={item.discountPercent || ""}
+                                  onChange={(e) =>
+                                    handleItemChange(
+                                      item.id,
+                                      "discountPercent",
+                                      parseFloat(e.target.value) || 0
+                                    )
+                                  }
+                                  disabled={isReadOnly || isSaving}
+                                  className="h-9 w-16 text-sm"
+                                />
+                              </td>
+                              <td className="py-3 pr-2 align-top">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.5"
+                                  value={item.taxPercent || ""}
+                                  onChange={(e) =>
+                                    handleItemChange(
+                                      item.id,
+                                      "taxPercent",
+                                      parseFloat(e.target.value) || 0
+                                    )
+                                  }
+                                  disabled={isReadOnly || isSaving}
+                                  className="h-9 w-16 text-sm"
+                                />
+                              </td>
+                              <td className="py-3 pr-2 text-right align-top font-semibold text-neutral-900 dark:text-white">
+                                {formatCurrency(item.lineTotal)}
+                              </td>
+                              {!isReadOnly && (
+                                <td className="py-3 align-top">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleRemoveItem(item.id)}
+                                    className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                                    disabled={items.length === 1 || isSaving}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </td>
+                              )}
+                            </tr>
+                            {hasTileInfo && (
+                              <tr className="border-b border-neutral-100 text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
+                                <td colSpan={8} className="pb-3 pl-4 pr-2 pt-0">
+                                  {product?.tilesPerBox != null &&
+                                    product.tilesPerBox > 0 && (
+                                      <span className="mr-4">
+                                        Tiles/box:{" "}
+                                        <strong>{product.tilesPerBox}</strong>
+                                      </span>
+                                    )}
+                                  {product?.coveragePerBox != null &&
+                                    product.coveragePerBox > 0 && (
+                                      <span className="mr-4">
+                                        Coverage/box:{" "}
+                                        <strong>
+                                          {product.coveragePerBox}{" "}
+                                          {product.coveragePerBoxUnit === "sqm"
+                                            ? "sqm"
+                                            : "sq ft"}
+                                        </strong>
+                                      </span>
+                                    )}
+                                  {product?.stock != null && (
+                                    <span className="mr-4">
+                                      Stock available:{" "}
+                                      <strong>{product.stock}</strong> boxes
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

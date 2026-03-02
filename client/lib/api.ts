@@ -358,8 +358,11 @@ class ApiClient {
     validUntil?: string;
     items: Array<{
       product: string;
+      unitType?: string;
       quantity: number;
       rate: number;
+      discountPercent?: number;
+      taxPercent?: number;
     }>;
     discount?: number;
     discountType?: 'percentage' | 'fixed';
@@ -383,8 +386,11 @@ class ApiClient {
     validUntil?: string;
     items?: Array<{
       product: string;
+      unitType?: string;
       quantity: number;
       rate: number;
+      discountPercent?: number;
+      taxPercent?: number;
     }>;
     discount?: number;
     discountType?: 'percentage' | 'fixed';
