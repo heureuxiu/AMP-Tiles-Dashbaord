@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Plus, Trash2, Receipt, Save, X as XIcon } from "lucide-react";
+import { Plus, Trash2, Receipt, Save, X as XIcon, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
 const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
@@ -47,7 +47,7 @@ type InvoiceItem = {
   discountPercent: number;
   taxPercent: number;
   lineTotal: number;
-  coverageInput: string; // for tiles: user enters coverage (sqm or sq ft), we compute quantity
+  coverageInput: string;
 };
 
 function calcLineTotal(item: InvoiceItem): number {
@@ -70,63 +70,143 @@ function getBoxesFromCoverage(
   return Math.ceil(coverageInSqm / sqmPerBox) || 0;
 }
 
-export default function CreateInvoicePage() {
+type FetchedInvoice = {
+  _id: string;
+  invoiceNumber: string;
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  customerAddress?: string;
+  invoiceDate: string;
+  dueDate?: string;
+  items: Array<{
+    product: { _id: string } | string;
+    productName: string;
+    unitType?: string;
+    quantity: number;
+    rate: number;
+    discountPercent?: number;
+    taxPercent?: number;
+    lineTotal: number;
+  }>;
+  notes?: string;
+  terms?: string;
+  status: string;
+  paymentMethod?: string;
+  amountPaid?: number;
+  grandTotal?: number;
+};
+
+export default function EditInvoicePage() {
+  const params = useParams();
   const router = useRouter();
+  const invoiceId = params.id as string;
+
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [invoiceDate, setInvoiceDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [invoiceStatus, setInvoiceStatus] = useState<string>("draft");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [amountPaid, setAmountPaid] = useState<number>(0);
-
-  const [items, setItems] = useState<InvoiceItem[]>([
-    {
-      id: "1",
-      product: "",
-      productName: "",
-      unitType: "Box",
-      quantity: 0,
-      rate: 0,
-      discountPercent: 0,
-      taxPercent: 0,
-      lineTotal: 0,
-      coverageInput: "",
-    },
-  ]);
+  const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [isDraft, setIsDraft] = useState(true);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    const load = async () => {
+      try {
+        setIsLoadingData(true);
+        const [invRes, prodRes] = await Promise.all([
+          api.getInvoice(invoiceId),
+          api.getProducts({ status: "active" }),
+        ]);
+        if (!invRes.success || !invRes.invoice) {
+          setNotFound(true);
+          toast.error("Invoice not found");
+          return;
+        }
+        if (prodRes.success && prodRes.products) {
+          setProducts((prodRes.products as Product[]) || []);
+        }
+        const inv = invRes.invoice as FetchedInvoice;
+        setCustomerName(inv.customerName || "");
+        setCustomerPhone(inv.customerPhone || "");
+        setCustomerEmail(inv.customerEmail || "");
+        setCustomerAddress(inv.customerAddress || "");
+        setInvoiceDate(
+          inv.invoiceDate
+            ? new Date(inv.invoiceDate).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0]
+        );
+        setDueDate(
+          inv.dueDate
+            ? new Date(inv.dueDate).toISOString().split("T")[0]
+            : ""
+        );
+        setNotes(inv.notes || "");
+        setTerms(inv.terms || "");
+        setInvoiceStatus(inv.status || "draft");
+        setPaymentMethod(inv.paymentMethod || "");
+        setAmountPaid(inv.amountPaid ?? 0);
+        setIsDraft(inv.status === "draft");
 
-  const fetchData = async () => {
-    try {
-      setIsLoadingData(true);
-      const res = await api.getProducts({ status: "active" });
-      if (res.success && res.products) setProducts(res.products as Product[]);
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to load products");
-    } finally {
-      setIsLoadingData(false);
-    }
-  };
+        const productId = (p: { _id: string } | string) =>
+          typeof p === "string" ? p : p?._id;
+        setItems(
+          (inv.items || []).map((it, idx) => ({
+            id: `${idx}-${Date.now()}`,
+            product: productId(it.product),
+            productName: it.productName || "",
+            unitType: it.unitType || "Box",
+            quantity: it.quantity || 0,
+            rate: it.rate || 0,
+            discountPercent: it.discountPercent ?? 0,
+            taxPercent: it.taxPercent ?? 0,
+            lineTotal: it.lineTotal || 0,
+            coverageInput: "",
+          }))
+        );
+        if (!inv.items?.length) {
+          setItems([
+            {
+              id: "1",
+              product: "",
+              productName: "",
+              unitType: "Box",
+              quantity: 0,
+              rate: 0,
+              discountPercent: 0,
+              taxPercent: 0,
+              lineTotal: 0,
+              coverageInput: "",
+            },
+          ]);
+        }
+      } catch (e) {
+        console.error(e);
+        toast.error("Failed to load invoice");
+        setNotFound(true);
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+    load();
+  }, [invoiceId]);
 
   const getProduct = (id: string) => products.find((p) => p._id === id);
 
   const handleAddItem = () => {
-    setItems([
-      ...items,
+    setItems((prev) => [
+      ...prev,
       {
         id: Date.now().toString(),
         product: "",
@@ -147,7 +227,7 @@ export default function CreateInvoicePage() {
       toast.error("At least one item is required");
       return;
     }
-    setItems(items.filter((i) => i.id !== id));
+    setItems((prev) => prev.filter((i) => i.id !== id));
   };
 
   const handleProductChange = (itemId: string, productId: string) => {
@@ -155,8 +235,8 @@ export default function CreateInvoicePage() {
     if (!product) return;
     const rate = product.retailPrice ?? product.price ?? 0;
     const taxPercent = product.taxPercent ?? 0;
-    setItems(
-      items.map((item) =>
+    setItems((prev) =>
+      prev.map((item) =>
         item.id === itemId
           ? {
               ...item,
@@ -181,8 +261,8 @@ export default function CreateInvoicePage() {
     field: keyof InvoiceItem,
     value: string | number
   ) => {
-    setItems(
-      items.map((item) => {
+    setItems((prev) =>
+      prev.map((item) => {
         if (item.id !== itemId) return item;
         const next = { ...item, [field]: value };
         if (
@@ -212,7 +292,7 @@ export default function CreateInvoicePage() {
 
   const handleCoverageBlur = (itemId: string) => {
     const item = items.find((i) => i.id === itemId);
-    if (!item || !item.coverageInput) return;
+    if (!item?.coverageInput) return;
     const product = getProduct(item.product);
     if (
       !product ||
@@ -222,8 +302,8 @@ export default function CreateInvoicePage() {
     const num = parseFloat(item.coverageInput) || 0;
     if (num <= 0) return;
     const boxes = getBoxesFromCoverage(num, item.unitType, product);
-    setItems(
-      items.map((i) =>
+    setItems((prev) =>
+      prev.map((i) =>
         i.id === itemId
           ? {
               ...i,
@@ -245,7 +325,7 @@ export default function CreateInvoicePage() {
         ? "Paid"
         : "Partially Paid";
 
-  const handleSaveInvoice = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim()) {
       toast.error("Customer name is required");
@@ -254,44 +334,41 @@ export default function CreateInvoicePage() {
     const validItems = items.filter(
       (i) => i.product && i.quantity > 0 && i.rate >= 0
     );
-    if (validItems.length === 0) {
+    if (isDraft && validItems.length === 0) {
       toast.error("Add at least one item with product, quantity and rate");
       return;
     }
     try {
       setIsSaving(true);
-      const payload = {
+      const payload: Parameters<typeof api.updateInvoice>[1] = {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
         customerAddress: customerAddress.trim() || undefined,
         invoiceDate,
         dueDate: dueDate || undefined,
-        items: validItems.map((i) => ({
-          product: i.product,
-          unitType: i.unitType,
-          quantity: i.quantity,
-          rate: i.rate,
-          discountPercent: i.discountPercent || 0,
-          taxPercent: i.taxPercent || 0,
-        })),
         notes: notes.trim() || undefined,
         terms: terms.trim() || undefined,
         status: invoiceStatus,
         paymentMethod: paymentMethod || undefined,
         amountPaid: amountPaid || undefined,
       };
-      const response = await api.createInvoice(payload);
-      if (response.success && response.invoice) {
-        const inv = response.invoice as { _id: string; invoiceNumber: string };
-        toast.success("Invoice created", {
-          description: `${inv.invoiceNumber} has been created.${invoiceStatus === "confirmed" || invoiceStatus === "delivered" ? " Stock has been reduced." : ""}`,
-        });
-        setTimeout(() => router.push(`/invoices/${inv._id}`), 800);
+      if (isDraft && validItems.length > 0) {
+        payload.items = validItems.map((i) => ({
+          product: i.product,
+          unitType: i.unitType,
+          quantity: i.quantity,
+          rate: i.rate,
+          discountPercent: i.discountPercent || 0,
+          taxPercent: i.taxPercent || 0,
+        }));
       }
+      await api.updateInvoice(invoiceId, payload);
+      toast.success("Invoice updated");
+      router.push(`/invoices/${invoiceId}`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to create invoice");
+      toast.error("Failed to update invoice");
     } finally {
       setIsSaving(false);
     }
@@ -303,25 +380,54 @@ export default function CreateInvoicePage() {
       currency: "AUD",
     }).format(amount);
 
+  if (notFound) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 p-8">
+        <p className="text-neutral-600 dark:text-neutral-400">
+          Invoice not found
+        </p>
+        <Button variant="outline" onClick={() => router.push("/invoices")}>
+          Back to Invoices
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoadingData && items.length === 0) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center p-8">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 p-6 lg:p-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-          Create Invoice
-        </h1>
-        <p className="mt-1 text-neutral-600 dark:text-neutral-400">
-          Tiles business: unit type, discount/tax per line, payment & status
-        </p>
+      <div className="flex items-center gap-4">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => router.push(`/invoices/${invoiceId}`)}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+            Edit Invoice
+          </h1>
+          <p className="mt-1 text-neutral-600 dark:text-neutral-400">
+            Update customer, items (draft only), payment & status
+          </p>
+        </div>
       </div>
 
-      <form onSubmit={handleSaveInvoice}>
+      <form onSubmit={handleSave}>
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            {/* Customer */}
+            {/* Customer & dates – same as create */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
               className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800"
             >
               <div className="border-b border-neutral-200/60 p-6 dark:border-neutral-700/60">
@@ -330,19 +436,12 @@ export default function CreateInvoicePage() {
                     className="flex h-10 w-10 items-center justify-center rounded-xl"
                     style={{ backgroundColor: "#8b5cf615" }}
                   >
-                    <Receipt
-                      className="h-5 w-5"
-                      style={{ color: "#8b5cf6" }}
-                      strokeWidth={2}
-                    />
+                    <Receipt className="h-5 w-5" style={{ color: "#8b5cf6" }} strokeWidth={2} />
                   </div>
                   <div>
                     <h3 className="font-bold text-neutral-900 dark:text-white">
                       Customer &amp; dates
                     </h3>
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                      Customer name required
-                    </p>
                   </div>
                 </div>
               </div>
@@ -352,7 +451,6 @@ export default function CreateInvoicePage() {
                     Customer Name <span className="text-red-500">*</span>
                   </label>
                   <Input
-                    placeholder="Customer name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     disabled={isSaving}
@@ -362,12 +460,9 @@ export default function CreateInvoicePage() {
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      Phone
-                    </label>
+                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</label>
                     <Input
                       type="tel"
-                      placeholder="Phone"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
                       disabled={isSaving}
@@ -375,12 +470,9 @@ export default function CreateInvoicePage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      Email
-                    </label>
+                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Email</label>
                     <Input
                       type="email"
-                      placeholder="Email"
                       value={customerEmail}
                       onChange={(e) => setCustomerEmail(e.target.value)}
                       disabled={isSaving}
@@ -389,11 +481,8 @@ export default function CreateInvoicePage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Address
-                  </label>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Address</label>
                   <Input
-                    placeholder="Address"
                     value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
                     disabled={isSaving}
@@ -402,9 +491,7 @@ export default function CreateInvoicePage() {
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      Invoice Date
-                    </label>
+                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Invoice Date</label>
                     <Input
                       type="date"
                       value={invoiceDate}
@@ -414,9 +501,7 @@ export default function CreateInvoicePage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      Due Date
-                    </label>
+                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Due Date</label>
                     <Input
                       type="date"
                       value={dueDate}
@@ -429,80 +514,58 @@ export default function CreateInvoicePage() {
               </div>
             </motion.div>
 
-            {/* Invoice Items */}
+            {/* Items – editable only for draft */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
+              transition={{ delay: 0.1 }}
               className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800"
             >
               <div className="flex items-center justify-between border-b border-neutral-200/60 p-6 dark:border-neutral-700/60">
                 <div>
-                  <h3 className="font-bold text-neutral-900 dark:text-white">
-                    Invoice Items
-                  </h3>
+                  <h3 className="font-bold text-neutral-900 dark:text-white">Invoice Items</h3>
                   <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                    Product, Unit Type, Qty, Rate, Disc %, Tax %, Line Total.
-                    Enter coverage (sqm/sq ft) to auto-calc boxes.
+                    {isDraft
+                      ? "Edit products, qty, rate, discount & tax"
+                      : "Items can only be edited when invoice is Draft"}
                   </p>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={handleAddItem} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Item
-                </Button>
+                {isDraft && (
+                  <Button type="button" variant="outline" size="sm" onClick={handleAddItem} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add Item
+                  </Button>
+                )}
               </div>
               <div className="overflow-x-auto p-6">
-                {isLoadingData ? (
-                  <div className="flex h-32 items-center justify-center">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
-                  </div>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Product
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Unit
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Qty
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Rate
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Disc %
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Tax %
-                        </th>
-                        <th className="pb-2 text-right font-semibold text-neutral-700 dark:text-neutral-300">
-                          Line Total
-                        </th>
-                        <th className="w-10 pb-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item) => {
-                        const product = getProduct(item.product);
-                        const showCoverage =
-                          (item.unitType === "Sq Meter" ||
-                            item.unitType === "Sq Ft") &&
-                          product &&
-                          (product.coveragePerBox ?? 0) > 0;
-                        return (
-                          <tr
-                            key={item.id}
-                            className="border-b border-neutral-100 dark:border-neutral-800"
-                          >
-                            <td className="py-2 pr-2">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-200 dark:border-neutral-700">
+                      <th className="pb-2 text-left font-semibold">Product</th>
+                      <th className="pb-2 text-left font-semibold">Unit</th>
+                      <th className="pb-2 text-left font-semibold">Qty</th>
+                      <th className="pb-2 text-left font-semibold">Rate</th>
+                      <th className="pb-2 text-left font-semibold">Disc %</th>
+                      <th className="pb-2 text-left font-semibold">Tax %</th>
+                      <th className="pb-2 text-right font-semibold">Line Total</th>
+                      {isDraft && <th className="w-10 pb-2"></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => {
+                      const product = getProduct(item.product);
+                      const showCoverage =
+                        isDraft &&
+                        (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") &&
+                        product &&
+                        (product.coveragePerBox ?? 0) > 0;
+                      return (
+                        <tr key={item.id} className="border-b border-neutral-100 dark:border-neutral-800">
+                          <td className="py-2 pr-2">
+                            {isDraft ? (
                               <select
                                 value={item.product}
-                                onChange={(e) =>
-                                  handleProductChange(item.id, e.target.value)
-                                }
+                                onChange={(e) => handleProductChange(item.id, e.target.value)}
                                 disabled={isSaving}
                                 className="h-9 w-full min-w-[140px] rounded-lg border border-neutral-200 bg-white px-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
                                 required
@@ -510,98 +573,83 @@ export default function CreateInvoicePage() {
                                 <option value="">Select product</option>
                                 {products.map((p) => (
                                   <option key={p._id} value={p._id}>
-                                    {p.name} ({p.sku}) Stock: {p.stock}
+                                    {p.name} ({p.sku})
                                   </option>
                                 ))}
                               </select>
-                            </td>
-                            <td className="py-2 pr-2">
+                            ) : (
+                              <span className="text-neutral-900 dark:text-white">{item.productName}</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-2">
+                            {isDraft ? (
                               <select
                                 value={item.unitType}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "unitType",
-                                    e.target.value
-                                  )
-                                }
+                                onChange={(e) => handleItemChange(item.id, "unitType", e.target.value)}
                                 disabled={isSaving}
                                 className="h-9 min-w-[90px] rounded-lg border border-neutral-200 bg-white px-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
                               >
                                 {UNIT_TYPES.map((u) => (
-                                  <option key={u} value={u}>
-                                    {u}
-                                  </option>
+                                  <option key={u} value={u}>{u}</option>
                                 ))}
                               </select>
-                            </td>
-                            <td className="py-2 pr-2">
-                              {showCoverage ? (
-                                <div className="space-y-1">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    placeholder={
-                                      item.unitType === "Sq Meter"
-                                        ? "e.g. 20"
-                                        : "e.g. 215"
-                                    }
-                                    value={item.coverageInput}
-                                    onChange={(e) =>
-                                      handleItemChange(
-                                        item.id,
-                                        "coverageInput",
-                                        e.target.value
-                                      )
-                                    }
-                                    onBlur={() => handleCoverageBlur(item.id)}
-                                    disabled={isSaving}
-                                    className="h-9 w-20 text-sm"
-                                  />
-                                  <span className="text-xs text-neutral-500">
-                                    → {item.quantity} box
-                                    {item.quantity !== 1 ? "es" : ""}
-                                  </span>
-                                </div>
-                              ) : (
+                            ) : (
+                              item.unitType || "—"
+                            )}
+                          </td>
+                          <td className="py-2 pr-2">
+                            {isDraft && showCoverage ? (
+                              <div className="space-y-1">
                                 <Input
                                   type="number"
                                   min="0"
-                                  step="1"
-                                  value={item.quantity || ""}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      item.id,
-                                      "quantity",
-                                      parseFloat(e.target.value) || 0
-                                    )
-                                  }
+                                  step="0.01"
+                                  placeholder={item.unitType === "Sq Meter" ? "e.g. 20" : "e.g. 215"}
+                                  value={item.coverageInput}
+                                  onChange={(e) => handleItemChange(item.id, "coverageInput", e.target.value)}
+                                  onBlur={() => handleCoverageBlur(item.id)}
                                   disabled={isSaving}
                                   className="h-9 w-20 text-sm"
-                                  required
                                 />
-                              )}
-                            </td>
-                            <td className="py-2 pr-2">
+                                <span className="text-xs text-neutral-500">→ {item.quantity} box(es)</span>
+                              </div>
+                            ) : isDraft ? (
+                              <Input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={item.quantity || ""}
+                                onChange={(e) =>
+                                  handleItemChange(item.id, "quantity", parseFloat(e.target.value) || 0)
+                                }
+                                disabled={isSaving}
+                                className="h-9 w-20 text-sm"
+                                required
+                              />
+                            ) : (
+                              item.quantity
+                            )}
+                          </td>
+                          <td className="py-2 pr-2">
+                            {isDraft ? (
                               <Input
                                 type="number"
                                 min="0"
                                 step="0.01"
                                 value={item.rate || ""}
                                 onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "rate",
-                                    parseFloat(e.target.value) || 0
-                                  )
+                                  handleItemChange(item.id, "rate", parseFloat(e.target.value) || 0)
                                 }
                                 disabled={isSaving}
                                 className="h-9 w-24 text-sm"
                                 required
                               />
-                            </td>
-                            <td className="py-2 pr-2">
+                            ) : (
+                              formatCurrency(item.rate)
+                            )}
+                          </td>
+                          <td className="py-2 pr-2">
+                            {isDraft ? (
                               <Input
                                 type="number"
                                 min="0"
@@ -609,17 +657,17 @@ export default function CreateInvoicePage() {
                                 step="0.5"
                                 value={item.discountPercent || ""}
                                 onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "discountPercent",
-                                    parseFloat(e.target.value) || 0
-                                  )
+                                  handleItemChange(item.id, "discountPercent", parseFloat(e.target.value) || 0)
                                 }
                                 disabled={isSaving}
                                 className="h-9 w-14 text-sm"
                               />
-                            </td>
-                            <td className="py-2 pr-2">
+                            ) : (
+                              item.discountPercent != null ? `${item.discountPercent}%` : "—"
+                            )}
+                          </td>
+                          <td className="py-2 pr-2">
+                            {isDraft ? (
                               <Input
                                 type="number"
                                 min="0"
@@ -627,19 +675,19 @@ export default function CreateInvoicePage() {
                                 step="0.5"
                                 value={item.taxPercent || ""}
                                 onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "taxPercent",
-                                    parseFloat(e.target.value) || 0
-                                  )
+                                  handleItemChange(item.id, "taxPercent", parseFloat(e.target.value) || 0)
                                 }
                                 disabled={isSaving}
                                 className="h-9 w-14 text-sm"
                               />
-                            </td>
-                            <td className="py-2 text-right font-medium text-neutral-900 dark:text-white">
-                              {formatCurrency(item.lineTotal)}
-                            </td>
+                            ) : (
+                              item.taxPercent != null ? `${item.taxPercent}%` : "—"
+                            )}
+                          </td>
+                          <td className="py-2 text-right font-medium">
+                            {formatCurrency(item.lineTotal)}
+                          </td>
+                          {isDraft && (
                             <td className="py-2">
                               <Button
                                 type="button"
@@ -652,25 +700,21 @@ export default function CreateInvoicePage() {
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </motion.div>
 
-            {/* Notes / Terms */}
             <div className="rounded-2xl border border-neutral-200/60 bg-white p-6 dark:border-neutral-700/60 dark:bg-neutral-800">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Notes
-                  </label>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Notes</label>
                   <textarea
                     rows={2}
-                    placeholder="Notes"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     disabled={isSaving}
@@ -678,12 +722,9 @@ export default function CreateInvoicePage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Terms
-                  </label>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Terms</label>
                   <textarea
                     rows={2}
-                    placeholder="Terms"
                     value={terms}
                     onChange={(e) => setTerms(e.target.value)}
                     disabled={isSaving}
@@ -694,50 +735,33 @@ export default function CreateInvoicePage() {
             </div>
           </div>
 
-          {/* Sidebar: Summary, Payment, Status, Actions */}
+          {/* Sidebar */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
+            transition={{ delay: 0.2 }}
             className="lg:col-span-1"
           >
             <div className="sticky top-24 space-y-6">
-              <div className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800">
-                <div className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60">
-                  <h3 className="font-semibold text-neutral-900 dark:text-white">
-                    Summary
-                  </h3>
-                </div>
-                <div className="space-y-4 p-6">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-neutral-600 dark:text-neutral-400">
-                      Subtotal
-                    </span>
-                    <span className="font-semibold">
-                      {formatCurrency(subtotal)}
-                    </span>
+              <div className="rounded-2xl border border-neutral-200/60 bg-white p-6 dark:border-neutral-700/60 dark:bg-neutral-800">
+                <h3 className="font-semibold text-neutral-900 dark:text-white">Summary</h3>
+                <div className="mt-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-neutral-600 dark:text-neutral-400">Subtotal</span>
+                    <span className="font-semibold">{formatCurrency(subtotal)}</span>
                   </div>
-                  <div className="border-t border-neutral-200 dark:border-neutral-700 pt-2">
-                    <div className="flex justify-between text-base font-semibold">
-                      <span>Grand Total</span>
-                      <span>{formatCurrency(grandTotal)}</span>
-                    </div>
+                  <div className="flex justify-between border-t border-neutral-200 pt-2 dark:border-neutral-700">
+                    <span className="font-semibold">Grand Total</span>
+                    <span>{formatCurrency(grandTotal)}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Payment */}
-              <div className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800">
-                <div className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60">
-                  <h3 className="font-semibold text-neutral-900 dark:text-white">
-                    Payment
-                  </h3>
-                </div>
-                <div className="space-y-4 p-6">
+              <div className="rounded-2xl border border-neutral-200/60 bg-white p-6 dark:border-neutral-700/60 dark:bg-neutral-800">
+                <h3 className="font-semibold text-neutral-900 dark:text-white">Payment</h3>
+                <div className="mt-4 space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      Payment Method
-                    </label>
+                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Payment Method</label>
                     <select
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value)}
@@ -745,70 +769,45 @@ export default function CreateInvoicePage() {
                       className="mt-1 h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm dark:border-neutral-600 dark:bg-neutral-800"
                     >
                       {PAYMENT_METHODS.map((o) => (
-                        <option key={o.value || "none"} value={o.value}>
-                          {o.label}
-                        </option>
+                        <option key={o.value || "none"} value={o.value}>{o.label}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      Amount Paid
-                    </label>
+                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Amount Paid</label>
                     <Input
                       type="number"
                       min="0"
                       step="0.01"
                       value={amountPaid || ""}
-                      onChange={(e) =>
-                        setAmountPaid(parseFloat(e.target.value) || 0)
-                      }
+                      onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
                       disabled={isSaving}
                       className="mt-1"
                     />
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-neutral-600 dark:text-neutral-400">
-                      Remaining Balance
-                    </span>
-                    <span className="font-semibold">
-                      {formatCurrency(remaining)}
-                    </span>
+                    <span className="text-neutral-600 dark:text-neutral-400">Remaining</span>
+                    <span className="font-semibold">{formatCurrency(remaining)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-neutral-600 dark:text-neutral-400">
-                      Payment Status
-                    </span>
-                    <span className="font-medium">{paymentStatus}</span>
+                    <span className="text-neutral-600 dark:text-neutral-400">Status</span>
+                    <span>{paymentStatus}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Invoice Status */}
-              <div className="rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800">
-                <div className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60">
-                  <h3 className="font-semibold text-neutral-900 dark:text-white">
-                    Invoice Status
-                  </h3>
-                </div>
-                <div className="p-6">
-                  <select
-                    value={invoiceStatus}
-                    onChange={(e) => setInvoiceStatus(e.target.value)}
-                    disabled={isSaving}
-                    className="h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm dark:border-neutral-600 dark:bg-neutral-800"
-                  >
-                    {INVOICE_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
-                    Stock reduces only when status is{" "}
-                    <strong>Confirmed</strong> or <strong>Delivered</strong>.
-                  </p>
-                </div>
+              <div className="rounded-2xl border border-neutral-200/60 bg-white p-6 dark:border-neutral-700/60 dark:bg-neutral-800">
+                <h3 className="font-semibold text-neutral-900 dark:text-white">Invoice Status</h3>
+                <select
+                  value={invoiceStatus}
+                  onChange={(e) => setInvoiceStatus(e.target.value)}
+                  disabled={isSaving}
+                  className="mt-2 h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+                >
+                  {INVOICE_STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-3">
@@ -816,17 +815,17 @@ export default function CreateInvoicePage() {
                   type="submit"
                   className="w-full gap-2"
                   size="lg"
-                  disabled={isLoadingData || isSaving}
+                  disabled={isSaving}
                 >
                   <Save className="h-4 w-4" />
-                  {isSaving ? "Saving..." : "Save Invoice"}
+                  {isSaving ? "Saving..." : "Save changes"}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   className="w-full gap-2"
                   size="lg"
-                  onClick={() => router.push("/invoices")}
+                  onClick={() => router.push(`/invoices/${invoiceId}`)}
                   disabled={isSaving}
                 >
                   <XIcon className="h-4 w-4" />

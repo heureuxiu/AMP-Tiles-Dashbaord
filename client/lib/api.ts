@@ -1,3 +1,4 @@
+// Use NEXT_PUBLIC_API_URL from .env.local for local backend; else production uses deployed URL
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === 'production'
@@ -18,12 +19,26 @@ interface Product {
   description: string;
   category: string;
   finish: string;
-  size?: string;
+  size: string;
   price: number;
   stock: number;
   unit: string;
   image?: string;
   isActive: boolean;
+  supplierType?: 'third-party' | 'own';
+  supplierVendor?: string;
+  supplierName?: string;
+  boxCoveragePackingDetails?: string;
+  tilesPerBox?: number;
+  coveragePerBox?: number;
+  coveragePerBoxUnit?: 'sqft' | 'sqm';
+  weightPerBox?: number;
+  retailPrice?: number;
+  pricingUnit?: 'per_box' | 'per_sqft' | 'per_sqm' | 'per_piece';
+  discountSalePrice?: number | null;
+  taxPercent?: number | null;
+  costPrice?: number;
+  profitMargin?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -183,11 +198,24 @@ class ApiClient {
     description?: string;
     category: string;
     finish: string;
-    size?: string;
-    price: number;
+    size: string;
+    price?: number;
     stock?: number;
     unit?: string;
     image?: string;
+    supplierType: 'third-party' | 'own';
+    supplierVendor?: string;
+    supplierName: string;
+    boxCoveragePackingDetails: string;
+    tilesPerBox: number;
+    coveragePerBox: number;
+    coveragePerBoxUnit: 'sqft' | 'sqm';
+    weightPerBox: number;
+    retailPrice: number;
+    pricingUnit: 'per_box' | 'per_sqft' | 'per_sqm' | 'per_piece';
+    discountSalePrice?: number | null;
+    taxPercent?: number | null;
+    costPrice: number;
   }) {
     return this.request('/products', {
       method: 'POST',
@@ -201,12 +229,25 @@ class ApiClient {
     description?: string;
     category: string;
     finish: string;
-    size?: string;
+    size: string;
     price: number;
     stock?: number;
     unit?: string;
     image?: string;
     isActive?: boolean;
+    supplierType: 'third-party' | 'own';
+    supplierVendor?: string;
+    supplierName: string;
+    boxCoveragePackingDetails: string;
+    tilesPerBox: number;
+    coveragePerBox: number;
+    coveragePerBoxUnit: 'sqft' | 'sqm';
+    weightPerBox: number;
+    retailPrice: number;
+    pricingUnit: 'per_box' | 'per_sqft' | 'per_sqm' | 'per_piece';
+    discountSalePrice?: number | null;
+    taxPercent?: number | null;
+    costPrice: number;
   }>) {
     return this.request(`/products/${id}`, {
       method: 'PUT',
@@ -497,12 +538,18 @@ class ApiClient {
     supplier: string;
     poDate?: string;
     expectedDeliveryDate?: string;
+    warehouseLocation?: string;
+    currency?: string;
+    paymentTerms?: string;
+    deliveryAddress?: string;
     items: Array<{
       product: string;
-      quantity: number;
+      unitType?: string;
+      quantityOrdered: number;
       rate: number;
+      discountPercent?: number;
+      taxPercent?: number;
     }>;
-    taxRate?: number;
     notes?: string;
     terms?: string;
   }) {
@@ -516,12 +563,18 @@ class ApiClient {
     supplier?: string;
     poDate?: string;
     expectedDeliveryDate?: string;
+    warehouseLocation?: string;
+    currency?: string;
+    paymentTerms?: string;
+    deliveryAddress?: string;
     items?: Array<{
       product: string;
-      quantity: number;
+      unitType?: string;
+      quantityOrdered: number;
       rate: number;
+      discountPercent?: number;
+      taxPercent?: number;
     }>;
-    taxRate?: number;
     notes?: string;
     terms?: string;
     status?: string;
@@ -532,9 +585,21 @@ class ApiClient {
     });
   }
 
-  async receivePurchaseOrder(id: string) {
+  async receivePurchaseOrder(
+    id: string,
+    body?: {
+      items?: Array<{
+        index?: number;
+        productId?: string;
+        quantityReceived: number;
+        damagedQuantity?: number;
+        batchNumber?: string;
+      }>;
+    }
+  ) {
     return this.request(`/purchase-orders/${id}/receive`, {
       method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
     });
   }
 
@@ -589,8 +654,11 @@ class ApiClient {
     dueDate?: string;
     items: Array<{
       product: string;
+      unitType?: string;
       quantity: number;
       rate: number;
+      discountPercent?: number;
+      taxPercent?: number;
     }>;
     discount?: number;
     discountType?: 'percentage' | 'fixed';
@@ -598,6 +666,8 @@ class ApiClient {
     notes?: string;
     terms?: string;
     status?: string;
+    paymentMethod?: string;
+    amountPaid?: number;
   }) {
     return this.request('/invoices', {
       method: 'POST',
@@ -614,8 +684,11 @@ class ApiClient {
     dueDate?: string;
     items?: Array<{
       product: string;
+      unitType?: string;
       quantity: number;
       rate: number;
+      discountPercent?: number;
+      taxPercent?: number;
     }>;
     discount?: number;
     discountType?: 'percentage' | 'fixed';
@@ -623,6 +696,8 @@ class ApiClient {
     notes?: string;
     terms?: string;
     status?: string;
+    paymentMethod?: string;
+    amountPaid?: number;
   }) {
     return this.request(`/invoices/${id}`, {
       method: 'PUT',

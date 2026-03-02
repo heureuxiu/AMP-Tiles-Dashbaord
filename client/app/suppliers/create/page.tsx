@@ -25,11 +25,12 @@ export default function CreateSupplierPage() {
     state: "",
     postcode: "",
     paymentTerms: "",
+    deliveryMethod: "",
     notes: "",
   });
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -66,6 +67,7 @@ export default function CreateSupplierPage() {
           postcode: formData.postcode || undefined,
         },
         paymentTerms: formData.paymentTerms || undefined,
+        deliveryMethod: formData.deliveryMethod || undefined,
         notes: formData.notes || undefined,
       };
 
@@ -135,6 +137,19 @@ export default function CreateSupplierPage() {
         {/* Form Content */}
         <form onSubmit={handleSubmit} className="p-6">
           <div className="grid gap-6 md:grid-cols-2">
+            {/* Supplier Code (Auto Generated) - shown as info on create */}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="supplierCode">Supplier Code (Auto Generated)</Label>
+              <Input
+                id="supplierCode"
+                type="text"
+                readOnly
+                value=""
+                placeholder="Auto-generated when saved"
+                className="bg-neutral-50 dark:bg-neutral-900 font-mono text-neutral-500 dark:text-neutral-400"
+              />
+            </div>
+
             {/* Basic Information Section */}
             <div className="space-y-6 md:col-span-2">
               <h4 className="text-lg font-semibold text-neutral-900 dark:text-white">
@@ -298,15 +313,39 @@ export default function CreateSupplierPage() {
             {/* Payment Terms */}
             <div className="space-y-2">
               <Label htmlFor="paymentTerms">Payment Terms</Label>
-              <Input
+              <select
                 id="paymentTerms"
                 name="paymentTerms"
-                type="text"
                 value={formData.paymentTerms}
                 onChange={handleChange}
-                placeholder="e.g., Net 30"
                 disabled={isSaving}
-              />
+                className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+              >
+                <option value="">Select payment terms</option>
+                <option value="COD">COD</option>
+                <option value="Net 7">Net 7</option>
+                <option value="Net 15">Net 15</option>
+                <option value="Net 30">Net 30</option>
+                <option value="Net 60">Net 60</option>
+              </select>
+            </div>
+
+            {/* Delivery Method */}
+            <div className="space-y-2">
+              <Label htmlFor="deliveryMethod">Delivery Method</Label>
+              <select
+                id="deliveryMethod"
+                name="deliveryMethod"
+                value={formData.deliveryMethod}
+                onChange={handleChange}
+                disabled={isSaving}
+                className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+              >
+                <option value="">Select delivery method</option>
+                <option value="Supplier Delivery">Supplier Delivery</option>
+                <option value="Pickup">Pickup</option>
+                <option value="Freight">Freight</option>
+              </select>
             </div>
 
             {/* Notes */}

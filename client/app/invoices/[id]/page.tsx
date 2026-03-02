@@ -3,17 +3,21 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Receipt, Download, Printer, ArrowLeft } from "lucide-react";
+import { Receipt, Download, Printer, ArrowLeft, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 
 type InvoiceItem = {
-  _id: string;
+  _id?: string;
   productName: string;
+  unitType?: string;
   quantity: number;
   rate: number;
+  discountPercent?: number;
+  taxPercent?: number;
   lineTotal: number;
+  coverageSqm?: number;
 };
 
 type InvoiceData = {
@@ -32,6 +36,10 @@ type InvoiceData = {
   tax?: number;
   grandTotal: number;
   status: string;
+  paymentMethod?: string;
+  amountPaid?: number;
+  remainingBalance?: number;
+  paymentStatus?: string;
 };
 
 const companyInfo = {
@@ -49,9 +57,12 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPdfLoading, setIsPdfLoading] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
 
   useEffect(() => {
-    const fetchInvoice = async () => {
+    const load = async () => {
       try {
         const response = await api.getInvoice(invoiceId);
         if (response.success && response.invoice) {
@@ -67,7 +78,7 @@ export default function InvoiceDetailPage() {
         setIsLoading(false);
       }
     };
-    fetchInvoice();
+    load();
   }, [invoiceId, router]);
 
   const formatCurrency = (amount: number) => {
@@ -110,6 +121,49 @@ export default function InvoiceDetailPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const fetchInvoice = async () => {
+    try {
+      const response = await api.getInvoice(invoiceId);
+      if (response.success && response.invoice) {
+        setInvoice(response.invoice as InvoiceData);
+      }
+    } catch {
+      toast.error("Failed to load invoice");
+    }
+  };
+
+  const handleRecordPayment = async () => {
+    if (!invoice) return;
+    const amount = parseFloat(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    const currentPaid = invoice.amountPaid ?? 0;
+    const newTotalPaid = currentPaid + amount;
+    if (newTotalPaid > grandTotal) {
+      toast.error("Amount paid cannot exceed total amount");
+      return;
+    }
+    try {
+      setIsRecordingPayment(true);
+      await api.updateInvoice(invoice._id, {
+        amountPaid: newTotalPaid,
+        ...(paymentMethod && { paymentMethod }),
+      });
+      toast.success("Payment recorded", {
+        description: `${formatCurrency(amount)} added. Total paid: ${formatCurrency(newTotalPaid)}, Remaining: ${formatCurrency(Math.max(0, grandTotal - newTotalPaid))}`,
+      });
+      setPaymentAmount("");
+      setPaymentMethod("");
+      await fetchInvoice();
+    } catch (e) {
+      toast.error("Failed to record payment");
+    } finally {
+      setIsRecordingPayment(false);
+    }
   };
 
   if (isLoading || !invoice) {
@@ -245,6 +299,14 @@ export default function InvoiceDetailPage() {
                       {formatDate(invoice.invoiceDate)}
                     </span>
                   </div>
+                  <div className="flex justify-end gap-3">
+                    <span className="font-semibold text-neutral-700 dark:text-neutral-300">
+                      Status:
+                    </span>
+                    <span className="capitalize text-neutral-900 dark:text-white">
+                      {invoice.status?.replace(/_/g, " ") ?? "—"}
+                    </span>
+                  </div>
                   {invoice.quotation?.quotationNumber && (
                     <div className="flex justify-end gap-3">
                       <span className="font-semibold text-neutral-700 dark:text-neutral-300">
@@ -267,11 +329,20 @@ export default function InvoiceDetailPage() {
                     <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                       PRODUCT
                     </th>
+                    <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                      UNIT
+                    </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                      QUANTITY
+                      QTY
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                       RATE
+                    </th>
+                    <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                      DISC %
+                    </th>
+                    <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                      TAX %
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                       AMOUNT
@@ -279,19 +350,28 @@ export default function InvoiceDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {invoice.items.map((item) => (
+                  {invoice.items.map((item, idx) => (
                     <tr
-                      key={item._id}
+                      key={item._id ?? idx}
                       className="border-b border-neutral-200 dark:border-neutral-700"
                     >
                       <td className="py-4 text-neutral-900 dark:text-white">
                         {item.productName}
+                      </td>
+                      <td className="py-4 text-neutral-600 dark:text-neutral-400">
+                        {item.unitType ?? "—"}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                         {item.quantity}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                         {formatCurrency(item.rate)}
+                      </td>
+                      <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
+                        {item.discountPercent != null ? `${item.discountPercent}%` : "—"}
+                      </td>
+                      <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
+                        {item.taxPercent != null ? `${item.taxPercent}%` : "—"}
                       </td>
                       <td className="py-4 text-right font-semibold text-neutral-900 dark:text-white">
                         {formatCurrency(item.lineTotal)}
@@ -336,6 +416,117 @@ export default function InvoiceDetailPage() {
                   <span className="text-2xl font-bold" style={{ color: "#8b5cf6" }}>
                     {formatCurrency(grandTotal)}
                   </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment & Status */}
+            <div className="mb-8 space-y-6 border-t border-neutral-200 pt-8 dark:border-neutral-700">
+              {/* Payment summary – clear record: Total | Paid | Remaining */}
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-600 dark:bg-neutral-800/50">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                  <DollarSign className="h-4 w-4" />
+                  Payment record
+                </h4>
+                <div className="grid gap-4 sm:grid-cols-4 text-sm">
+                  <div>
+                    <p className="text-neutral-500 dark:text-neutral-400">Total amount</p>
+                    <p className="text-lg font-bold text-neutral-900 dark:text-white">
+                      {formatCurrency(grandTotal)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-neutral-500 dark:text-neutral-400">Amount received</p>
+                    <p className="text-lg font-semibold text-green-600 dark:text-green-400">
+                      {formatCurrency(invoice.amountPaid ?? 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-neutral-500 dark:text-neutral-400">Remaining</p>
+                    <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">
+                      {formatCurrency(invoice.remainingBalance ?? grandTotal)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-neutral-500 dark:text-neutral-400">Payment status</p>
+                    <p className="capitalize font-medium text-neutral-900 dark:text-white">
+                      {(invoice.paymentStatus ?? "unpaid").replace(/_/g, " ")}
+                    </p>
+                  </div>
+                </div>
+                {(invoice.paymentMethod || "").trim() && (
+                  <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                    Method: {(invoice.paymentMethod || "").replace(/_/g, " ")}
+                  </p>
+                )}
+              </div>
+
+              {/* Record new payment – when there is remaining balance and not cancelled */}
+              {(invoice.remainingBalance ?? grandTotal) > 0 && invoice.status !== "cancelled" && (
+                <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-600 dark:bg-neutral-800/30 print:hidden">
+                  <h4 className="mb-3 text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                    Record new payment
+                  </h4>
+                  <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
+                    Client ne jo amount diya hai wo yahan enter karein – remaining balance khud update ho jayegi.
+                  </p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                        Amount received
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="e.g. 100"
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(e.target.value)}
+                        disabled={isRecordingPayment}
+                        className="h-10 w-32 rounded-lg border border-neutral-200 bg-white px-3 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                        Method
+                      </label>
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        disabled={isRecordingPayment}
+                        className="h-10 rounded-lg border border-neutral-200 bg-white px-3 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+                      >
+                        <option value="">— Optional —</option>
+                        <option value="cash">Cash</option>
+                        <option value="card">Card</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="eftpos">EFTPOS</option>
+                        <option value="credit">Credit</option>
+                      </select>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleRecordPayment}
+                      disabled={isRecordingPayment || !paymentAmount.trim()}
+                      className="gap-2"
+                    >
+                      {isRecordingPayment ? "Saving..." : "Record payment"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div>
+                  <h4 className="mb-3 text-sm font-semibold text-neutral-500 dark:text-neutral-400">
+                    INVOICE STATUS
+                  </h4>
+                  <p className="capitalize text-neutral-900 dark:text-white">
+                    {invoice.status?.replace(/_/g, " ") ?? "Draft"}
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                    Stock is reduced when status is Confirmed or Delivered.
+                  </p>
                 </div>
               </div>
             </div>

@@ -120,7 +120,7 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
             </div>
 
             {/* Navigation - overflow for small screens */}
-            <nav className="scrollbar-thin scrollbar-thumb-amp-footer-light scrollbar-track-transparent flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-4 lg:px-4 lg:py-5">
+            <nav className="scrollbar-hide flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-4 lg:px-4 lg:py-5">
               <ul className="space-y-1">
                 {sidebarNav.map((section) => (
                   <SidebarSection
@@ -243,8 +243,16 @@ function SidebarSection({
   pathname,
   onNavigate,
 }: SidebarSectionProps) {
-  const [expanded, setExpanded] = React.useState(true);
+  const isActiveSection = section.items.some(
+    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`)
+  );
+  const [expanded, setExpanded] = React.useState(isActiveSection);
   const Icon = sectionIcons[section.label];
+
+  // Keep section expanded when its route becomes active (e.g. after navigation)
+  React.useEffect(() => {
+    if (isActiveSection) setExpanded(true);
+  }, [isActiveSection]);
 
   return (
     <li>

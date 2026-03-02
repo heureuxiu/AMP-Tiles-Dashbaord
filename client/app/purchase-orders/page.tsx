@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, Eye, CheckCircle, Plus, Filter, X, Trash2 } from "lucide-react";
+import { ShoppingCart, Eye, CheckCircle, Plus, Filter, X, Trash2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,39 +24,50 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
-type POStatus = "draft" | "sent" | "received" | "cancelled";
+type POStatus = "draft" | "sent" | "sent_to_supplier" | "confirmed" | "partially_received" | "received" | "cancelled";
+
+const PO_STATUS_OPTIONS: { value: POStatus; label: string }[] = [
+  { value: "draft", label: "Draft" },
+  { value: "sent_to_supplier", label: "Sent to Supplier" },
+  { value: "sent", label: "Sent" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "partially_received", label: "Partially Received" },
+  { value: "received", label: "Received" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const STATUS_DOT_COLORS: Record<POStatus, string> = {
+  draft: "bg-amber-500",
+  sent: "bg-blue-500",
+  sent_to_supplier: "bg-blue-500",
+  confirmed: "bg-indigo-500",
+  partially_received: "bg-cyan-500",
+  received: "bg-green-500",
+  cancelled: "bg-red-500",
+};
 
 type PurchaseOrder = {
   _id: string;
   poNumber: string;
   supplierName: string;
-  // Optional populated supplier reference (used for filtering by supplier id)
-  supplier?: {
-    _id: string;
-    name: string;
-  };
+  supplier?: { _id: string; name: string };
   poDate: string;
   status: POStatus;
-  items: {
-    product: string;
-    quantity: number;
-    rate: number;
-    lineTotal?: number;
-  }[];
+  items: { quantityOrdered?: number; quantity?: number; rate: number; lineTotal?: number }[];
   grandTotal: number;
 };
 
-type Supplier = {
-  _id: string;
-  name: string;
-};
+type Supplier = { _id: string; name: string };
 
 type Stats = {
   total: number;
-  draft: number;
-  sent: number;
-  received: number;
-  cancelled: number;
+  draft?: number;
+  sent_to_supplier?: number;
+  confirmed?: number;
+  partially_received?: number;
+  received?: number;
+  cancelled?: number;
+  sent?: number;
 };
 
 export default function PurchaseOrdersPage() {
@@ -69,12 +80,15 @@ export default function PurchaseOrdersPage() {
   const [stats, setStats] = useState<Stats>({
     total: 0,
     draft: 0,
-    sent: 0,
+    sent_to_supplier: 0,
+    confirmed: 0,
+    partially_received: 0,
     received: 0,
     cancelled: 0,
   });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [poToDelete, setPoToDelete] = useState<PurchaseOrder | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -117,6 +131,24 @@ export default function PurchaseOrdersPage() {
 
   const handleView = (id: string) => {
     router.push(`/purchase-orders/${id}`);
+  };
+
+  const handleStatusChange = async (poId: string, newStatus: POStatus) => {
+    try {
+      setUpdatingStatusId(poId);
+      const response = await api.updatePurchaseOrder(poId, { status: newStatus });
+      if (response.success) {
+        toast.success("Status updated", {
+          description: `PO status changed to ${PO_STATUS_OPTIONS.find((s) => s.value === newStatus)?.label ?? newStatus}`,
+        });
+        fetchData();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to update status";
+      toast.error("Failed to update status", { description: errorMessage });
+    } finally {
+      setUpdatingStatusId(null);
+    }
   };
 
   const handleMarkReceived = async (id: string, poNumber: string) => {
@@ -168,33 +200,19 @@ export default function PurchaseOrdersPage() {
     }
   };
 
+  const STATUS_STYLE: Record<POStatus, { label: string; className: string }> = {
+    draft: { label: "Draft", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+    sent: { label: "Sent", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+    sent_to_supplier: { label: "Sent to Supplier", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+    confirmed: { label: "Confirmed", className: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" },
+    partially_received: { label: "Part. Received", className: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400" },
+    received: { label: "Received", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+    cancelled: { label: "Cancelled", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  };
+
   const getStatusBadge = (status: POStatus) => {
-    switch (status) {
-      case "received":
-        return (
-          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
-            Received
-          </Badge>
-        );
-      case "sent":
-        return (
-          <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
-            Sent
-          </Badge>
-        );
-      case "cancelled":
-        return (
-          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">
-            Cancelled
-          </Badge>
-        );
-      default:
-        return (
-          <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
-            Draft
-          </Badge>
-        );
-    }
+    const s = STATUS_STYLE[status] || STATUS_STYLE.draft;
+    return <Badge className={s.className}>{s.label}</Badge>;
   };
 
   const formatDate = (dateString: string) => {
@@ -306,31 +324,21 @@ export default function PurchaseOrdersPage() {
                 <Button variant="outline" size="sm" className="gap-2">
                   {statusFilter === "all"
                     ? "All Status"
-                    : statusFilter === "draft"
-                    ? "Draft"
-                    : statusFilter === "sent"
-                    ? "Sent"
-                    : statusFilter === "cancelled"
-                    ? "Cancelled"
-                    : "Received"}
+                    : statusFilter === "sent_to_supplier"
+                    ? "Sent to Supplier"
+                    : statusFilter === "partially_received"
+                    ? "Partially Received"
+                    : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setStatusFilter("all")}>
-                  All Status
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("draft")}>
-                  Draft
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("sent")}>
-                  Sent
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("received")}>
-                  Received
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("cancelled")}>
-                  Cancelled
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("all")}>All Status</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("draft")}>Draft</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("sent_to_supplier")}>Sent to Supplier</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("confirmed")}>Confirmed</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("partially_received")}>Partially Received</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("received")}>Received</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("cancelled")}>Cancelled</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -451,8 +459,37 @@ export default function PurchaseOrdersPage() {
                             </Button>
                           </motion.div>
 
+                          {/* Status change dropdown (badge-style trigger + options with colored dots) */}
+                          {po.status !== "received" && po.status !== "cancelled" && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={updatingStatusId === po._id}
+                                  className={`h-8 shrink-0 gap-1.5 rounded-lg border-0 px-2.5 py-1 text-xs font-medium shadow-sm hover:opacity-90 ${STATUS_STYLE[po.status]?.className ?? STATUS_STYLE.draft.className}`}
+                                >
+                                  {STATUS_STYLE[po.status]?.label ?? "Draft"}
+                                  <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="min-w-[180px] rounded-lg p-1 shadow-lg">
+                                {PO_STATUS_OPTIONS.map((opt) => (
+                                  <DropdownMenuItem
+                                    key={opt.value}
+                                    onClick={() => handleStatusChange(po._id, opt.value)}
+                                    className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm focus:bg-neutral-100 dark:focus:bg-neutral-700"
+                                  >
+                                    <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT_COLORS[opt.value]}`} />
+                                    {opt.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+
                           {/* Mark as Received Button (only for draft/sent) */}
-                          {(po.status === "draft" || po.status === "sent") && (
+                          {!["received", "cancelled"].includes(po.status) && (
                             <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                               <Button
                                 variant="ghost"
@@ -504,18 +541,13 @@ export default function PurchaseOrdersPage() {
             className="border-t border-neutral-200/60 p-4 sm:p-6 dark:border-neutral-700/60"
           >
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-600 dark:text-neutral-400">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
-                    {stats.draft} Draft
-                  </Badge>
-                  <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
-                    {stats.sent} Sent
-                  </Badge>
-                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
-                    {stats.received} Received
-                  </Badge>
-                </div>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{stats.draft ?? 0} Draft</Badge>
+                <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">{stats.sent_to_supplier ?? 0} Sent</Badge>
+                <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">{stats.confirmed ?? 0} Confirmed</Badge>
+                <Badge className="bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400">{stats.partially_received ?? 0} Part. Rec.</Badge>
+                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">{stats.received ?? 0} Received</Badge>
+                <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">{stats.cancelled ?? 0} Cancelled</Badge>
               </div>
               <span className="font-bold text-neutral-900 dark:text-white">
                 Total: {filteredPurchaseOrders.length}{" "}

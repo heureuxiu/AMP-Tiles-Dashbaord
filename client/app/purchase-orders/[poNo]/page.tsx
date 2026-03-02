@@ -17,15 +17,24 @@ import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
 import { api } from "@/lib/api";
 
-type POStatus = "draft" | "sent" | "received" | "cancelled";
+type POStatus = "draft" | "sent_to_supplier" | "confirmed" | "partially_received" | "received" | "cancelled";
 
 type POItem = {
   _id: string;
-  product?: { name: string; sku: string; unit?: string };
+  product?: { name: string; sku: string; unit?: string; coveragePerBox?: number; coveragePerBoxUnit?: string };
   productName: string;
-  quantity: number;
+  sku?: string;
+  unitType?: string;
+  quantityOrdered: number;
   rate: number;
+  discountPercent?: number;
+  taxPercent?: number;
   lineTotal: number;
+  coverageSqm?: number;
+  quantityReceived?: number;
+  damagedQuantity?: number;
+  batchNumber?: string;
+  receivedDate?: string | null;
 };
 
 type PurchaseOrderDetail = {
@@ -35,8 +44,13 @@ type PurchaseOrderDetail = {
   supplierName: string;
   poDate: string;
   expectedDeliveryDate?: string;
+  warehouseLocation?: string;
+  currency?: string;
+  paymentTerms?: string;
+  deliveryAddress?: string;
   status: POStatus;
   notes?: string;
+  createdBy?: { name?: string; email?: string };
   items: POItem[];
   subtotal: number;
   tax?: number;
@@ -99,32 +113,16 @@ export default function PurchaseOrderDetailPage() {
   };
 
   const getStatusBadge = (status: POStatus) => {
-    switch (status) {
-      case "received":
-        return (
-          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
-            Received
-          </Badge>
-        );
-      case "sent":
-        return (
-          <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
-            Sent
-          </Badge>
-        );
-      case "cancelled":
-        return (
-          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400">
-            Cancelled
-          </Badge>
-        );
-      default:
-        return (
-          <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
-            Draft
-          </Badge>
-        );
-    }
+    const map: Record<POStatus, { label: string; className: string }> = {
+      draft: { label: "Draft", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+      sent_to_supplier: { label: "Sent to Supplier", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+      confirmed: { label: "Confirmed", className: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" },
+      partially_received: { label: "Partially Received", className: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400" },
+      received: { label: "Received", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+      cancelled: { label: "Cancelled", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+    };
+    const s = map[status] || map.draft;
+    return <Badge className={s.className}>{s.label}</Badge>;
   };
 
   const formatDate = (dateString: string) => {
@@ -188,7 +186,7 @@ export default function PurchaseOrderDetailPage() {
             </p>
           </div>
         </div>
-        {(poData.status === "draft" || poData.status === "sent") && (
+        {!["received", "cancelled"].includes(poData.status) && (
           <Button
             onClick={handleMarkReceived}
             disabled={isMarkingReceived}
@@ -233,60 +231,54 @@ export default function PurchaseOrderDetailPage() {
         <div className="p-6">
           <div className="grid gap-6 md:grid-cols-2">
             <div>
-              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                Supplier Name
-              </p>
-              <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">
-                {poData.supplierName || poData.supplier?.name}
-              </p>
+              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Supplier</p>
+              <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">{poData.supplierName || poData.supplier?.name}</p>
             </div>
             <div>
-              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                PO Date
-              </p>
-              <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">
-                {formatDate(poData.poDate)}
-              </p>
+              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">PO Date</p>
+              <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">{formatDate(poData.poDate)}</p>
             </div>
             {poData.expectedDeliveryDate && (
               <div>
-                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                  Expected Delivery
-                </p>
-                <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">
-                  {formatDate(poData.expectedDeliveryDate)}
-                </p>
+                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Expected Delivery</p>
+                <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">{formatDate(poData.expectedDeliveryDate)}</p>
               </div>
             )}
             <div>
-              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                Status
-              </p>
+              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Status</p>
               <div className="mt-1">{getStatusBadge(poData.status)}</div>
             </div>
-            {poData.status === "received" && poData.receivedDate && (
+            {poData.warehouseLocation && (
               <div>
-                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                  Received On
-                </p>
-                <p className="mt-1 text-lg font-semibold text-green-600 dark:text-green-400">
-                  {formatDate(poData.receivedDate)}
-                </p>
+                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Warehouse Location</p>
+                <p className="mt-1 font-semibold text-neutral-900 dark:text-white">{poData.warehouseLocation}</p>
               </div>
             )}
             <div>
-              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                Total Items
-              </p>
-              <p className="mt-1 text-lg font-semibold text-neutral-900 dark:text-white">
-                {poData.items?.length ?? 0} line items
-              </p>
+              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Currency</p>
+              <p className="mt-1 font-semibold text-neutral-900 dark:text-white">{poData.currency || "AUD"}</p>
             </div>
+            {poData.paymentTerms && (
+              <div>
+                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Payment Terms</p>
+                <p className="mt-1 font-semibold text-neutral-900 dark:text-white">{poData.paymentTerms}</p>
+              </div>
+            )}
+            {poData.deliveryAddress && (
+              <div className="md:col-span-2">
+                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Delivery Address</p>
+                <p className="mt-1 font-semibold text-neutral-900 dark:text-white">{poData.deliveryAddress}</p>
+              </div>
+            )}
+            {poData.createdBy?.name && (
+              <div>
+                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Created By</p>
+                <p className="mt-1 font-semibold text-neutral-900 dark:text-white">{poData.createdBy.name}</p>
+              </div>
+            )}
             {poData.notes && (
               <div className="md:col-span-2">
-                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                  Notes
-                </p>
+                <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">Notes</p>
                 <p className="mt-1 text-neutral-900 dark:text-white">{poData.notes}</p>
               </div>
             )}
@@ -313,29 +305,45 @@ export default function PurchaseOrderDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Product / SKU</TableHead>
-                  <TableHead>Quantity</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Qty Ordered</TableHead>
                   <TableHead>Rate</TableHead>
-                  <TableHead>Total</TableHead>
+                  <TableHead>Disc %</TableHead>
+                  <TableHead>Tax %</TableHead>
+                  <TableHead>Line Total</TableHead>
+                  <TableHead>Coverage</TableHead>
+                  <TableHead>Qty Received</TableHead>
+                  <TableHead>Remaining</TableHead>
+                  <TableHead>Damaged</TableHead>
+                  <TableHead>Batch</TableHead>
+                  <TableHead>Received Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(poData.items || []).map((item) => (
-                  <TableRow key={item._id}>
-                    <TableCell className="font-medium text-neutral-900 dark:text-white">
-                      {getProductDisplay(item)}
-                    </TableCell>
-                    <TableCell className="font-semibold text-neutral-900 dark:text-white">
-                      {item.quantity}
-                    </TableCell>
-                    <TableCell className="text-neutral-600 dark:text-neutral-400">
-                      {formatCurrency(item.rate)}
-                    </TableCell>
-                    <TableCell className="font-semibold text-neutral-900 dark:text-white">
-                      {formatCurrency(item.lineTotal)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {(poData.items || []).map((item) => {
+                  const qtyOrdered = item.quantityOrdered ?? (item as unknown as { quantity?: number }).quantity ?? 0;
+                  const qtyRec = item.quantityReceived ?? 0;
+                  const damaged = item.damagedQuantity ?? 0;
+                  const remaining = Math.max(0, qtyOrdered - qtyRec - damaged);
+                  return (
+                    <TableRow key={item._id}>
+                      <TableCell className="font-medium text-neutral-900 dark:text-white">{getProductDisplay(item)}</TableCell>
+                      <TableCell>{item.unitType ?? "Box"}</TableCell>
+                      <TableCell className="font-semibold">{qtyOrdered}</TableCell>
+                      <TableCell>{formatCurrency(item.rate)}</TableCell>
+                      <TableCell>{item.discountPercent ?? 0}%</TableCell>
+                      <TableCell>{item.taxPercent ?? 0}%</TableCell>
+                      <TableCell className="font-semibold">{formatCurrency(item.lineTotal)}</TableCell>
+                      <TableCell className="text-neutral-600 dark:text-neutral-400">{item.coverageSqm != null ? `${item.coverageSqm} sq m` : "—"}</TableCell>
+                      <TableCell className="text-green-600 dark:text-green-400">{qtyRec}</TableCell>
+                      <TableCell>{remaining}</TableCell>
+                      <TableCell className="text-amber-600 dark:text-amber-400">{damaged}</TableCell>
+                      <TableCell className="text-xs">{item.batchNumber || "—"}</TableCell>
+                      <TableCell className="text-xs">{item.receivedDate ? formatDate(item.receivedDate) : "—"}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -352,38 +360,42 @@ export default function PurchaseOrderDetailPage() {
         </div>
       </motion.div>
 
-      {/* Stock Update Info Box */}
+      {/* Goods Receiving / Stock Info */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className="rounded-2xl border border-amber-200/60 bg-amber-50 p-6 dark:border-amber-700/60 dark:bg-amber-900/20"
+        className={`rounded-2xl border p-6 ${poData.status === "received" ? "border-green-200/60 bg-green-50 dark:border-green-700/60 dark:bg-green-900/20" : "border-amber-200/60 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-900/20"}`}
       >
         <div className="flex gap-4">
           <div className="shrink-0">
-            <AlertCircle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            {poData.status === "received" ? (
+              <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+            ) : (
+              <AlertCircle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            )}
           </div>
           <div>
-            <h4 className="font-bold text-amber-900 dark:text-amber-200">
+            <h4 className={`font-bold ${poData.status === "received" ? "text-green-900 dark:text-green-200" : "text-amber-900 dark:text-amber-200"}`}>
               {poData.status === "received"
-                ? "Stock from this PO"
-                : "How to Update Stock (Phase-0)"}
+                ? "Goods received – Stock updated"
+                : "Goods Receiving"}
             </h4>
-            <p className="mt-2 text-sm text-amber-800 dark:text-amber-300">
+            <p className={`mt-2 text-sm ${poData.status === "received" ? "text-green-800 dark:text-green-300" : "text-amber-800 dark:text-amber-300"}`}>
               {poData.status === "received"
-                ? "This purchase order has been marked as received. You can still view its details above. Stock updates are reflected in Inventory → Stock Update."
-                : "Stock is not auto-updated in this phase. After marking as received, go to Inventory → Stock Update and enter the quantity manually. You may mention this PO number (" +
-                  poData.poNumber +
-                  ") in remarks for tracking."}
+                ? "This PO has been marked as received. Stock was increased for the received quantities. You can view stock in Inventory → Products / Stock."
+                : "Use \"Mark as Received\" above to confirm receipt. Stock will increase automatically for the quantities received. You can receive in full or partially (Partially Received status)."}
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push("/inventory/stock")}
-              className="mt-4 border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-200 dark:hover:bg-amber-900/30"
-            >
-              Go to Stock Update
-            </Button>
+            {poData.status === "received" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/inventory/stock")}
+                className="mt-4 border-green-300 text-green-900 hover:bg-green-100 dark:border-green-600 dark:text-green-200 dark:hover:bg-green-900/30"
+              >
+                View Stock
+              </Button>
+            )}
           </div>
         </div>
       </motion.div>
