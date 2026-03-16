@@ -70,9 +70,37 @@ type Product = {
   retailPrice?: number;
   pricingUnit?: "per_box" | "per_sqft" | "per_sqm" | "per_piece";
   discountSalePrice?: number | null;
+  builderPrice?: number | null;
   taxPercent?: number | null;
   costPrice?: number;
   profitMargin?: number | null;
+};
+
+const isSqmUnit = (unit?: string) =>
+  String(unit || "")
+    .trim()
+    .toLowerCase() === "sqm";
+
+const normalizeStockQuantity = (value: number, unit: string) => {
+  const numericValue = Number.isFinite(value) ? value : 0;
+  if (numericValue <= 0) return 0;
+  if (isSqmUnit(unit)) return Math.round(numericValue * 100) / 100;
+  return Math.floor(numericValue);
+};
+
+const parseStockInput = (rawValue: string, unit: string) => {
+  if (rawValue === "") return 0;
+  const numericValue = Number(rawValue);
+  if (!Number.isFinite(numericValue)) return 0;
+  return normalizeStockQuantity(numericValue, unit);
+};
+
+const formatStockQuantity = (stock: number, unit?: string) => {
+  const numericStock = Number(stock) || 0;
+  if (isSqmUnit(unit)) {
+    return (Math.round(numericStock * 100) / 100).toFixed(2);
+  }
+  return String(numericStock);
 };
 
 export default function ProductsPage() {
@@ -112,6 +140,7 @@ export default function ProductsPage() {
     retailPrice: 0,
     pricingUnit: "per_box" as "per_box" | "per_sqft" | "per_sqm" | "per_piece",
     discountSalePrice: null as number | null,
+    builderPrice: null as number | null,
     taxPercent: null as number | null,
     costPrice: 0,
   });
@@ -138,6 +167,7 @@ export default function ProductsPage() {
     retailPrice: 0,
     pricingUnit: "per_box" as "per_box" | "per_sqft" | "per_sqm" | "per_piece",
     discountSalePrice: null as number | null,
+    builderPrice: null as number | null,
     taxPercent: null as number | null,
     costPrice: 0,
   });
@@ -291,6 +321,7 @@ export default function ProductsPage() {
       retailPrice: product.retailPrice ?? product.price,
       pricingUnit: product.pricingUnit ?? "per_box",
       discountSalePrice: product.discountSalePrice ?? null,
+      builderPrice: product.builderPrice ?? null,
       taxPercent: product.taxPercent ?? null,
       costPrice: product.costPrice ?? 0,
     });
@@ -866,7 +897,7 @@ export default function ProductsPage() {
                                   : "text-green-600 dark:text-green-400"
                               }`}
                             >
-                              {item.stock}
+                              {formatStockQuantity(item.stock, item.unit)}
                             </span>
                             <span className="text-[10px] text-neutral-500 dark:text-neutral-400 sm:text-xs">
                               {item.unit}
@@ -1117,6 +1148,22 @@ export default function ProductsPage() {
                   <Input type="number" min={0} step={0.01} placeholder="e.g., 45.00" value={formData.retailPrice || ""} onChange={(e) => setFormData({ ...formData, retailPrice: parseFloat(e.target.value) || 0 })} required />
                 </div>
                 <div className="grid gap-2 mt-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Builder Price (Optional)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="Special builder rate"
+                    value={formData.builderPrice ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        builderPrice: e.target.value === "" ? null : parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2 mt-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Discount / Sale Price (Optional)</label>
                   <Input type="number" min={0} step={0.01} placeholder="Optional" value={formData.discountSalePrice ?? ""} onChange={(e) => setFormData({ ...formData, discountSalePrice: e.target.value === "" ? null : parseFloat(e.target.value) || 0 })} />
                 </div>
@@ -1151,14 +1198,32 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Stock Qty</label>
-                  <Input type="number" min={0} value={formData.stock || ""} onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })} />
+                  <Input
+                    type="number"
+                    min={0}
+                    step={isSqmUnit(formData.unit) ? 0.01 : 1}
+                    value={formData.stock || ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        stock: parseStockInput(e.target.value, formData.unit),
+                      })
+                    }
+                  />
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Unit</label>
                   <select
                     className="flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-800"
                     value={formData.unit || "boxes"}
-                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                    onChange={(e) => {
+                      const nextUnit = e.target.value;
+                      setFormData({
+                        ...formData,
+                        unit: nextUnit,
+                        stock: normalizeStockQuantity(formData.stock, nextUnit),
+                      });
+                    }}
                   >
                     <option value="boxes">Per Box</option>
                     <option value="sq ft">Per Sq Ft</option>
@@ -1213,10 +1278,11 @@ export default function ProductsPage() {
                 <span className="text-neutral-500 dark:text-neutral-400">Coverage per Box</span><span>{productToView.coveragePerBox != null ? `${productToView.coveragePerBox} ${productToView.coveragePerBoxUnit ?? "sqft"}` : "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Weight per Box (kg)</span><span>{productToView.weightPerBox ?? "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Retail Price</span><span className="font-medium">${Number(productToView.retailPrice ?? productToView.price ?? 0).toFixed(2)}</span>
+                <span className="text-neutral-500 dark:text-neutral-400">Builder Price</span><span>{productToView.builderPrice != null ? `$${Number(productToView.builderPrice).toFixed(2)}` : "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Pricing Unit</span><span>{productToView.pricingUnit ? String(productToView.pricingUnit).replace("per_", "per ") : "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Cost Price</span><span>${Number(productToView.costPrice ?? 0).toFixed(2)}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Profit Margin</span><span>{productToView.profitMargin != null ? `${productToView.profitMargin}%` : "—"}</span>
-                <span className="text-neutral-500 dark:text-neutral-400">Stock</span><span>{productToView.stock} {productToView.unit}</span>
+                <span className="text-neutral-500 dark:text-neutral-400">Stock</span><span>{formatStockQuantity(productToView.stock, productToView.unit)} {productToView.unit}</span>
               </div>
               {productToView.description && (
                 <>
