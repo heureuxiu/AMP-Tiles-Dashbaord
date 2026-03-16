@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Users, Edit, Search, X, Plus, Trash2 } from "lucide-react";
+import { Users, Edit, Search, X, Plus, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -81,6 +81,10 @@ export default function SuppliersPage() {
       (supplier.phone && supplier.phone.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (supplier.email && supplier.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  const handleView = (id: string) => {
+    router.push(`/suppliers/${id}`);
+  };
 
   const handleEdit = (id: string) => {
     router.push(`/suppliers/${id}/edit`);
@@ -283,6 +287,19 @@ export default function SuppliersPage() {
                           </span>
                         </TableCell>
                         <TableCell className="flex items-center gap-1">
+                          {/* View Button */}
+                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/20"
+                              onClick={() => handleView(supplier._id)}
+                              aria-label={`View ${supplier.name}`}
+                              title="View Supplier"
+                            >
+                              <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            </Button>
+                          </motion.div>
                           {/* Edit Button */}
                           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                             <Button
