@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-const UNIT_TYPES = ["Box", "Sq Ft", "Piece", "Pallet"] as const;
+const UNIT_TYPES = ["Box", "Sq Ft", "Sqm", "Piece", "Pallet"] as const;
 const PAYMENT_TERMS = ["", "COD", "Net 7", "Net 15", "Net 30", "Net 60"];
 const CURRENCIES = ["AUD", "USD", "EUR", "GBP"];
 
@@ -122,8 +122,23 @@ export default function CreatePurchaseOrderPage() {
     if (!p || !item.quantityOrdered) return undefined;
     const cov = p.coveragePerBox ?? 0;
     const unit = p.coveragePerBoxUnit || "sqm";
-    if (item.unitType === "Box" && cov) return Math.round(item.quantityOrdered * (unit === "sqm" ? cov : cov * 0.092903) * 100) / 100;
-    if (item.unitType === "Sq Ft") return Math.round(item.quantityOrdered * 0.092903 * 100) / 100;
+
+    // Box: use product coverage per box
+    if (item.unitType === "Box" && cov) {
+      const perBoxSqm = unit === "sqm" ? cov : cov * 0.092903;
+      return Math.round(item.quantityOrdered * perBoxSqm * 100) / 100;
+    }
+
+    // Sq Ft: convert to sqm
+    if (item.unitType === "Sq Ft") {
+      return Math.round(item.quantityOrdered * 0.092903 * 100) / 100;
+    }
+
+    // Sqm: quantity is already in square meters
+    if (item.unitType === "Sqm") {
+      return Math.round(item.quantityOrdered * 100) / 100;
+    }
+
     return undefined;
   };
 
@@ -495,7 +510,7 @@ export default function CreatePurchaseOrderPage() {
                         value={item.quantityOrdered || ""}
                         onChange={(e) => handleItemChange(item.id, "quantityOrdered", Number(e.target.value))}
                         disabled={isSaving}
-                        className="w-full"
+                        className="w-full no-spin"
                       />
                     </TableCell>
                     <TableCell>
@@ -506,7 +521,7 @@ export default function CreatePurchaseOrderPage() {
                         value={item.rate || ""}
                         onChange={(e) => handleItemChange(item.id, "rate", Number(e.target.value))}
                         disabled={isSaving}
-                        className="w-full"
+                        className="w-full no-spin"
                       />
                     </TableCell>
                     <TableCell>
@@ -518,7 +533,7 @@ export default function CreatePurchaseOrderPage() {
                         value={item.discountPercent || ""}
                         onChange={(e) => handleItemChange(item.id, "discountPercent", Number(e.target.value))}
                         disabled={isSaving}
-                        className="w-16"
+                        className="w-16 no-spin"
                       />
                     </TableCell>
                     <TableCell>
@@ -530,7 +545,7 @@ export default function CreatePurchaseOrderPage() {
                         value={item.taxPercent || ""}
                         onChange={(e) => handleItemChange(item.id, "taxPercent", Number(e.target.value))}
                         disabled={isSaving}
-                        className="w-16"
+                        className="w-16 no-spin"
                       />
                     </TableCell>
                     <TableCell className="font-semibold">{formatCurrency(item.lineTotal)}</TableCell>
@@ -591,6 +606,17 @@ export default function CreatePurchaseOrderPage() {
           </Button>
         </div>
       </motion.div>
+      {/* Hide number input arrows for key PO numeric fields */}
+      <style jsx global>{`
+        .no-spin::-webkit-inner-spin-button,
+        .no-spin::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        .no-spin {
+          -moz-appearance: textfield;
+        }
+      `}</style>
     </div>
   );
 }
