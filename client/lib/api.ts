@@ -36,6 +36,7 @@ interface Product {
   retailPrice?: number;
   pricingUnit?: 'per_box' | 'per_sqft' | 'per_sqm' | 'per_piece';
   discountSalePrice?: number | null;
+  builderPrice?: number | null;
   taxPercent?: number | null;
   costPrice?: number;
   profitMargin?: number | null;
@@ -47,6 +48,8 @@ interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
+  emailSent?: boolean;
+  emailError?: string | null;
   token?: string;
   user?: User;
   products?: Product[];
@@ -173,12 +176,14 @@ class ApiClient {
     category?: string;
     finish?: string;
     status?: string;
+    supplierName?: string;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
     if (params?.category) queryParams.append('category', params.category);
     if (params?.finish) queryParams.append('finish', params.finish);
     if (params?.status) queryParams.append('status', params.status);
+    if (params?.supplierName) queryParams.append('supplierName', params.supplierName);
 
     const query = queryParams.toString();
     return this.request(`/products${query ? `?${query}` : ''}`, {
@@ -214,6 +219,7 @@ class ApiClient {
     retailPrice: number;
     pricingUnit: 'per_box' | 'per_sqft' | 'per_sqm' | 'per_piece';
     discountSalePrice?: number | null;
+    builderPrice?: number | null;
     taxPercent?: number | null;
     costPrice: number;
   }) {
@@ -246,6 +252,7 @@ class ApiClient {
     retailPrice: number;
     pricingUnit: 'per_box' | 'per_sqft' | 'per_sqm' | 'per_piece';
     discountSalePrice?: number | null;
+    builderPrice?: number | null;
     taxPercent?: number | null;
     costPrice: number;
   }>) {
@@ -299,6 +306,7 @@ class ApiClient {
     productId: string;
     type: 'stock-in' | 'stock-out';
     quantity: number;
+    sqrMtr?: number;
     remarks?: string;
   }) {
     return this.request('/stock/update', {
@@ -370,6 +378,7 @@ class ApiClient {
     notes?: string;
     terms?: string;
     status?: string;
+    sendEmail?: boolean;
   }) {
     return this.request('/quotations', {
       method: 'POST',
