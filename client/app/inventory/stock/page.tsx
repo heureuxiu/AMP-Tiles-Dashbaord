@@ -19,6 +19,8 @@ type Product = {
   stock: number;
   unit: string;
   image?: string;
+  coveragePerBox?: number;
+  coveragePerBoxUnit?: string;
 };
 
 type StockStats = {
@@ -29,10 +31,21 @@ type StockStats = {
   outOfStock: number;
 };
 
+const normalizeTransactionQuantity = (
+  value: number,
+  unit: "boxes" | "sqrMtr"
+) => {
+  const numeric = Number.isFinite(value) ? value : 0;
+  if (numeric <= 0) return 0;
+  if (unit === "sqrMtr") return Math.round(numeric * 100) / 100;
+  return Math.floor(numeric);
+};
+
 export default function StockUpdatePage() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [actionType, setActionType] = useState<"stock-in" | "stock-out" | "">("");
   const [quantity, setQuantity] = useState(0);
+  const [unit, setUnit] = useState<"boxes" | "sqrMtr">("boxes");
   const [remarks, setRemarks] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [stats, setStats] = useState<StockStats>({
@@ -94,6 +107,7 @@ export default function StockUpdatePage() {
         productId: selectedProductId,
         type: actionType,
         quantity,
+        sqrMtr: unit === "sqrMtr" ? quantity : undefined,
         remarks,
       });
 
@@ -101,9 +115,10 @@ export default function StockUpdatePage() {
         toast.success(
           `Stock ${actionType === "stock-in" ? "added" : "removed"} successfully`,
           {
-            description: `${quantity} ${selectedProduct?.unit || 'boxes'} ${
+            description: `${quantity} ${unit === "sqrMtr" ? "Sqr Mtr" : "Boxes"} ${
               actionType === "stock-in" ? "added to" : "removed from"
             } ${selectedProduct?.name}`,
+
           }
         );
 
@@ -127,6 +142,7 @@ export default function StockUpdatePage() {
     setSelectedProductId("");
     setActionType("");
     setQuantity(0);
+    setUnit("boxes");
     setRemarks("");
   };
 
@@ -135,6 +151,15 @@ export default function StockUpdatePage() {
       ? selectedProduct.stock + quantity
       : Math.max(0, selectedProduct.stock - quantity)
     : 0;
+
+  const sqmPerBox =
+    selectedProduct?.coveragePerBox
+      ? selectedProduct.coveragePerBoxUnit === "sqm"
+        ? selectedProduct.coveragePerBox
+        : selectedProduct.coveragePerBox * 0.0929
+      : null;
+  const currentSqm = sqmPerBox !== null ? selectedProduct!.stock * sqmPerBox : null;
+  const newSqm = sqmPerBox !== null ? newStock * sqmPerBox : null;
 
   return (
     <div className="min-w-0 w-full space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8">
@@ -249,18 +274,44 @@ export default function StockUpdatePage() {
                   htmlFor="quantity"
                   className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
-                  Quantity (boxes) <span className="text-red-500">*</span>
+                  Quantity <span className="text-red-500">*</span>
                 </label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  placeholder="Enter quantity"
-                  value={quantity || ""}
-                  onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-                  disabled={isSubmitting}
-                  required
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="quantity"
+                    type="number"
+                    min={unit === "sqrMtr" ? "0.01" : "1"}
+                    step={unit === "sqrMtr" ? "0.01" : "1"}
+                    placeholder="Enter quantity"
+                    value={quantity || ""}
+                    onChange={(e) =>
+                      setQuantity(
+                        normalizeTransactionQuantity(
+                          parseFloat(e.target.value) || 0,
+                          unit
+                        )
+                      )
+                    }
+                    disabled={isSubmitting}
+                    required
+                    className="flex-1"
+                  />
+                  <select
+                    value={unit}
+                    onChange={(e) => {
+                      const nextUnit = e.target.value as "boxes" | "sqrMtr";
+                      setUnit(nextUnit);
+                      setQuantity(
+                        normalizeTransactionQuantity(quantity, nextUnit)
+                      );
+                    }}
+                    disabled={isSubmitting}
+                    className="h-10 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:focus-visible:ring-neutral-300"
+                  >
+                    <option value="boxes">Boxes</option>
+                    <option value="sqrMtr">Sqr Mtr</option>
+                  </select>
+                </div>
               </div>
 
               {/* Remarks */}
@@ -361,6 +412,16 @@ export default function StockUpdatePage() {
                         {selectedProduct.unit}
                       </span>
                     </div>
+                    {currentSqm !== null && (
+                      <div className="mt-2 flex items-baseline gap-1 border-t border-neutral-200 pt-2 dark:border-neutral-700">
+                        <span className="text-lg font-semibold text-neutral-700 dark:text-neutral-300">
+                          {currentSqm.toFixed(2)}
+                        </span>
+                        <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                          m² (Sqr Mtr)
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Stock Change Preview */}
@@ -386,19 +447,37 @@ export default function StockUpdatePage() {
                           >
                             After Update
                           </div>
-                          <div className="mt-1 flex items-baseline gap-2">
-                            <span
-                              className={`text-2xl font-bold ${
-                                actionType === "stock-in"
-                                  ? "text-green-900 dark:text-green-300"
-                                  : "text-red-900 dark:text-red-300"
-                              }`}
-                            >
-                              {newStock}
-                            </span>
-                            <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                              {selectedProduct.unit}
-                            </span>
+                          <div className="mt-1 space-y-0.5">
+                            <div className="flex items-baseline gap-2">
+                              <span
+                                className={`text-2xl font-bold ${
+                                  actionType === "stock-in"
+                                    ? "text-green-900 dark:text-green-300"
+                                    : "text-red-900 dark:text-red-300"
+                                }`}
+                              >
+                                {newStock}
+                              </span>
+                              <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                                {selectedProduct.unit}
+                              </span>
+                            </div>
+                            {newSqm !== null && (
+                              <div className="flex items-baseline gap-1">
+                                <span
+                                  className={`text-sm font-semibold ${
+                                    actionType === "stock-in"
+                                      ? "text-green-800 dark:text-green-400"
+                                      : "text-red-800 dark:text-red-400"
+                                  }`}
+                                >
+                                  {newSqm.toFixed(2)}
+                                </span>
+                                <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                  m²
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div
