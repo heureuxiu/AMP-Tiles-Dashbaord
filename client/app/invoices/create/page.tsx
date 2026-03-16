@@ -86,7 +86,7 @@ export default function CreateInvoicePage() {
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
-  const [invoiceStatus, setInvoiceStatus] = useState<string>("draft");
+  const [invoiceStatus, setInvoiceStatus] = useState<string>("confirmed");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [amountPaid, setAmountPaid] = useState<number>(0);
 
