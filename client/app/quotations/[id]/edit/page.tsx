@@ -11,13 +11,17 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 
 const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
+type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
+const SQFT_PER_SQM = 10.764;
 
 type Product = {
   _id: string;
   name: string;
   sku: string;
+  unit?: string;
   price?: number;
   retailPrice?: number;
+  pricingUnit?: PricingUnit;
   tilesPerBox?: number | null;
   coveragePerBox?: number | null;
   coveragePerBoxUnit?: string;
@@ -78,8 +82,137 @@ type Quotation = {
   }>;
 };
 
-function calcLineTotal(item: QuotationItem): number {
-  const base = item.quantity * item.rate;
+type StockUnit = "box" | "piece" | "sqm" | "sqft";
+
+function roundQty(value: number): number {
+  return Math.round((Number(value) || 0) * 1000) / 1000;
+}
+
+function normalizeStockUnit(rawUnit?: string, pricingUnit?: PricingUnit): StockUnit {
+  const normalized = String(rawUnit || "")
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "");
+
+  if (
+    normalized.includes("sqm") ||
+    normalized.includes("sqmeter") ||
+    normalized.includes("sqmetre") ||
+    normalized.includes("m2") ||
+    normalized.includes("mÂ²")
+  ) {
+    return "sqm";
+  }
+
+  if (
+    normalized.includes("sqft") ||
+    normalized.includes("sqfeet") ||
+    normalized.includes("ft2") ||
+    normalized.includes("ftÂ²")
+  ) {
+    return "sqft";
+  }
+
+  if (normalized.includes("piece")) return "piece";
+  if (normalized.includes("box")) return "box";
+
+  if (pricingUnit === "per_sqm") return "sqm";
+  if (pricingUnit === "per_sqft") return "sqft";
+  if (pricingUnit === "per_piece") return "piece";
+  return "box";
+}
+
+function normalizeItemUnitType(rawUnitType?: string): StockUnit {
+  const normalized = String(rawUnitType || "box")
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "");
+
+  if (
+    normalized.includes("sqm") ||
+    normalized.includes("sqmeter") ||
+    normalized.includes("sqmetre") ||
+    normalized.includes("m2") ||
+    normalized.includes("mÂ²")
+  ) {
+    return "sqm";
+  }
+
+  if (
+    normalized.includes("sqft") ||
+    normalized.includes("sqfeet") ||
+    normalized.includes("ft2") ||
+    normalized.includes("ftÂ²")
+  ) {
+    return "sqft";
+  }
+
+  if (normalized.includes("piece")) return "piece";
+  return "box";
+}
+
+function normalizeCoverageUnit(
+  rawUnit?: string | null,
+  pricingUnit?: PricingUnit
+): "sqm" | "sqft" {
+  const normalized = String(rawUnit || "")
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "");
+
+  if (
+    normalized.includes("sqm") ||
+    normalized.includes("sqmeter") ||
+    normalized.includes("sqmetre") ||
+    normalized.includes("m2") ||
+    normalized.includes("m²")
+  ) {
+    return "sqm";
+  }
+
+  if (
+    normalized.includes("sqft") ||
+    normalized.includes("sqfeet") ||
+    normalized.includes("ft2") ||
+    normalized.includes("ft²")
+  ) {
+    return "sqft";
+  }
+
+  if (pricingUnit === "per_sqm") return "sqm";
+  if (pricingUnit === "per_sqft") return "sqft";
+  return "sqft";
+}
+
+function getSqmPerBox(product?: Product): number {
+  if (!product) return 0;
+  const cov = Number(product.coveragePerBox) || 0;
+  if (cov <= 0) return 0;
+  const covUnit = normalizeCoverageUnit(
+    product.coveragePerBoxUnit,
+    product.pricingUnit
+  );
+  return covUnit === "sqm" ? cov : cov / SQFT_PER_SQM;
+}
+
+function getBillableQuantity(item: QuotationItem, product?: Product): number {
+  const quantity = Number(item.quantity) || 0;
+  if (!product) return quantity;
+
+  const sqmPerBox = getSqmPerBox(product);
+  const pricingUnit = product.pricingUnit || "per_box";
+
+  if (pricingUnit === "per_sqm") {
+    return sqmPerBox > 0 ? quantity * sqmPerBox : quantity;
+  }
+
+  if (pricingUnit === "per_sqft") {
+    return sqmPerBox > 0 ? quantity * sqmPerBox * SQFT_PER_SQM : quantity;
+  }
+
+  return quantity;
+}
+
+function calcLineTotal(item: QuotationItem, product?: Product): number {
+  const billableQty = getBillableQuantity(item, product);
+  const base = billableQty * item.rate;
   const afterDisc = base * (1 - (item.discountPercent || 0) / 100);
   return Math.round(afterDisc * (1 + (item.taxPercent || 0) / 100) * 100) / 100;
 }
@@ -90,12 +223,80 @@ function getBoxesFromCoverage(
   product: Product
 ): number {
   const cov = product.coveragePerBox;
-  const covUnit = (product.coveragePerBoxUnit || "sqft").toLowerCase();
+  const covUnit = normalizeCoverageUnit(
+    product.coveragePerBoxUnit,
+    product.pricingUnit
+  );
   if (!cov || cov <= 0) return 0;
   let coverageInSqm = coverageValue;
-  if (unitType === "Sq Ft") coverageInSqm = coverageValue / 10.764;
-  const sqmPerBox = covUnit === "sqm" ? cov : cov / 10.764;
+  if (unitType === "Sq Ft") coverageInSqm = coverageValue / SQFT_PER_SQM;
+  const sqmPerBox = covUnit === "sqm" ? cov : cov / SQFT_PER_SQM;
   return Math.ceil(coverageInSqm / sqmPerBox) || 0;
+}
+
+function getItemCoverageSqm(product: Product, item: QuotationItem): number | null {
+  const quantity = Number(item.quantity) || 0;
+  const itemUnit = normalizeItemUnitType(item.unitType);
+  const sqmPerBox = getSqmPerBox(product);
+  const hasCoveragePerBox = sqmPerBox > 0;
+
+  if (itemUnit === "box") {
+    return hasCoveragePerBox ? quantity * sqmPerBox : null;
+  }
+  if (itemUnit === "sqm") {
+    return hasCoveragePerBox ? quantity * sqmPerBox : quantity;
+  }
+  if (itemUnit === "sqft") {
+    return hasCoveragePerBox ? quantity * sqmPerBox : quantity / SQFT_PER_SQM;
+  }
+  return null;
+}
+
+function getItemStockDemand(product: Product, item: QuotationItem): number {
+  const quantity = Number(item.quantity) || 0;
+  const stockUnit = normalizeStockUnit(product.unit, product.pricingUnit);
+  if (stockUnit === "box" || stockUnit === "piece") return quantity;
+
+  const coverageSqm = getItemCoverageSqm(product, item);
+  if (coverageSqm == null) return quantity;
+  if (stockUnit === "sqm") return coverageSqm;
+  return coverageSqm * SQFT_PER_SQM;
+}
+
+function getMaxQuantityFromAvailableStock(
+  product: Product,
+  item: QuotationItem,
+  availableStockInUnit: number
+): number {
+  const safeAvailable = Math.max(0, availableStockInUnit || 0);
+  const stockUnit = normalizeStockUnit(product.unit, product.pricingUnit);
+  const itemUnit = normalizeItemUnitType(item.unitType);
+  const sqmPerBox = getSqmPerBox(product);
+  const hasCoveragePerBox = sqmPerBox > 0;
+
+  if (stockUnit === "box" || stockUnit === "piece") {
+    return safeAvailable;
+  }
+
+  if (stockUnit === "sqm") {
+    if (hasCoveragePerBox) {
+      return safeAvailable / sqmPerBox;
+    }
+    if (itemUnit === "sqft") return safeAvailable * SQFT_PER_SQM;
+    return safeAvailable;
+  }
+
+  if (hasCoveragePerBox) {
+    return safeAvailable / (sqmPerBox * SQFT_PER_SQM);
+  }
+  if (itemUnit === "sqm") return safeAvailable / SQFT_PER_SQM;
+  return safeAvailable;
+}
+
+function formatStockQty(value: number): string {
+  const rounded = roundQty(value);
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(3).replace(/\.?0+$/, "");
 }
 
 export default function EditQuotationPage() {
@@ -199,6 +400,85 @@ export default function EditQuotationPage() {
   }, [quotationId]);
 
   const getProduct = (id: string) => products.find((p) => p._id === id);
+  const getPreferredUnitType = (product?: Product) => {
+    switch (product?.pricingUnit) {
+      case "per_sqm":
+        return "Sq Meter";
+      case "per_sqft":
+        return "Sq Ft";
+      case "per_piece":
+        return "Piece";
+      default:
+        return "Box";
+    }
+  };
+  const getStockUnitLabel = (product?: Product) => product?.unit || "boxes";
+
+  const getMaxQuantityForItem = (
+    currentItems: QuotationItem[],
+    itemId: string,
+    productId: string
+  ) => {
+    const product = getProduct(productId);
+    if (!product) return 0;
+
+    const currentItem = currentItems.find((item) => item.id === itemId);
+    if (!currentItem) return 0;
+
+    const available = Number(product.stock ?? 0);
+    const usedInOtherRows = currentItems.reduce((sum, item) => {
+      if (item.id === itemId || item.product !== productId) return sum;
+      return sum + getItemStockDemand(product, item);
+    }, 0);
+    const availableForCurrentRow = roundQty(Math.max(0, available - usedInOtherRows));
+    return roundQty(
+      getMaxQuantityFromAvailableStock(product, currentItem, availableForCurrentRow)
+    );
+  };
+
+  const clampQuantityToStock = (
+    currentItems: QuotationItem[],
+    itemId: string,
+    productId: string,
+    requestedQuantity: number
+  ) => {
+    const maxQuantity = getMaxQuantityForItem(currentItems, itemId, productId);
+    const nextQuantity = Math.min(
+      Math.max(0, requestedQuantity || 0),
+      maxQuantity
+    );
+    return {
+      quantity: nextQuantity,
+      maxQuantity,
+      wasClamped: nextQuantity !== (requestedQuantity || 0),
+    };
+  };
+
+  const getStockValidationMessage = (candidateItems: QuotationItem[]) => {
+    const requestedByProduct = new Map<string, { requested: number; available: number; product: Product }>();
+    for (const item of candidateItems) {
+      if (!item.product || (Number(item.quantity) || 0) <= 0) continue;
+      const product = getProduct(item.product);
+      if (!product) continue;
+      const requestedDemand = getItemStockDemand(product, item);
+      const existing = requestedByProduct.get(item.product);
+      requestedByProduct.set(item.product, {
+        requested: (existing?.requested || 0) + requestedDemand,
+        available: Number(product.stock ?? 0),
+        product,
+      });
+    }
+
+    for (const [, entry] of requestedByProduct.entries()) {
+      const requested = roundQty(entry.requested);
+      const available = roundQty(entry.available);
+      if (requested > available) {
+        return `${entry.product.name}: requested ${formatStockQty(requested)}, available ${formatStockQty(available)} ${getStockUnitLabel(entry.product)}`;
+      }
+    }
+
+    return null;
+  };
 
   const handleAddItem = () => {
     if (isReadOnly) return;
@@ -234,25 +514,42 @@ export default function EditQuotationPage() {
     if (!product) return;
     const rate = product.retailPrice ?? product.price ?? 0;
     const taxPercent = product.taxPercent ?? 0;
+    const preferredUnitType = getPreferredUnitType(product);
+    let stockMessage: string | null = null;
 
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              product: product._id,
-              productName: product.name,
-              rate,
-              taxPercent,
-              lineTotal: calcLineTotal({
-                ...item,
-                rate,
-                taxPercent,
-              }),
-            }
-          : item
-      )
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+
+        const requestedQuantity = 0;
+        const { quantity: safeQuantity, wasClamped, maxQuantity } =
+          clampQuantityToStock(prev, itemId, productId, requestedQuantity);
+        if (wasClamped && !stockMessage) {
+          stockMessage = `Only ${formatStockQty(maxQuantity)} ${getStockUnitLabel(product)} available for ${product.name}`;
+        }
+
+        const next = {
+          ...item,
+          product: product._id,
+          productName: product.name,
+          unitType: preferredUnitType,
+          coverageInput: "",
+          quantity: safeQuantity,
+          rate,
+          taxPercent,
+        };
+        return {
+          ...next,
+          lineTotal: calcLineTotal(next, product),
+        };
+      })
     );
+
+    if (stockMessage) {
+      toast.error("Insufficient stock", {
+        description: stockMessage,
+      });
+    }
   };
 
   const handleItemChange = (
@@ -261,33 +558,72 @@ export default function EditQuotationPage() {
     value: string | number
   ) => {
     if (isReadOnly) return;
+    let stockMessage: string | null = null;
     setItems((prev) =>
       prev.map((item) => {
         if (item.id !== itemId) return item;
         const next = { ...item, [field]: value };
+        const product = next.product ? getProduct(next.product) : undefined;
+
+        if (field === "unitType" && product) {
+          if (
+            (next.unitType === "Sq Meter" || next.unitType === "Sq Ft") &&
+            (product.coveragePerBox ?? 0) > 0
+          ) {
+            const coverageNum = parseFloat(next.coverageInput) || 0;
+            next.quantity =
+              coverageNum > 0
+                ? getBoxesFromCoverage(coverageNum, next.unitType, product)
+                : 0;
+          } else {
+            next.coverageInput = "";
+          }
+        }
+
+        if (field === "coverageInput" && typeof value === "string") {
+          const num = parseFloat(value) || 0;
+          if (
+            product &&
+            (next.unitType === "Sq Meter" || next.unitType === "Sq Ft") &&
+            num > 0
+          ) {
+            next.quantity = getBoxesFromCoverage(num, next.unitType, product);
+          } else if (field === "coverageInput") {
+            next.quantity = 0;
+          }
+        }
+
+        if (next.product) {
+          const requestedQuantity = Number(next.quantity) || 0;
+          const { quantity: safeQuantity, wasClamped, maxQuantity } =
+            clampQuantityToStock(prev, itemId, next.product, requestedQuantity);
+          next.quantity = safeQuantity;
+
+          if (wasClamped && !stockMessage && product) {
+            stockMessage = `Only ${formatStockQty(maxQuantity)} ${getStockUnitLabel(product)} available for ${product.name}`;
+          }
+        }
+
         if (
           field === "quantity" ||
           field === "rate" ||
           field === "discountPercent" ||
-          field === "taxPercent"
+          field === "taxPercent" ||
+          field === "coverageInput" ||
+          field === "unitType"
         ) {
-          next.lineTotal = calcLineTotal(next);
+          next.lineTotal = calcLineTotal(next, product);
         }
-        if (field === "coverageInput" && typeof value === "string") {
-          const num = parseFloat(value) || 0;
-          const product = getProduct(item.product);
-          if (
-            product &&
-            (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") &&
-            num > 0
-          ) {
-            next.quantity = getBoxesFromCoverage(num, item.unitType, product);
-            next.lineTotal = calcLineTotal({ ...next, quantity: next.quantity });
-          }
-        }
+
         return next;
       })
     );
+
+    if (stockMessage) {
+      toast.error("Insufficient stock", {
+        description: stockMessage,
+      });
+    }
   };
 
   const handleCoverageBlur = (itemId: string) => {
@@ -302,18 +638,28 @@ export default function EditQuotationPage() {
       return;
     const num = parseFloat(item.coverageInput) || 0;
     if (num <= 0) return;
-    const boxes = getBoxesFromCoverage(num, item.unitType, product);
+    let stockMessage: string | null = null;
     setItems((prev) =>
-      prev.map((i) =>
-        i.id === itemId
-          ? {
-              ...i,
-              quantity: boxes,
-              lineTotal: calcLineTotal({ ...i, quantity: boxes }),
-            }
-          : i
-      )
+      prev.map((i) => {
+        if (i.id !== itemId) return i;
+        const boxes = getBoxesFromCoverage(num, item.unitType, product);
+        const { quantity: safeQuantity, wasClamped, maxQuantity } =
+          clampQuantityToStock(prev, itemId, item.product, boxes);
+        if (wasClamped && !stockMessage) {
+          stockMessage = `Only ${formatStockQty(maxQuantity)} ${getStockUnitLabel(product)} available for ${product.name}`;
+        }
+        return {
+          ...i,
+          quantity: safeQuantity,
+          lineTotal: calcLineTotal({ ...i, quantity: safeQuantity }, product),
+        };
+      })
     );
+    if (stockMessage) {
+      toast.error("Insufficient stock", {
+        description: stockMessage,
+      });
+    }
   };
 
   const calculateSubtotal = () => {
@@ -339,6 +685,14 @@ export default function EditQuotationPage() {
 
     if (!isReadOnly && validItems.length === 0) {
       toast.error("Please add at least one item with quantity");
+      return;
+    }
+
+    const stockValidationMessage = getStockValidationMessage(validItems);
+    if (stockValidationMessage) {
+      toast.error("Insufficient stock", {
+        description: stockValidationMessage,
+      });
       return;
     }
 
@@ -709,6 +1063,11 @@ export default function EditQuotationPage() {
                     <tbody>
                       {items.map((item) => {
                         const product = getProduct(item.product);
+                        const isUnitLocked = Boolean(product?.pricingUnit);
+                        const stockUnitLabel = getStockUnitLabel(product);
+                        const maxQuantityForItem = item.product
+                          ? getMaxQuantityForItem(items, item.id, item.product)
+                          : 0;
                         const hasTileInfo =
                           product &&
                           ((product.tilesPerBox ?? 0) > 0 ||
@@ -746,7 +1105,7 @@ export default function EditQuotationPage() {
                                   onChange={(e) =>
                                     handleItemChange(item.id, "unitType", e.target.value)
                                   }
-                                  disabled={isReadOnly || isSaving}
+                                  disabled={isReadOnly || isSaving || isUnitLocked}
                                   className="h-9 min-w-[90px] rounded-lg border border-neutral-200 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
                                 >
                                   {UNIT_TYPES.map((u) => (
@@ -787,17 +1146,23 @@ export default function EditQuotationPage() {
                                   <Input
                                     type="number"
                                     min="0"
+                                    max={item.product ? maxQuantityForItem : undefined}
                                     step="1"
-                                    placeholder="0"
+                                    placeholder={item.product ? "0" : "Select product first"}
                                     value={item.quantity || ""}
-                                    onChange={(e) =>
+                                    onChange={(e) => {
+                                      const typedQuantity =
+                                        Math.max(0, parseFloat(e.target.value) || 0);
+                                      const safeQuantity = item.product
+                                        ? Math.min(typedQuantity, maxQuantityForItem)
+                                        : 0;
                                       handleItemChange(
                                         item.id,
                                         "quantity",
-                                        parseFloat(e.target.value) || 0
-                                      )
-                                    }
-                                    disabled={isReadOnly || isSaving}
+                                        safeQuantity
+                                      );
+                                    }}
+                                    disabled={isReadOnly || isSaving || !item.product}
                                     className="h-9 w-20 text-sm"
                                     required
                                   />
@@ -901,7 +1266,13 @@ export default function EditQuotationPage() {
                                   {product?.stock != null && (
                                     <span className="mr-4">
                                       Stock available:{" "}
-                                      <strong>{product.stock}</strong> boxes
+                                      <strong>{product.stock}</strong> {stockUnitLabel}
+                                    </span>
+                                  )}
+                                  {product?.stock != null && item.product && (
+                                    <span className="mr-4">
+                                      Available to quote now:{" "}
+                                      <strong>{formatStockQty(maxQuantityForItem)}</strong> {stockUnitLabel}
                                     </span>
                                   )}
                                 </td>
