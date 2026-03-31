@@ -36,6 +36,14 @@ const PO_STATUS_OPTIONS: { value: POStatus; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+const PO_STATUS_UPDATE_OPTIONS: { value: POStatus; label: string }[] = [
+  { value: "draft", label: "Draft" },
+  { value: "sent_to_supplier", label: "Sent to Supplier" },
+  { value: "sent", label: "Sent" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
 const STATUS_DOT_COLORS: Record<POStatus, string> = {
   draft: "bg-amber-500",
   sent: "bg-blue-500",
@@ -134,6 +142,14 @@ export default function PurchaseOrdersPage() {
   };
 
   const handleStatusChange = async (poId: string, newStatus: POStatus) => {
+    if (newStatus === "partially_received" || newStatus === "received") {
+      toast.error("Use Receive action", {
+        description:
+          "To keep stock and PO status consistent, use the Mark as Received action.",
+      });
+      return;
+    }
+
     try {
       setUpdatingStatusId(poId);
       const response = await api.updatePurchaseOrder(poId, { status: newStatus });
@@ -151,13 +167,28 @@ export default function PurchaseOrdersPage() {
     }
   };
 
-  const handleMarkReceived = async (id: string, poNumber: string) => {
+  const handleMarkReceived = async (
+    id: string,
+    poNumber: string,
+    applyStockUpdate = true
+  ) => {
     try {
-      const response = await api.receivePurchaseOrder(id);
+      const response = await api.receivePurchaseOrder(id, { applyStockUpdate });
       if (response.success) {
-        toast.success("Purchase Order marked as received", {
-          description: `${poNumber} has been marked as received and stock updated`,
-        });
+        const successDescription =
+          typeof response.message === "string" && response.message.trim().length > 0
+            ? response.message
+            : applyStockUpdate
+            ? `${poNumber} has been marked as received and stock updated`
+            : `${poNumber} has been marked as received (manual stock update mode)`;
+        toast.success(
+          applyStockUpdate
+            ? "Purchase Order marked as received"
+            : "Purchase Order received (manual stock mode)",
+          {
+            description: successDescription,
+          }
+        );
         fetchData();
       }
     } catch (error) {
@@ -474,7 +505,7 @@ export default function PurchaseOrdersPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="min-w-[180px] rounded-lg p-1 shadow-lg">
-                                {PO_STATUS_OPTIONS.map((opt) => (
+                                {PO_STATUS_UPDATE_OPTIONS.map((opt) => (
                                   <DropdownMenuItem
                                     key={opt.value}
                                     onClick={() => handleStatusChange(po._id, opt.value)}
@@ -490,18 +521,33 @@ export default function PurchaseOrdersPage() {
 
                           {/* Mark as Received Button (only for draft/sent) */}
                           {!["received", "cancelled"].includes(po.status) && (
-                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 rounded-full hover:bg-green-100 dark:hover:bg-green-900/20"
-                                onClick={() => handleMarkReceived(po._id, po.poNumber)}
-                                aria-label={`Mark ${po.poNumber} as received`}
-                                title="Mark as Received"
-                              >
-                                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                              </Button>
-                            </motion.div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 rounded-full hover:bg-green-100 dark:hover:bg-green-900/20"
+                                    aria-label={`Receive ${po.poNumber}`}
+                                    title="Receive Options"
+                                  >
+                                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                  </Button>
+                                </motion.div>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="min-w-[220px]">
+                                <DropdownMenuItem
+                                  onClick={() => handleMarkReceived(po._id, po.poNumber, true)}
+                                >
+                                  Receive + Auto Stock Update
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleMarkReceived(po._id, po.poNumber, false)}
+                                >
+                                  Receive Only (Manual Stock Later)
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
                           {/* Delete Button (backend allows only draft) */}
                           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
