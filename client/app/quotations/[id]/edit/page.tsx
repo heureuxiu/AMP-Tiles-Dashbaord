@@ -27,6 +27,7 @@ type Product = {
   coveragePerBoxUnit?: string;
   stock?: number;
   taxPercent?: number | null;
+  supplierType?: "third-party" | "own";
 };
 
 type QuotationStatus =
@@ -413,6 +414,8 @@ export default function EditQuotationPage() {
     }
   };
   const getStockUnitLabel = (product?: Product) => product?.unit || "boxes";
+  const isStockRestrictedProduct = (product?: Product) =>
+    (product?.supplierType || "own") !== "third-party";
 
   const getMaxQuantityForItem = (
     currentItems: QuotationItem[],
@@ -421,6 +424,7 @@ export default function EditQuotationPage() {
   ) => {
     const product = getProduct(productId);
     if (!product) return 0;
+    if (!isStockRestrictedProduct(product)) return Number.POSITIVE_INFINITY;
 
     const currentItem = currentItems.find((item) => item.id === itemId);
     if (!currentItem) return 0;
@@ -442,6 +446,24 @@ export default function EditQuotationPage() {
     productId: string,
     requestedQuantity: number
   ) => {
+    const product = getProduct(productId);
+    if (!product) {
+      return {
+        quantity: Math.max(0, requestedQuantity || 0),
+        maxQuantity: 0,
+        wasClamped: false,
+      };
+    }
+
+    if (!isStockRestrictedProduct(product)) {
+      const safeQuantity = Math.max(0, requestedQuantity || 0);
+      return {
+        quantity: safeQuantity,
+        maxQuantity: safeQuantity,
+        wasClamped: false,
+      };
+    }
+
     const maxQuantity = getMaxQuantityForItem(currentItems, itemId, productId);
     const nextQuantity = Math.min(
       Math.max(0, requestedQuantity || 0),
@@ -460,6 +482,7 @@ export default function EditQuotationPage() {
       if (!item.product || (Number(item.quantity) || 0) <= 0) continue;
       const product = getProduct(item.product);
       if (!product) continue;
+      if (!isStockRestrictedProduct(product)) continue;
       const requestedDemand = getItemStockDemand(product, item);
       const existing = requestedByProduct.get(item.product);
       requestedByProduct.set(item.product, {
@@ -1063,11 +1086,16 @@ export default function EditQuotationPage() {
                     <tbody>
                       {items.map((item) => {
                         const product = getProduct(item.product);
+                        const isStockRestricted = isStockRestrictedProduct(product);
                         const isUnitLocked = Boolean(product?.pricingUnit);
                         const stockUnitLabel = getStockUnitLabel(product);
                         const maxQuantityForItem = item.product
                           ? getMaxQuantityForItem(items, item.id, item.product)
                           : 0;
+                        const maxQuantityLimit =
+                          item.product && Number.isFinite(maxQuantityForItem)
+                            ? maxQuantityForItem
+                            : undefined;
                         const hasTileInfo =
                           product &&
                           ((product.tilesPerBox ?? 0) > 0 ||
@@ -1146,7 +1174,7 @@ export default function EditQuotationPage() {
                                   <Input
                                     type="number"
                                     min="0"
-                                    max={item.product ? maxQuantityForItem : undefined}
+                                    max={maxQuantityLimit}
                                     step="1"
                                     placeholder={item.product ? "0" : "Select product first"}
                                     value={item.quantity || ""}
@@ -1154,7 +1182,9 @@ export default function EditQuotationPage() {
                                       const typedQuantity =
                                         Math.max(0, parseFloat(e.target.value) || 0);
                                       const safeQuantity = item.product
-                                        ? Math.min(typedQuantity, maxQuantityForItem)
+                                        ? Number.isFinite(maxQuantityForItem)
+                                          ? Math.min(typedQuantity, maxQuantityForItem)
+                                          : typedQuantity
                                         : 0;
                                       handleItemChange(
                                         item.id,
@@ -1269,10 +1299,15 @@ export default function EditQuotationPage() {
                                       <strong>{product.stock}</strong> {stockUnitLabel}
                                     </span>
                                   )}
-                                  {product?.stock != null && item.product && (
+                                  {product?.stock != null && item.product && isStockRestricted && (
                                     <span className="mr-4">
                                       Available to quote now:{" "}
                                       <strong>{formatStockQty(maxQuantityForItem)}</strong> {stockUnitLabel}
+                                    </span>
+                                  )}
+                                  {!isStockRestricted && item.product && (
+                                    <span className="mr-4">
+                                      Stock check: <strong>Skipped (third-party)</strong>
                                     </span>
                                   )}
                                 </td>
