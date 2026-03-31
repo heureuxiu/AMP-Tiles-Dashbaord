@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, Save, X, Plus, Trash2 } from "lucide-react";
+import { ShoppingCart, X, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +47,7 @@ type Product = {
   sku: string;
   price?: number;
   retailPrice?: number;
+  costPrice?: number;
   coveragePerBox?: number;
   coveragePerBoxUnit?: string;
   tilesPerBox?: number;
@@ -55,7 +56,8 @@ type Product = {
 export default function CreatePurchaseOrderPage() {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [supplier, setSupplier] = useState("");
@@ -66,45 +68,77 @@ export default function CreatePurchaseOrderPage() {
   const [paymentTerms, setPaymentTerms] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
-  const [terms, setTerms] = useState("");
-  const [items, setItems] = useState<POItem[]>([
-    { id: "1", product: "", productName: "", unitType: "Box", quantityOrdered: 0, rate: 0, discountPercent: 0, taxPercent: 0, lineTotal: 0 },
-  ]);
+  const [terms] = useState("");
+  const createEmptyItem = () => ({
+    id: Date.now().toString(),
+    product: "",
+    productName: "",
+    unitType: "Box",
+    quantityOrdered: 0,
+    rate: 0,
+    discountPercent: 0,
+    taxPercent: 0,
+    lineTotal: 0,
+  });
+  const [items, setItems] = useState<POItem[]>([createEmptyItem()]);
 
   useEffect(() => {
-    fetchData();
+    fetchSuppliers();
   }, []);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    const loadSupplierProducts = async () => {
+      if (!supplier) {
+        setProducts([]);
+        return;
+      }
+      try {
+        setIsLoadingProducts(true);
+        const productsResponse = await api.getProducts({ supplier });
+        if (productsResponse.success && productsResponse.products) {
+          setProducts(productsResponse.products);
+        } else {
+          setProducts([]);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Failed to load products";
+        toast.error("Failed to load supplier products", {
+          description: errorMessage,
+        });
+        setProducts([]);
+      } finally {
+        setIsLoadingProducts(false);
+      }
+    };
+
+    loadSupplierProducts();
+  }, [supplier]);
+
+  const fetchSuppliers = async () => {
     try {
-      setIsLoadingData(true);
-      const [suppliersResponse, productsResponse] = await Promise.all([
-        api.getSuppliers(),
-        api.getProducts(),
-      ]);
+      setIsLoadingSuppliers(true);
+      const suppliersResponse = await api.getSuppliers();
 
       if (suppliersResponse.success && suppliersResponse.suppliers) {
         setSuppliers(suppliersResponse.suppliers as Supplier[]);
       }
-
-      if (productsResponse.success && productsResponse.products) {
-        setProducts(productsResponse.products);
-      }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to load data";
-      toast.error("Failed to load data", {
+      const errorMessage = error instanceof Error ? error.message : "Failed to load suppliers";
+      toast.error("Failed to load suppliers", {
         description: errorMessage,
       });
     } finally {
-      setIsLoadingData(false);
+      setIsLoadingSuppliers(false);
     }
   };
 
   const handleAddItem = () => {
-    setItems([
-      ...items,
-      { id: Date.now().toString(), product: "", productName: "", unitType: "Box", quantityOrdered: 0, rate: 0, discountPercent: 0, taxPercent: 0, lineTotal: 0 },
-    ]);
+    setItems([...items, createEmptyItem()]);
+  };
+
+  const handleSupplierChange = (supplierId: string) => {
+    setSupplier(supplierId);
+    setItems([createEmptyItem()]);
   };
 
   const getProduct = (productId: string) => products.find((p) => p._id === productId);
@@ -159,7 +193,7 @@ export default function CreatePurchaseOrderPage() {
           const p = getProduct(String(value));
           if (p) {
             updatedItem.productName = p.name;
-            updatedItem.rate = p.retailPrice ?? p.price ?? 0;
+            updatedItem.rate = p.costPrice ?? 0;
           }
         }
         updatedItem.lineTotal = calcLineTotal(updatedItem);
@@ -288,11 +322,11 @@ export default function CreatePurchaseOrderPage() {
         </div>
 
         <div className="p-6">
-          {isLoadingData ? (
+          {isLoadingSuppliers ? (
             <div className="flex h-32 items-center justify-center">
               <div className="flex flex-col items-center gap-3">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
-                <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading suppliers and products...</p>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading suppliers...</p>
               </div>
             </div>
           ) : (
@@ -316,7 +350,7 @@ export default function CreatePurchaseOrderPage() {
                 <select
                   id="supplier"
                   value={supplier}
-                  onChange={(e) => setSupplier(e.target.value)}
+                  onChange={(e) => handleSupplierChange(e.target.value)}
                   disabled={isSaving}
                   className="w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900"
                 >
@@ -447,7 +481,7 @@ export default function CreatePurchaseOrderPage() {
             <Button
               onClick={handleAddItem}
               size="sm"
-              disabled={isLoadingData || isSaving}
+              disabled={isLoadingSuppliers || isLoadingProducts || isSaving || !supplier}
               className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
             >
               <Plus className="h-4 w-4" />
@@ -464,7 +498,7 @@ export default function CreatePurchaseOrderPage() {
                   <TableHead className="min-w-[200px]">Product <span className="text-red-500">*</span></TableHead>
                   <TableHead className="min-w-[100px]">Unit Type</TableHead>
                   <TableHead className="min-w-[90px]">Qty Ordered <span className="text-red-500">*</span></TableHead>
-                  <TableHead className="min-w-[90px]">Rate (Per Unit)</TableHead>
+                  <TableHead className="min-w-[110px]">Cost Rate (Per Unit)</TableHead>
                   <TableHead className="min-w-[70px]">Disc. %</TableHead>
                   <TableHead className="min-w-[70px]">Tax %</TableHead>
                   <TableHead className="min-w-[90px]">Line Total</TableHead>
@@ -479,10 +513,12 @@ export default function CreatePurchaseOrderPage() {
                       <select
                         value={item.product}
                         onChange={(e) => handleItemChange(item.id, "product", e.target.value)}
-                        disabled={isLoadingData || isSaving}
+                        disabled={isLoadingSuppliers || isLoadingProducts || isSaving || !supplier}
                         className="w-full rounded-md border border-gray-200 bg-slate-100 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
                       >
-                        <option value="">Select Product</option>
+                        <option value="">
+                          {!supplier ? "Select Supplier First" : isLoadingProducts ? "Loading Products..." : "Select Product"}
+                        </option>
                         {products.map((p) => (
                           <option key={p._id} value={p._id}>
                             {p.name} ({p.sku})
@@ -519,9 +555,9 @@ export default function CreatePurchaseOrderPage() {
                         min={0}
                         step={0.01}
                         value={item.rate || ""}
-                        onChange={(e) => handleItemChange(item.id, "rate", Number(e.target.value))}
+                        readOnly
                         disabled={isSaving}
-                        className="w-full no-spin"
+                        className="w-full no-spin bg-neutral-50 dark:bg-neutral-800"
                       />
                     </TableCell>
                     <TableCell>
@@ -591,7 +627,7 @@ export default function CreatePurchaseOrderPage() {
         <div className="mt-6 flex gap-3">
           <Button
             onClick={handleSubmit}
-            disabled={isSaving || isLoadingData}
+            disabled={isSaving || isLoadingSuppliers || isLoadingProducts}
             className="flex-1 bg-purple-600 hover:bg-purple-700"
           >
             {isSaving ? "Saving..." : "Create Purchase Order"}
