@@ -64,7 +64,7 @@ export default function PurchaseOrderDetailPage() {
   const poId = params.poNo as string; // From list we pass _id, so URL is /purchase-orders/:id
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isMarkingReceived, setIsMarkingReceived] = useState(false);
+  const [receiveMode, setReceiveMode] = useState<"auto" | "manual" | null>(null);
   const [poData, setPoData] = useState<PurchaseOrderDetail | null>(null);
 
   useEffect(() => {
@@ -87,16 +87,27 @@ export default function PurchaseOrderDetailPage() {
     fetchPO();
   }, [poId, router]);
 
-  const handleMarkReceived = async () => {
+  const handleMarkReceived = async (applyStockUpdate = true) => {
     if (!poData) return;
     try {
-      setIsMarkingReceived(true);
-      const response = await api.receivePurchaseOrder(poData._id);
+      setReceiveMode(applyStockUpdate ? "auto" : "manual");
+      const response = await api.receivePurchaseOrder(poData._id, { applyStockUpdate });
       if (response.success && response.purchaseOrder) {
         setPoData(response.purchaseOrder as PurchaseOrderDetail);
-        toast.success("Purchase order marked as received", {
-          description: `${poData.poNumber} has been received and stock updated`,
-        });
+        const successDescription =
+          typeof response.message === "string" && response.message.trim().length > 0
+            ? response.message
+            : applyStockUpdate
+            ? `${poData.poNumber} has been received and stock updated`
+            : `${poData.poNumber} has been received (manual stock update mode)`;
+        toast.success(
+          applyStockUpdate
+            ? "Purchase order marked as received"
+            : "Purchase order received (manual stock mode)",
+          {
+            description: successDescription,
+          }
+        );
       } else {
         toast.error("Failed to mark as received");
       }
@@ -104,7 +115,7 @@ export default function PurchaseOrderDetailPage() {
       const msg = error instanceof Error ? error.message : "Failed to mark as received";
       toast.error(msg);
     } finally {
-      setIsMarkingReceived(false);
+      setReceiveMode(null);
     }
   };
 
@@ -187,14 +198,24 @@ export default function PurchaseOrderDetailPage() {
           </div>
         </div>
         {!["received", "cancelled"].includes(poData.status) && (
-          <Button
-            onClick={handleMarkReceived}
-            disabled={isMarkingReceived}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-          >
-            <CheckCircle className="h-4 w-4" />
-            {isMarkingReceived ? "Marking..." : "Mark as Received"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => handleMarkReceived(true)}
+              disabled={receiveMode !== null}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle className="h-4 w-4" />
+              {receiveMode === "auto" ? "Marking..." : "Receive + Auto Stock"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleMarkReceived(false)}
+              disabled={receiveMode !== null}
+              className="flex items-center gap-2"
+            >
+              {receiveMode === "manual" ? "Marking..." : "Receive (Manual Stock)"}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -308,7 +329,7 @@ export default function PurchaseOrderDetailPage() {
                   <TableHead>Product</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Qty Ordered</TableHead>
-                  <TableHead>Rate</TableHead>
+                  <TableHead>Cost Rate</TableHead>
                   <TableHead>Disc %</TableHead>
                   <TableHead>Tax %</TableHead>
                   <TableHead>Line Total</TableHead>
@@ -378,24 +399,33 @@ export default function PurchaseOrderDetailPage() {
           <div>
             <h4 className={`font-bold ${poData.status === "received" ? "text-green-900 dark:text-green-200" : "text-amber-900 dark:text-amber-200"}`}>
               {poData.status === "received"
-                ? "Goods received – Stock updated"
+                ? "Goods received"
                 : "Goods Receiving"}
             </h4>
             <p className={`mt-2 text-sm ${poData.status === "received" ? "text-green-800 dark:text-green-300" : "text-amber-800 dark:text-amber-300"}`}>
               {poData.status === "received"
-                ? "This PO has been marked as received. Stock was increased for the received quantities. You can view stock in Inventory → Products / Stock."
-                : "Use \"Mark as Received\" above to confirm receipt. Stock will increase automatically for the quantities received. You can receive in full or partially (Partially Received status)."}
+                ? "This PO has been marked as received. If automatic stock-on-receive is enabled, stock has already been increased. Otherwise use Manual Stock Update."
+                : "Use one of the receive actions above. Auto mode updates stock immediately; manual mode keeps stock unchanged so you can update it later from Stock Update."}
             </p>
-            {poData.status === "received" && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => router.push("/inventory/stock")}
-                className="mt-4 border-green-300 text-green-900 hover:bg-green-100 dark:border-green-600 dark:text-green-200 dark:hover:bg-green-900/30"
+                className={
+                  poData.status === "received"
+                    ? "border-green-300 text-green-900 hover:bg-green-100 dark:border-green-600 dark:text-green-200 dark:hover:bg-green-900/30"
+                    : "border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-200 dark:hover:bg-amber-900/30"
+                }
               >
-                View Stock
+                {poData.status === "received" ? "View / Adjust Stock" : "Manual Stock Update"}
               </Button>
-            )}
+              {poData.receivedDate && (
+                <span className={`text-xs ${poData.status === "received" ? "text-green-700 dark:text-green-300" : "text-amber-700 dark:text-amber-300"}`}>
+                  Received on {formatDate(poData.receivedDate)}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </motion.div>
