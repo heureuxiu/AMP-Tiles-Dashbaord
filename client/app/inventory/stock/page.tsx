@@ -31,6 +31,25 @@ type StockStats = {
   outOfStock: number;
 };
 
+type StockMovement = {
+  _id: string;
+  type: "stock-in" | "stock-out";
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  remarks?: string;
+  sourceType?: "manual" | "purchase_order" | "invoice" | "adjustment";
+  sourceRef?: string;
+  createdAt: string;
+  product?: {
+    name?: string;
+    sku?: string;
+  };
+  createdBy?: {
+    name?: string;
+  };
+};
+
 const normalizeTransactionQuantity = (
   value: number,
   unit: "boxes" | "sqrMtr"
@@ -55,6 +74,7 @@ export default function StockUpdatePage() {
     lowStock: 0,
     outOfStock: 0,
   });
+  const [movements, setMovements] = useState<StockMovement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -69,7 +89,7 @@ export default function StockUpdatePage() {
     try {
       setIsLoading(true);
       
-      // Fetch products and stats in parallel
+      // Fetch core data in parallel
       const [productsResponse, statsResponse] = await Promise.all([
         api.getProducts(),
         api.getStockStats(),
@@ -81,6 +101,18 @@ export default function StockUpdatePage() {
 
       if (statsResponse.success && statsResponse.stats) {
         setStats(statsResponse.stats as StockStats);
+      }
+
+      // Movements panel is non-blocking; keep page usable even if this request fails.
+      try {
+        const transactionsResponse = await api.getStockTransactions({ limit: 20 });
+        if (transactionsResponse.success && transactionsResponse.transactions) {
+          setMovements(transactionsResponse.transactions as StockMovement[]);
+        } else {
+          setMovements([]);
+        }
+      } catch {
+        setMovements([]);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to fetch data";
@@ -552,6 +584,82 @@ export default function StockUpdatePage() {
                     {stats.outOfStock}
                   </span>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Recent Stock Movements */}
+          <div className="min-w-0 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 lg:rounded-2xl lg:p-4">
+            <h4 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-white">
+              Recent Movements
+            </h4>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="h-6 w-6 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+              </div>
+            ) : movements.length === 0 ? (
+              <p className="py-2 text-xs text-neutral-500 dark:text-neutral-400">
+                No stock movements yet.
+              </p>
+            ) : (
+              <div className="max-h-80 space-y-2 overflow-auto pr-1">
+                {movements.map((movement) => {
+                  const productLabel = movement.product?.name || movement.product?.sku || "Product";
+                  const sourceLabel =
+                    movement.sourceType === "purchase_order"
+                      ? "PO"
+                      : movement.sourceType === "invoice"
+                        ? "Invoice"
+                        : movement.sourceType === "manual"
+                          ? "Manual"
+                          : movement.sourceType === "adjustment"
+                            ? "Adjustment"
+                            : "System";
+                  const sourceRefText = movement.sourceRef ? ` ${movement.sourceRef}` : "";
+                  return (
+                    <div
+                      key={movement._id}
+                      className="rounded-lg border border-neutral-200/60 p-2.5 text-xs dark:border-neutral-700/60"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-neutral-900 dark:text-white">
+                          {productLabel}
+                        </span>
+                        <span
+                          className={
+                            movement.type === "stock-in"
+                              ? "font-semibold text-green-600 dark:text-green-400"
+                              : "font-semibold text-red-600 dark:text-red-400"
+                          }
+                        >
+                          {movement.type === "stock-in" ? "+" : "-"}
+                          {movement.quantity}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-neutral-500 dark:text-neutral-400">
+                        {sourceLabel}
+                        {sourceRefText}
+                        {" | "}
+                        {movement.previousStock}
+                        {" -> "}
+                        {movement.newStock}
+                      </div>
+                      <div className="mt-1 text-neutral-500 dark:text-neutral-400">
+                        {new Date(movement.createdAt).toLocaleString("en-AU")}
+                      </div>
+                      {movement.createdBy?.name && (
+                        <div className="mt-1 text-neutral-500 dark:text-neutral-400">
+                          By {movement.createdBy.name}
+                        </div>
+                      )}
+                      {movement.remarks && (
+                        <div className="mt-1 text-neutral-600 dark:text-neutral-300">
+                          {movement.remarks}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
