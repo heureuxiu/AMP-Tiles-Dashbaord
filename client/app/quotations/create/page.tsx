@@ -26,6 +26,13 @@ type Product = {
   coveragePerBoxUnit?: string;
   stock?: number;
   taxPercent?: number | null;
+  supplierType?: "third-party" | "own";
+};
+
+type Supplier = {
+  _id: string;
+  name: string;
+  supplierNumber?: string;
 };
 
 type QuotationItem = {
@@ -259,10 +266,26 @@ function formatStockQty(value: number): string {
   return rounded.toFixed(3).replace(/\.?0+$/, "");
 }
 
+const createEmptyItem = (id?: string): QuotationItem => ({
+  id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  product: "",
+  productName: "",
+  unitType: "Box",
+  quantity: 0,
+  rate: 0,
+  lineTotal: 0,
+  discountPercent: 0,
+  taxPercent: 0,
+  coverageInput: "",
+});
+
 export default function CreateQuotationPage() {
   const router = useRouter();
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplier, setSupplier] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMode, setSaveMode] = useState<SaveMode | null>(null);
   const [customerName, setCustomerName] = useState("");
@@ -279,24 +302,15 @@ export default function CreateQuotationPage() {
   });
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
-  const [items, setItems] = useState<QuotationItem[]>([
-    {
-      id: "1",
-      product: "",
-      productName: "",
-      unitType: "Box",
-      quantity: 0,
-      rate: 0,
-      lineTotal: 0,
-      discountPercent: 0,
-      taxPercent: 0,
-      coverageInput: "",
-    },
-  ]);
+  const [items, setItems] = useState<QuotationItem[]>([createEmptyItem("1")]);
 
   useEffect(() => {
-    fetchProducts();
+    fetchSuppliers();
   }, []);
+
+  useEffect(() => {
+    fetchProducts(supplier);
+  }, [supplier]);
 
   // Default: valid until = quotationDate + 7 days (can be overridden)
   useEffect(() => {
@@ -306,21 +320,56 @@ export default function CreateQuotationPage() {
     setValidUntil(d.toISOString().split("T")[0]);
   }, [quotationDate]);
 
-  const fetchProducts = async () => {
+  const fetchSuppliers = async () => {
     try {
-      setIsLoadingProducts(true);
-      const response = await api.getProducts();
-      if (response.success && response.products) {
-        setProducts(response.products);
+      setIsLoadingSuppliers(true);
+      const response = await api.getSuppliers();
+      if (response.success && response.suppliers) {
+        setSuppliers(response.suppliers as Supplier[]);
+      } else {
+        setSuppliers([]);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to fetch products";
-      toast.error("Failed to load products", {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to fetch suppliers";
+      toast.error("Failed to load suppliers", {
         description: errorMessage,
       });
+      setSuppliers([]);
+    } finally {
+      setIsLoadingSuppliers(false);
+    }
+  };
+
+  const fetchProducts = async (supplierId: string) => {
+    if (!supplierId) {
+      setProducts([]);
+      setIsLoadingProducts(false);
+      return;
+    }
+    try {
+      setIsLoadingProducts(true);
+      const response = await api.getProducts({ supplier: supplierId });
+      if (response.success && response.products) {
+        setProducts(response.products);
+      } else {
+        setProducts([]);
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to fetch products";
+      toast.error("Failed to load supplier products", {
+        description: errorMessage,
+      });
+      setProducts([]);
     } finally {
       setIsLoadingProducts(false);
     }
+  };
+
+  const handleSupplierChange = (supplierId: string) => {
+    setSupplier(supplierId);
+    setItems([createEmptyItem()]);
   };
 
   const getProduct = (id: string) => products.find((p) => p._id === id);
@@ -337,6 +386,8 @@ export default function CreateQuotationPage() {
     }
   };
   const getStockUnitLabel = (product?: Product) => product?.unit || "boxes";
+  const isStockRestrictedProduct = (product?: Product) =>
+    (product?.supplierType || "own") !== "third-party";
 
   const getMaxQuantityForItem = (
     currentItems: QuotationItem[],
@@ -345,6 +396,7 @@ export default function CreateQuotationPage() {
   ) => {
     const product = getProduct(productId);
     if (!product) return 0;
+    if (!isStockRestrictedProduct(product)) return Number.POSITIVE_INFINITY;
 
     const currentItem = currentItems.find((item) => item.id === itemId);
     if (!currentItem) return 0;
@@ -366,6 +418,24 @@ export default function CreateQuotationPage() {
     productId: string,
     requestedQuantity: number
   ) => {
+    const product = getProduct(productId);
+    if (!product) {
+      return {
+        quantity: Math.max(0, requestedQuantity || 0),
+        maxQuantity: 0,
+        wasClamped: false,
+      };
+    }
+
+    if (!isStockRestrictedProduct(product)) {
+      const safeQuantity = Math.max(0, requestedQuantity || 0);
+      return {
+        quantity: safeQuantity,
+        maxQuantity: safeQuantity,
+        wasClamped: false,
+      };
+    }
+
     const maxQuantity = getMaxQuantityForItem(currentItems, itemId, productId);
     const nextQuantity = Math.min(
       Math.max(0, requestedQuantity || 0),
@@ -384,6 +454,7 @@ export default function CreateQuotationPage() {
       if (!item.product || (Number(item.quantity) || 0) <= 0) continue;
       const product = getProduct(item.product);
       if (!product) continue;
+      if (!isStockRestrictedProduct(product)) continue;
       const requestedDemand = getItemStockDemand(product, item);
       const existing = requestedByProduct.get(item.product);
       requestedByProduct.set(item.product, {
@@ -405,19 +476,7 @@ export default function CreateQuotationPage() {
   };
 
   const handleAddItem = () => {
-    const newItem: QuotationItem = {
-      id: Date.now().toString(),
-      product: "",
-      productName: "",
-      unitType: "Box",
-      quantity: 0,
-      rate: 0,
-      discountPercent: 0,
-      taxPercent: 0,
-      lineTotal: 0,
-      coverageInput: "",
-    };
-    setItems([...items, newItem]);
+    setItems((prev) => [...prev, createEmptyItem()]);
   };
 
   const handleRemoveItem = (id: string) => {
@@ -429,6 +488,26 @@ export default function CreateQuotationPage() {
   };
 
   const handleProductChange = (itemId: string, productId: string) => {
+    if (!productId) {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id !== itemId
+            ? item
+            : {
+                ...item,
+                product: "",
+                productName: "",
+                coverageInput: "",
+                quantity: 0,
+                rate: 0,
+                taxPercent: 0,
+                lineTotal: 0,
+              }
+        )
+      );
+      return;
+    }
+
     const product = products.find((p) => p._id === productId);
     if (!product) return;
     const rate = product.retailPrice ?? product.price ?? 0;
@@ -586,6 +665,11 @@ export default function CreateQuotationPage() {
   };
 
   const saveQuotation = async (mode: SaveMode) => {
+    if (!supplier) {
+      toast.error("Supplier is required");
+      return;
+    }
+
     if (!customerName.trim()) {
       toast.error("Customer name is required");
       return;
@@ -764,6 +848,33 @@ export default function CreateQuotationPage() {
                   />
                 </div>
 
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="supplier"
+                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                  >
+                    Supplier <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="supplier"
+                    value={supplier}
+                    onChange={(e) => handleSupplierChange(e.target.value)}
+                    disabled={isSaving || isLoadingSuppliers}
+                    className="flex h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+                    required
+                  >
+                    <option value="">
+                      {isLoadingSuppliers ? "Loading suppliers..." : "Select supplier"}
+                    </option>
+                    {suppliers.map((sup) => (
+                      <option key={sup._id} value={sup._id}>
+                        {sup.name}
+                        {sup.supplierNumber ? ` (${sup.supplierNumber})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   {/* Customer Phone */}
                   <div className="grid gap-2">
@@ -938,6 +1049,7 @@ export default function CreateQuotationPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleAddItem}
+                    disabled={isSaving || isLoadingProducts || !supplier}
                     className="gap-2"
                   >
                     <Plus className="h-4 w-4" />
@@ -979,11 +1091,16 @@ export default function CreateQuotationPage() {
                     <tbody>
                       {items.map((item) => {
                         const product = getProduct(item.product);
+                        const isStockRestricted = isStockRestrictedProduct(product);
                         const isUnitLocked = Boolean(product?.pricingUnit);
                         const stockUnitLabel = getStockUnitLabel(product);
                         const maxQuantityForItem = item.product
                           ? getMaxQuantityForItem(items, item.id, item.product)
                           : 0;
+                        const maxQuantityLimit =
+                          item.product && Number.isFinite(maxQuantityForItem)
+                            ? maxQuantityForItem
+                            : undefined;
                         const hasTileInfo =
                           product &&
                           ((product.tilesPerBox ?? 0) > 0 ||
@@ -1003,12 +1120,16 @@ export default function CreateQuotationPage() {
                                   onChange={(e) =>
                                     handleProductChange(item.id, e.target.value)
                                   }
-                                  disabled={isLoadingProducts}
+                                  disabled={!supplier || isLoadingProducts}
                                   className="flex h-9 w-full min-w-[160px] rounded-lg border border-neutral-200 bg-white px-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
                                   required
                                 >
                                   <option value="">
-                                    {isLoadingProducts ? "Loading..." : "Select product"}
+                                    {!supplier
+                                      ? "Select supplier first"
+                                      : isLoadingProducts
+                                        ? "Loading..."
+                                        : "Select product"}
                                   </option>
                                   {products.map((product) => (
                                     <option key={product._id} value={product._id}>
@@ -1063,7 +1184,7 @@ export default function CreateQuotationPage() {
                                   <Input
                                     type="number"
                                     min="0"
-                                    max={item.product ? maxQuantityForItem : undefined}
+                                    max={maxQuantityLimit}
                                     step="1"
                                     placeholder={item.product ? "0" : "Select product first"}
                                     value={item.quantity || ""}
@@ -1071,7 +1192,9 @@ export default function CreateQuotationPage() {
                                       const typedQuantity =
                                         Math.max(0, parseFloat(e.target.value) || 0);
                                       const safeQuantity = item.product
-                                        ? Math.min(typedQuantity, maxQuantityForItem)
+                                        ? Number.isFinite(maxQuantityForItem)
+                                          ? Math.min(typedQuantity, maxQuantityForItem)
+                                          : typedQuantity
                                         : 0;
                                       handleItemChange(
                                         item.id,
@@ -1181,10 +1304,15 @@ export default function CreateQuotationPage() {
                                       <strong>{product.stock}</strong> {stockUnitLabel}
                                     </span>
                                   )}
-                                  {product?.stock != null && item.product && (
+                                  {product?.stock != null && item.product && isStockRestricted && (
                                     <span className="mr-4">
                                       Available to quote now:{" "}
                                       <strong>{formatStockQty(maxQuantityForItem)}</strong> {stockUnitLabel}
+                                    </span>
+                                  )}
+                                  {!isStockRestricted && item.product && (
+                                    <span className="mr-4">
+                                      Stock check: <strong>Skipped (third-party)</strong>
                                     </span>
                                   )}
                                 </td>
