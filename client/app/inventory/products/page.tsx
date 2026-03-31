@@ -59,6 +59,7 @@ type Product = {
   unit: string;
   image?: string;
   isActive: boolean;
+  supplier?: { _id: string; name: string; supplierNumber?: string } | string | null;
   supplierType?: "third-party" | "own";
   supplierVendor?: string;
   supplierName?: string;
@@ -130,6 +131,7 @@ export default function ProductsPage() {
     unit: "boxes",
     image: "",
     supplierType: "own" as "third-party" | "own",
+    supplier: "",
     supplierVendor: "",
     supplierName: "",
     boxCoveragePackingDetails: "",
@@ -157,6 +159,7 @@ export default function ProductsPage() {
     unit: "boxes",
     image: "",
     supplierType: "own" as "third-party" | "own",
+    supplier: "",
     supplierVendor: "",
     supplierName: "",
     boxCoveragePackingDetails: "",
@@ -298,6 +301,15 @@ export default function ProductsPage() {
   };
 
   const handleEditProduct = (product: Product) => {
+    const supplierIdFromProduct =
+      typeof product.supplier === "string"
+        ? product.supplier
+        : product.supplier && typeof product.supplier === "object"
+          ? product.supplier._id
+          : suppliers.find(
+              (s) => s.name.toLowerCase() === String(product.supplierName || "").trim().toLowerCase()
+            )?._id || "";
+
     setEditingProduct(product);
     setFormData({
       name: product.name,
@@ -311,6 +323,7 @@ export default function ProductsPage() {
       unit: product.unit,
       image: product.image ?? "",
       supplierType: product.supplierType ?? "own",
+      supplier: supplierIdFromProduct,
       supplierVendor: product.supplierVendor ?? "",
       supplierName: product.supplierName ?? "",
       boxCoveragePackingDetails: product.boxCoveragePackingDetails ?? "",
@@ -377,8 +390,8 @@ export default function ProductsPage() {
       toast.error("Size is required");
       return;
     }
-    if (formData.supplierType === "third-party" && !formData.supplierName?.trim()) {
-      toast.error("Supplier name is required when Supplier Type is Third-Party");
+    if (formData.supplierType === "third-party" && !formData.supplier) {
+      toast.error("Please select a supplier for Third-Party products");
       return;
     }
     if (!formData.boxCoveragePackingDetails?.trim()) {
@@ -399,8 +412,11 @@ export default function ProductsPage() {
     }
 
     try {
+      const selectedSupplier = suppliers.find((s) => s._id === formData.supplier);
       const payload = {
         ...formData,
+        supplier: formData.supplierType === "third-party" ? formData.supplier : "",
+        supplierName: formData.supplierType === "third-party" ? selectedSupplier?.name || "" : "",
         price: formData.retailPrice,
       };
       if (editingProduct) {
@@ -1072,7 +1088,7 @@ export default function ProductsPage() {
                   <button
                     type="button"
                     className={`flex-1 rounded-md py-2 text-sm font-medium ${formData.supplierType === "own" ? "bg-amp-primary text-white" : "text-neutral-600 dark:text-neutral-400"}`}
-                    onClick={() => setFormData({ ...formData, supplierType: "own", supplierName: "" })}
+                    onClick={() => setFormData({ ...formData, supplierType: "own", supplier: "", supplierName: "" })}
                   >
                     Own
                   </button>
@@ -1087,9 +1103,25 @@ export default function ProductsPage() {
               </div>
               {formData.supplierType === "third-party" && (
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Supplier Name <span className="text-red-500">*</span></label>
-                  <Input list="supplier-names" placeholder="Select or type new" value={formData.supplierName} onChange={(e) => setFormData({ ...formData, supplierName: e.target.value })} required={formData.supplierType === "third-party"} />
-                  <datalist id="supplier-names">{suppliers.map((s) => <option key={s._id} value={s.name} />)}</datalist>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Supplier <span className="text-red-500">*</span></label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-800"
+                    value={formData.supplier}
+                    onChange={(e) => {
+                      const selectedSupplier = suppliers.find((s) => s._id === e.target.value);
+                      setFormData({
+                        ...formData,
+                        supplier: e.target.value,
+                        supplierName: selectedSupplier?.name ?? "",
+                      });
+                    }}
+                    required={formData.supplierType === "third-party"}
+                  >
+                    <option value="">Select Supplier</option>
+                    {suppliers.map((s) => (
+                      <option key={s._id} value={s._id}>{s.name}</option>
+                    ))}
+                  </select>
                 </div>
               )}
 
