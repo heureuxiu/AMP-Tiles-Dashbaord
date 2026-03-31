@@ -25,6 +25,7 @@ interface Product {
   unit: string;
   image?: string;
   isActive: boolean;
+  supplier?: { _id: string; name: string; supplierNumber?: string } | string | null;
   supplierType?: 'third-party' | 'own';
   supplierVendor?: string;
   supplierName?: string;
@@ -70,6 +71,10 @@ interface ApiResponse<T = unknown> {
   // Supplier payloads (list + single)
   suppliers?: unknown[];
   supplier?: unknown;
+  // Stock payloads (list + single + product history)
+  transactions?: unknown[];
+  transaction?: unknown;
+  history?: unknown[];
 }
 
 class ApiClient {
@@ -176,6 +181,7 @@ class ApiClient {
     category?: string;
     finish?: string;
     status?: string;
+    supplier?: string;
     supplierName?: string;
   }) {
     const queryParams = new URLSearchParams();
@@ -183,6 +189,7 @@ class ApiClient {
     if (params?.category) queryParams.append('category', params.category);
     if (params?.finish) queryParams.append('finish', params.finish);
     if (params?.status) queryParams.append('status', params.status);
+    if (params?.supplier) queryParams.append('supplier', params.supplier);
     if (params?.supplierName) queryParams.append('supplierName', params.supplierName);
 
     const query = queryParams.toString();
@@ -209,6 +216,7 @@ class ApiClient {
     unit?: string;
     image?: string;
     supplierType: 'third-party' | 'own';
+    supplier?: string;
     supplierVendor?: string;
     supplierName: string;
     boxCoveragePackingDetails: string;
@@ -242,6 +250,7 @@ class ApiClient {
     image?: string;
     isActive?: boolean;
     supplierType: 'third-party' | 'own';
+    supplier?: string;
     supplierVendor?: string;
     supplierName: string;
     boxCoveragePackingDetails: string;
@@ -603,6 +612,7 @@ class ApiClient {
   async receivePurchaseOrder(
     id: string,
     body?: {
+      applyStockUpdate?: boolean;
       items?: Array<{
         index?: number;
         productId?: string;
