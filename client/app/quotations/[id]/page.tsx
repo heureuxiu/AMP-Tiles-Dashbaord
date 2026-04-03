@@ -9,14 +9,26 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 
-type QuotationStatus = "draft" | "sent" | "converted" | "expired" | "cancelled";
+type QuotationStatus =
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "rejected"
+  | "converted"
+  | "expired"
+  | "cancelled";
+
+const CONVERTIBLE_STATUSES: QuotationStatus[] = ["draft", "sent", "accepted"];
+const SQFT_PER_SQM = 10.764;
 
 type QuotationItem = {
   _id: string;
   productName: string;
+  unitType?: string;
   quantity: number;
   rate: number;
   lineTotal: number;
+  coverageSqm?: number;
 };
 
 type QuotationData = {
@@ -33,6 +45,39 @@ type QuotationData = {
   tax: number;
   taxRate?: number;
   grandTotal: number;
+  convertedToInvoice?: boolean;
+};
+
+const isAlreadyConverted = (quotation: QuotationData) =>
+  quotation.status === "converted" && Boolean(quotation.convertedToInvoice);
+
+const canConvertQuotation = (quotation: QuotationData) =>
+  CONVERTIBLE_STATUSES.includes(quotation.status) ||
+  (quotation.status === "converted" && !quotation.convertedToInvoice);
+
+const formatQty = (value: number) => {
+  const numeric = Number(value) || 0;
+  const rounded = Math.round(numeric * 1000) / 1000;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(3).replace(/\.?0+$/, "");
+};
+
+const getDisplayQuantity = (item: QuotationItem) => {
+  const coverageSqm = Number(item.coverageSqm);
+  if (item.unitType === "Sq Meter" && Number.isFinite(coverageSqm) && coverageSqm > 0) {
+    return formatQty(coverageSqm);
+  }
+  if (item.unitType === "Sq Ft" && Number.isFinite(coverageSqm) && coverageSqm > 0) {
+    return formatQty(coverageSqm * SQFT_PER_SQM);
+  }
+  return formatQty(item.quantity);
+};
+
+const getDisplayUnit = (item: QuotationItem) => {
+  if (item.unitType === "Sq Meter") return "sqm";
+  if (item.unitType === "Sq Ft") return "sq ft";
+  if (item.unitType === "Piece") return "pcs";
+  return "box";
 };
 
 export default function ViewQuotationPage() {
@@ -90,17 +135,29 @@ export default function ViewQuotationPage() {
   };
 
   const handleConvert = async () => {
-    if (!quotation || quotation.status === "converted") {
+    if (!quotation || isAlreadyConverted(quotation)) {
       toast.error("This quotation has already been converted");
+      return;
+    }
+
+    if (!canConvertQuotation(quotation)) {
+      toast.error("This quotation cannot be converted in its current status", {
+        description: "Set it to Accepted, Sent, or Draft before converting.",
+      });
       return;
     }
 
     try {
       const response = await api.convertQuotationToInvoice(quotationId);
       if (response.success) {
+        const createdInvoice = response.invoice as { _id?: string } | undefined;
         toast.success("Quotation converted to invoice", {
           description: `${quotation.quotationNumber} has been converted successfully`,
         });
+        if (createdInvoice?._id) {
+          router.push(`/invoices/${createdInvoice._id}`);
+          return;
+        }
         fetchQuotation(); // Refresh data
       }
     } catch (error) {
@@ -122,6 +179,10 @@ export default function ViewQuotationPage() {
         return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400";
       case "sent":
         return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400";
+      case "accepted":
+        return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400";
+      case "rejected":
+        return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400";
       case "converted":
         return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400";
       case "expired":
@@ -186,13 +247,25 @@ export default function ViewQuotationPage() {
             <Download className="h-4 w-4" />
             Download PDF
           </Button>
-          {quotation.status === "draft" && (
+          {quotation.status !== "converted" && (
             <>
               <Button variant="outline" onClick={handleEdit} className="gap-2">
                 <Edit className="h-4 w-4" />
                 Edit
               </Button>
-              <Button onClick={handleConvert} className="gap-2">
+            </>
+          )}
+          {canConvertQuotation(quotation) && (
+            <>
+              <Button
+                onClick={handleConvert}
+                className="gap-2"
+                title={
+                  canConvertQuotation(quotation)
+                    ? "Convert to Invoice"
+                    : "Set status to Accepted, Sent, or Draft first"
+                }
+              >
                 <ArrowRight className="h-4 w-4" />
                 Convert to Invoice
               </Button>
@@ -328,7 +401,7 @@ export default function ViewQuotationPage() {
                           {item.productName}
                         </td>
                         <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
-                          {item.quantity}
+                          {getDisplayQuantity(item)} {getDisplayUnit(item)}
                         </td>
                         <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                           {formatCurrency(item.rate)}
