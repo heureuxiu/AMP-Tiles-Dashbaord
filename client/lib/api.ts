@@ -380,6 +380,7 @@ class ApiClient {
       rate: number;
       discountPercent?: number;
       taxPercent?: number;
+      coverageSqm?: number;
     }>;
     discount?: number;
     discountType?: 'percentage' | 'fixed';
@@ -409,6 +410,7 @@ class ApiClient {
       rate: number;
       discountPercent?: number;
       taxPercent?: number;
+      coverageSqm?: number;
     }>;
     discount?: number;
     discountType?: 'percentage' | 'fixed';
