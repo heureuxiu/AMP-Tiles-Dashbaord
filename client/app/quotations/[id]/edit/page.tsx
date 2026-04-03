@@ -235,6 +235,13 @@ function getBoxesFromCoverage(
   return Math.ceil(coverageInSqm / sqmPerBox) || 0;
 }
 
+function formatQty(value: number): string {
+  const rounded = roundQty(value);
+  if (!Number.isFinite(rounded) || rounded <= 0) return "";
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(3).replace(/\.?0+$/, "");
+}
+
 function getItemCoverageSqm(product: Product, item: QuotationItem): number | null {
   const quantity = Number(item.quantity) || 0;
   const itemUnit = normalizeItemUnitType(item.unitType);
@@ -262,6 +269,60 @@ function getItemStockDemand(product: Product, item: QuotationItem): number {
   if (coverageSqm == null) return quantity;
   if (stockUnit === "sqm") return coverageSqm;
   return coverageSqm * SQFT_PER_SQM;
+}
+
+function getCoverageSqmForPayload(
+  item: QuotationItem,
+  product?: Product
+): number | undefined {
+  if (!product) return undefined;
+
+  const coverageInput = Number(item.coverageInput);
+  if (item.unitType === "Sq Meter" && Number.isFinite(coverageInput) && coverageInput > 0) {
+    return roundQty(coverageInput);
+  }
+  if (item.unitType === "Sq Ft" && Number.isFinite(coverageInput) && coverageInput > 0) {
+    return roundQty(coverageInput / SQFT_PER_SQM);
+  }
+
+  if (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") {
+    const derivedCoverageSqm = getItemCoverageSqm(product, item);
+    if (derivedCoverageSqm != null && derivedCoverageSqm > 0) {
+      return roundQty(derivedCoverageSqm);
+    }
+  }
+
+  return undefined;
+}
+
+function getCoverageInputFromStoredItem(
+  item: Quotation["items"][number],
+  product?: Product
+): string {
+  if (!item || (item.unitType !== "Sq Meter" && item.unitType !== "Sq Ft")) {
+    return "";
+  }
+
+  const explicitCoverageSqm = Number(item.coverageSqm);
+  if (Number.isFinite(explicitCoverageSqm) && explicitCoverageSqm > 0) {
+    if (item.unitType === "Sq Ft") {
+      return formatQty(explicitCoverageSqm * SQFT_PER_SQM);
+    }
+    return formatQty(explicitCoverageSqm);
+  }
+
+  const quantity = Number(item.quantity) || 0;
+  const sqmPerBox = getSqmPerBox(product);
+  if (sqmPerBox > 0) {
+    const derivedCoverageSqm = quantity * sqmPerBox;
+    if (item.unitType === "Sq Ft") {
+      return formatQty(derivedCoverageSqm * SQFT_PER_SQM);
+    }
+    return formatQty(derivedCoverageSqm);
+  }
+
+  if (item.unitType === "Sq Ft") return formatQty(quantity);
+  return formatQty(quantity);
 }
 
 function getMaxQuantityFromAvailableStock(
@@ -332,6 +393,10 @@ export default function EditQuotationPage() {
           api.getQuotation(quotationId),
         ]);
 
+        const productsList = productsResponse.success && productsResponse.products
+          ? (productsResponse.products as Product[])
+          : [];
+
         if (productsResponse.success && productsResponse.products) {
           setProducts(productsResponse.products as Product[]);
         }
@@ -354,6 +419,7 @@ export default function EditQuotationPage() {
           const mappedItems: QuotationItem[] = (q.items || []).map((item, index) => {
             const productId =
               typeof item.product === "string" ? item.product : item.product?._id;
+            const matchedProduct = productsList.find((product) => product._id === productId);
             return {
               id: `${item._id || index}`,
               product: productId || "",
@@ -364,7 +430,7 @@ export default function EditQuotationPage() {
               discountPercent: item.discountPercent ?? 0,
               taxPercent: item.taxPercent ?? 0,
               lineTotal: item.lineTotal || 0,
-              coverageInput: "",
+              coverageInput: getCoverageInputFromStoredItem(item, matchedProduct),
             };
           });
           setItems(
@@ -742,6 +808,7 @@ export default function EditQuotationPage() {
           rate: item.rate,
           discountPercent: item.discountPercent || 0,
           taxPercent: item.taxPercent || 0,
+          coverageSqm: getCoverageSqmForPayload(item, getProduct(item.product)),
         }));
       }
 
@@ -1166,7 +1233,7 @@ export default function EditQuotationPage() {
                                       className="h-9 w-20 text-sm"
                                     />
                                     <span className="text-xs text-neutral-500">
-                                      → {item.quantity} box
+                                      → {formatQty(item.quantity) || "0"} box
                                       {item.quantity === 1 ? "" : "es"}
                                     </span>
                                   </div>
