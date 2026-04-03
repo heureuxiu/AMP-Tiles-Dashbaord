@@ -50,6 +50,35 @@ const companyInfo = {
   abn: "12 345 678 901",
 };
 
+const SQFT_PER_SQM = 10.764;
+
+const formatQty = (value: number) => {
+  const numeric = Number(value) || 0;
+  const rounded = Math.round(numeric * 1000) / 1000;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(3).replace(/\.?0+$/, "");
+};
+
+const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
+
+const formatPaymentStatus = (status?: string) => {
+  if (status === "paid") return "Fully Paid";
+  if (status === "partially_paid") return "Partially Paid";
+  if (status === "unpaid" || !status) return "Unpaid";
+  return status.replace(/_/g, " ");
+};
+
+const getDisplayQuantity = (item: InvoiceItem) => {
+  const coverageSqm = Number(item.coverageSqm);
+  if (item.unitType === "Sq Meter" && Number.isFinite(coverageSqm) && coverageSqm > 0) {
+    return formatQty(coverageSqm);
+  }
+  if (item.unitType === "Sq Ft" && Number.isFinite(coverageSqm) && coverageSqm > 0) {
+    return formatQty(coverageSqm * SQFT_PER_SQM);
+  }
+  return formatQty(item.quantity);
+};
+
 export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -141,12 +170,20 @@ export default function InvoiceDetailPage() {
       toast.error("Enter a valid amount");
       return;
     }
-    const currentPaid = invoice.amountPaid ?? 0;
-    const newTotalPaid = currentPaid + amount;
-    if (newTotalPaid > grandTotal) {
+    const amountCents = toCents(amount);
+    if (amountCents <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    const currentPaidCents = toCents(invoice.amountPaid ?? 0);
+    const grandTotalCents = toCents(grandTotal);
+    const newTotalPaidCents = currentPaidCents + amountCents;
+    if (newTotalPaidCents > grandTotalCents) {
       toast.error("Amount paid cannot exceed total amount");
       return;
     }
+    const newTotalPaid = newTotalPaidCents / 100;
+    const remaining = Math.max(0, grandTotalCents - newTotalPaidCents) / 100;
     try {
       setIsRecordingPayment(true);
       await api.updateInvoice(invoice._id, {
@@ -154,12 +191,12 @@ export default function InvoiceDetailPage() {
         ...(paymentMethod && { paymentMethod }),
       });
       toast.success("Payment recorded", {
-        description: `${formatCurrency(amount)} added. Total paid: ${formatCurrency(newTotalPaid)}, Remaining: ${formatCurrency(Math.max(0, grandTotal - newTotalPaid))}`,
+        description: `${formatCurrency(amount)} added. Total paid: ${formatCurrency(newTotalPaid)}, Remaining: ${formatCurrency(remaining)}`,
       });
       setPaymentAmount("");
       setPaymentMethod("");
       await fetchInvoice();
-    } catch (e) {
+    } catch {
       toast.error("Failed to record payment");
     } finally {
       setIsRecordingPayment(false);
@@ -176,6 +213,7 @@ export default function InvoiceDetailPage() {
 
   const subtotal = invoice.subtotal ?? invoice.items.reduce((sum, i) => sum + i.lineTotal, 0);
   const grandTotal = invoice.grandTotal ?? subtotal;
+  const remainingBalance = invoice.remainingBalance ?? grandTotal;
 
   return (
     <>
@@ -362,7 +400,7 @@ export default function InvoiceDetailPage() {
                         {item.unitType ?? "—"}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
-                        {item.quantity}
+                        {getDisplayQuantity(item)}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                         {formatCurrency(item.rate)}
@@ -444,13 +482,13 @@ export default function InvoiceDetailPage() {
                   <div>
                     <p className="text-neutral-500 dark:text-neutral-400">Remaining</p>
                     <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">
-                      {formatCurrency(invoice.remainingBalance ?? grandTotal)}
+                      {formatCurrency(remainingBalance)}
                     </p>
                   </div>
                   <div>
                     <p className="text-neutral-500 dark:text-neutral-400">Payment status</p>
                     <p className="capitalize font-medium text-neutral-900 dark:text-white">
-                      {(invoice.paymentStatus ?? "unpaid").replace(/_/g, " ")}
+                      {formatPaymentStatus(invoice.paymentStatus)}
                     </p>
                   </div>
                 </div>
@@ -462,13 +500,13 @@ export default function InvoiceDetailPage() {
               </div>
 
               {/* Record new payment – when there is remaining balance and not cancelled */}
-              {(invoice.remainingBalance ?? grandTotal) > 0 && invoice.status !== "cancelled" && (
+              {toCents(remainingBalance) > 0 && invoice.status !== "cancelled" && (
                 <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-600 dark:bg-neutral-800/30 print:hidden">
                   <h4 className="mb-3 text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                     Record new payment
                   </h4>
                   <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
-                    Client ne jo amount diya hai wo yahan enter karein – remaining balance khud update ho jayegi.
+                    Enter the amount received from the client – the remaining balance will update automatically.
                   </p>
                   <div className="flex flex-wrap items-end gap-3">
                     <div>
