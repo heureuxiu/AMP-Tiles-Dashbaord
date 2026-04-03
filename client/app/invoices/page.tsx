@@ -185,6 +185,13 @@ export default function InvoicesPage() {
     });
   };
 
+  const formatPaymentStatus = (status?: string) => {
+    if (status === "paid") return "Fully Paid";
+    if (status === "partially_paid") return "Partially Paid";
+    if (status === "unpaid" || !status) return "Unpaid";
+    return status.replace(/_/g, " ");
+  };
+
   return (
     <div className="min-w-0 w-full space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8">
       {/* Top Bar */}
@@ -334,7 +341,7 @@ export default function InvoicesPage() {
                           </span>
                         </TableCell>
                         <TableCell className="capitalize text-neutral-900 dark:text-white">
-                          {(invoice.paymentStatus ?? "unpaid").replace(/_/g, " ")}
+                          {formatPaymentStatus(invoice.paymentStatus)}
                         </TableCell>
                         <TableCell className="flex items-center gap-1">
                           {/* View Button */}
