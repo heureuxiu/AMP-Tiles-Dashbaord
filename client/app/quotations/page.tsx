@@ -37,6 +37,15 @@ type Quotation = {
   convertedToInvoice: boolean;
 };
 
+const CONVERTIBLE_STATUSES: QuotationStatus[] = ["draft", "sent", "accepted"];
+
+const isAlreadyConverted = (quotation: Quotation) =>
+  quotation.status === "converted" && Boolean(quotation.convertedToInvoice);
+
+const canConvertQuotation = (quotation: Quotation) =>
+  CONVERTIBLE_STATUSES.includes(quotation.status) ||
+  (quotation.status === "converted" && !quotation.convertedToInvoice);
+
 export default function QuotationsPage() {
   const router = useRouter();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -112,8 +121,15 @@ export default function QuotationsPage() {
   };
 
   const handleConvertToInvoice = async (quotation: Quotation) => {
-    if (quotation.status === "converted") {
+    if (isAlreadyConverted(quotation)) {
       toast.error("This quotation has already been converted");
+      return;
+    }
+
+    if (!canConvertQuotation(quotation)) {
+      toast.error("This quotation cannot be converted in its current status", {
+        description: "Set it to Accepted, Sent, or Draft before converting.",
+      });
       return;
     }
 
@@ -166,6 +182,11 @@ export default function QuotationsPage() {
   };
 
   const handleStatusChange = async (id: string, newStatus: QuotationStatus) => {
+    if (newStatus === "converted") {
+      toast.error("Use the Convert action to create an invoice.");
+      return;
+    }
+
     try {
       const response = await api.updateQuotation(id, { status: newStatus });
       if (response.success) {
@@ -439,13 +460,6 @@ export default function QuotationsPage() {
                               <span className="h-2 w-2 rounded-full bg-neutral-500" />
                               Expired
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
-                              onClick={() => handleStatusChange(quotation._id, "converted")}
-                            >
-                              <span className="h-2 w-2 rounded-full bg-green-500" />
-                              Converted to Invoice
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
 
@@ -469,14 +483,20 @@ export default function QuotationsPage() {
                             variant="ghost"
                             size="icon"
                             className={`h-8 w-8 rounded-full ${
-                              quotation.status === "converted"
+                              !canConvertQuotation(quotation)
                                 ? "cursor-not-allowed opacity-50"
                                 : "hover:bg-green-100 dark:hover:bg-green-900/20"
                             }`}
                             onClick={() => handleConvertToInvoice(quotation)}
-                            disabled={quotation.status === "converted"}
+                            disabled={!canConvertQuotation(quotation)}
                             aria-label={`Convert ${quotation.quotationNumber} to invoice`}
-                            title="Convert to Invoice"
+                            title={
+                              isAlreadyConverted(quotation)
+                                ? "Already converted"
+                                : canConvertQuotation(quotation)
+                                ? "Convert to Invoice"
+                                : "Set status to Accepted, Sent, or Draft first"
+                            }
                           >
                             <ArrowRight className="h-4 w-4 text-green-600 dark:text-green-400" />
                           </Button>
