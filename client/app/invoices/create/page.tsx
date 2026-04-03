@@ -70,6 +70,8 @@ function getBoxesFromCoverage(
   return Math.ceil(coverageInSqm / sqmPerBox) || 0;
 }
 
+const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
+
 export default function CreateInvoicePage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -237,12 +239,14 @@ export default function CreateInvoicePage() {
 
   const subtotal = items.reduce((sum, i) => sum + i.lineTotal, 0);
   const grandTotal = Math.round(subtotal * 100) / 100;
-  const remaining = Math.max(0, grandTotal - (amountPaid || 0));
+  const paidCents = toCents(amountPaid || 0);
+  const grandTotalCents = toCents(grandTotal);
+  const remaining = Math.max(0, grandTotalCents - paidCents) / 100;
   const paymentStatus =
-    (amountPaid || 0) <= 0
+    paidCents <= 0
       ? "Unpaid"
-      : (amountPaid || 0) >= grandTotal
-        ? "Paid"
+      : paidCents >= grandTotalCents
+        ? "Fully Paid"
         : "Partially Paid";
 
   const handleSaveInvoice = async (e: React.FormEvent) => {
