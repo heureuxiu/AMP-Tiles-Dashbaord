@@ -201,6 +201,13 @@ function getBoxesFromCoverage(
   return Math.ceil(coverageInSqm / sqmPerBox) || 0;
 }
 
+function formatQty(value: number): string {
+  const rounded = roundQty(value);
+  if (!Number.isFinite(rounded) || rounded <= 0) return "";
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(3).replace(/\.?0+$/, "");
+}
+
 function getItemCoverageSqm(product: Product, item: QuotationItem): number | null {
   const quantity = Number(item.quantity) || 0;
   const itemUnit = normalizeItemUnitType(item.unitType);
@@ -228,6 +235,30 @@ function getItemStockDemand(product: Product, item: QuotationItem): number {
   if (coverageSqm == null) return quantity;
   if (stockUnit === "sqm") return coverageSqm;
   return coverageSqm * SQFT_PER_SQM;
+}
+
+function getCoverageSqmForPayload(
+  item: QuotationItem,
+  product?: Product
+): number | undefined {
+  if (!product) return undefined;
+
+  const coverageInput = Number(item.coverageInput);
+  if (item.unitType === "Sq Meter" && Number.isFinite(coverageInput) && coverageInput > 0) {
+    return roundQty(coverageInput);
+  }
+  if (item.unitType === "Sq Ft" && Number.isFinite(coverageInput) && coverageInput > 0) {
+    return roundQty(coverageInput / SQFT_PER_SQM);
+  }
+
+  if (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") {
+    const derivedCoverageSqm = getItemCoverageSqm(product, item);
+    if (derivedCoverageSqm != null && derivedCoverageSqm > 0) {
+      return roundQty(derivedCoverageSqm);
+    }
+  }
+
+  return undefined;
 }
 
 function getMaxQuantityFromAvailableStock(
@@ -717,6 +748,7 @@ export default function CreateQuotationPage() {
           rate: item.rate,
           discountPercent: item.discountPercent || 0,
           taxPercent: item.taxPercent || 0,
+          coverageSqm: getCoverageSqmForPayload(item, getProduct(item.product)),
         })),
         status: "draft",
         sendEmail: mode === "send",
@@ -1176,7 +1208,7 @@ export default function CreateQuotationPage() {
                                       className="h-9 w-20 text-sm"
                                     />
                                     <span className="text-xs text-neutral-500">
-                                      → {item.quantity} box
+                                      → {formatQty(item.quantity) || "0"} box
                                       {item.quantity === 1 ? "" : "es"}
                                     </span>
                                   </div>
