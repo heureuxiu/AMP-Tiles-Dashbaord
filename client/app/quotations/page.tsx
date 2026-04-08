@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, PencilIcon, FileText, Eye, ArrowRight, Search, X, Trash2 } from "lucide-react";
+import { Plus, PencilIcon, FileText, Eye, ArrowRight, Search, X, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -153,6 +153,27 @@ export default function QuotationsPage() {
     router.push(`/quotations/${id}`);
   };
 
+  const handleDownloadPDF = async (quotation: Quotation) => {
+    try {
+      toast.info(`Generating PDF for ${quotation.quotationNumber}...`);
+      const blob = await api.getQuotationPdfBlob(quotation._id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `quotation-${quotation.quotationNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded", {
+        description: `${quotation.quotationNumber}.pdf`,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to download PDF";
+      toast.error("Failed to download PDF", {
+        description: errorMessage,
+      });
+    }
+  };
+
   const openDeleteModal = (quotation: Quotation) => {
     setQuotationToDelete(quotation);
     setDeleteModalOpen(true);
@@ -188,21 +209,45 @@ export default function QuotationsPage() {
     }
 
     try {
-      const response = await api.updateQuotation(id, { status: newStatus });
+      const response =
+        newStatus === "sent"
+          ? await api.sendQuotationByEmail(id)
+          : await api.updateQuotation(id, { status: newStatus });
       if (response.success) {
-        toast.success("Status updated", {
-          description: `Quotation marked as ${getStatusLabel(newStatus)}`,
-        });
+        if (newStatus === "sent") {
+          toast.success("Quotation sent by email", {
+            description:
+              response.message ||
+              "Quotation email has been sent and status updated to Sent.",
+          });
+        } else {
+          toast.success("Status updated", {
+            description: `Quotation marked as ${getStatusLabel(newStatus)}`,
+          });
+        }
         fetchQuotations();
       } else {
-        toast.error("Failed to update quotation status");
+        toast.error(
+          newStatus === "sent"
+            ? "Failed to send quotation email"
+            : "Failed to update quotation status"
+        );
       }
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to update quotation status";
-      toast.error("Failed to update quotation status", {
+        error instanceof Error
+          ? error.message
+          : newStatus === "sent"
+          ? "Failed to send quotation email"
+          : "Failed to update quotation status";
+      toast.error(
+        newStatus === "sent"
+          ? "Failed to send quotation email"
+          : "Failed to update quotation status",
+        {
         description: errorMessage,
-      });
+        }
+      );
     }
   };
 
@@ -441,13 +486,6 @@ export default function QuotationsPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
-                              onClick={() => handleStatusChange(quotation._id, "accepted")}
-                            >
-                              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                              Accepted
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
                               onClick={() => handleStatusChange(quotation._id, "rejected")}
                             >
                               <span className="h-2 w-2 rounded-full bg-red-500" />
@@ -513,6 +551,20 @@ export default function QuotationsPage() {
                             title="View Quotation"
                           >
                             <Eye className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+
+                        {/* Download PDF Button */}
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/20"
+                            onClick={() => handleDownloadPDF(quotation)}
+                            aria-label={`Download ${quotation.quotationNumber}`}
+                            title="Download PDF"
+                          >
+                            <Download className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                           </Button>
                         </motion.div>
 
