@@ -24,6 +24,7 @@ const INVOICE_STATUSES = [
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
+type SaveMode = "save" | "save_send";
 
 type Product = {
   _id: string;
@@ -71,12 +72,14 @@ function getBoxesFromCoverage(
 }
 
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
+const DELIVERY_COST = 295;
 
 export default function CreateInvoicePage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMode, setSaveMode] = useState<SaveMode>("save");
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -238,7 +241,7 @@ export default function CreateInvoicePage() {
   };
 
   const subtotal = items.reduce((sum, i) => sum + i.lineTotal, 0);
-  const grandTotal = Math.round(subtotal * 100) / 100;
+  const grandTotal = Math.round((subtotal + DELIVERY_COST) * 100) / 100;
   const paidCents = toCents(amountPaid || 0);
   const grandTotalCents = toCents(grandTotal);
   const remaining = Math.max(0, grandTotalCents - paidCents) / 100;
@@ -249,10 +252,13 @@ export default function CreateInvoicePage() {
         ? "Fully Paid"
         : "Partially Paid";
 
-  const handleSaveInvoice = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveInvoice = async (mode: SaveMode = "save") => {
     if (!customerName.trim()) {
       toast.error("Customer name is required");
+      return;
+    }
+    if (mode === "save_send" && !customerEmail.trim()) {
+      toast.error("Customer email is required to send invoice");
       return;
     }
     const validItems = items.filter(
@@ -263,6 +269,7 @@ export default function CreateInvoicePage() {
       return;
     }
     try {
+      setSaveMode(mode);
       setIsSaving(true);
       const payload = {
         customerName: customerName.trim(),
@@ -284,21 +291,46 @@ export default function CreateInvoicePage() {
         status: invoiceStatus,
         paymentMethod: paymentMethod || undefined,
         amountPaid: amountPaid || undefined,
+        sendEmail: mode === "save_send",
       };
       const response = await api.createInvoice(payload);
       if (response.success && response.invoice) {
         const inv = response.invoice as { _id: string; invoiceNumber: string };
-        toast.success("Invoice created", {
-          description: `${inv.invoiceNumber} has been created.${invoiceStatus === "confirmed" || invoiceStatus === "delivered" ? " Stock has been reduced." : ""}`,
-        });
+        if (mode === "save_send") {
+          if (response.emailSent) {
+            toast.success("Invoice created and emailed", {
+              description: `${inv.invoiceNumber} sent to ${customerEmail.trim()}`,
+            });
+          } else {
+            toast.error("Invoice created but email not sent", {
+              description: response.emailError || response.message || "Please try again.",
+            });
+          }
+        } else {
+          toast.success("Invoice created", {
+            description: `${inv.invoiceNumber} has been created.${invoiceStatus === "confirmed" || invoiceStatus === "delivered" ? " Stock has been reduced." : ""}`,
+          });
+        }
         setTimeout(() => router.push(`/invoices/${inv._id}`), 800);
       }
     } catch (err) {
       console.error(err);
-      toast.error("Failed to create invoice");
+      toast.error(
+        mode === "save_send" ? "Failed to create and send invoice" : "Failed to create invoice"
+      );
     } finally {
       setIsSaving(false);
+      setSaveMode("save");
     }
+  };
+
+  const handleSaveInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await saveInvoice("save");
+  };
+
+  const handleSaveAndSend = async () => {
+    await saveInvoice("save_send");
   };
 
   const formatCurrency = (amount: number) =>
@@ -455,212 +487,186 @@ export default function CreateInvoicePage() {
                   Add Item
                 </Button>
               </div>
-              <div className="overflow-x-auto p-6">
+              <div className="p-4">
                 {isLoadingData ? (
                   <div className="flex h-32 items-center justify-center">
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
                   </div>
                 ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Product
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Unit
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Qty
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Rate
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Disc %
-                        </th>
-                        <th className="pb-2 text-left font-semibold text-neutral-700 dark:text-neutral-300">
-                          Tax %
-                        </th>
-                        <th className="pb-2 text-right font-semibold text-neutral-700 dark:text-neutral-300">
-                          Line Total
-                        </th>
-                        <th className="w-10 pb-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item) => {
-                        const product = getProduct(item.product);
-                        const showCoverage =
-                          (item.unitType === "Sq Meter" ||
-                            item.unitType === "Sq Ft") &&
-                          product &&
-                          (product.coveragePerBox ?? 0) > 0;
-                        return (
-                          <tr
-                            key={item.id}
-                            className="border-b border-neutral-100 dark:border-neutral-800"
-                          >
-                            <td className="py-2 pr-2">
+                  <div className="space-y-3">
+                    {items.map((item, idx) => {
+                      const product = getProduct(item.product);
+                      const showCoverage =
+                        (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") &&
+                        product &&
+                        (product.coveragePerBox ?? 0) > 0;
+
+                      const fieldCls =
+                        "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white dark:focus:border-amp-primary";
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900"
+                        >
+                          {/* Item header */}
+                          <div className="mb-3 flex items-center justify-between">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+                              Item {idx + 1}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveItem(item.id)}
+                              className="h-7 w-7 rounded-full text-red-500 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20"
+                              disabled={items.length === 1 || isSaving}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+
+                          {/* Row 1: Product / Unit */}
+                          <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                                Product <span className="text-red-500">*</span>
+                              </label>
                               <select
                                 value={item.product}
-                                onChange={(e) =>
-                                  handleProductChange(item.id, e.target.value)
-                                }
+                                onChange={(e) => handleProductChange(item.id, e.target.value)}
                                 disabled={isSaving}
-                                className="h-9 w-full min-w-[140px] rounded-lg border border-neutral-200 bg-white px-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+                                className={fieldCls}
                                 required
                               >
                                 <option value="">Select product</option>
                                 {products.map((p) => (
                                   <option key={p._id} value={p._id}>
-                                    {p.name} ({p.sku}) Stock: {p.stock}
+                                    {p.name} ({p.sku}) — Stock: {p.stock}
                                   </option>
                                 ))}
                               </select>
-                            </td>
-                            <td className="py-2 pr-2">
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                                Unit
+                              </label>
                               <select
                                 value={item.unitType}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "unitType",
-                                    e.target.value
-                                  )
-                                }
+                                onChange={(e) => handleItemChange(item.id, "unitType", e.target.value)}
                                 disabled={isSaving}
-                                className="h-9 min-w-[90px] rounded-lg border border-neutral-200 bg-white px-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+                                className={fieldCls}
                               >
                                 {UNIT_TYPES.map((u) => (
-                                  <option key={u} value={u}>
-                                    {u}
-                                  </option>
+                                  <option key={u} value={u}>{u}</option>
                                 ))}
                               </select>
-                            </td>
-                            <td className="py-2 pr-2">
+                            </div>
+                          </div>
+
+                          {/* Row 2: Qty / Rate / Disc% / Tax% / Line Total */}
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                            <div className="space-y-1">
+                              <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                                Qty <span className="text-red-500">*</span>
+                              </label>
                               {showCoverage ? (
                                 <div className="space-y-1">
-                                  <Input
+                                  <input
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    placeholder={
-                                      item.unitType === "Sq Meter"
-                                        ? "e.g. 20"
-                                        : "e.g. 215"
-                                    }
+                                    placeholder={item.unitType === "Sq Meter" ? "e.g. 20" : "e.g. 215"}
                                     value={item.coverageInput}
-                                    onChange={(e) =>
-                                      handleItemChange(
-                                        item.id,
-                                        "coverageInput",
-                                        e.target.value
-                                      )
-                                    }
+                                    onChange={(e) => handleItemChange(item.id, "coverageInput", e.target.value)}
                                     onBlur={() => handleCoverageBlur(item.id)}
                                     disabled={isSaving}
-                                    className="h-9 w-20 text-sm"
+                                    className={fieldCls}
+                                    style={{ MozAppearance: "textfield" } as React.CSSProperties}
                                   />
-                                  <span className="text-xs text-neutral-500">
-                                    → {item.quantity} box
-                                    {item.quantity !== 1 ? "es" : ""}
+                                  <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                                    → {item.quantity} box{item.quantity !== 1 ? "es" : ""}
                                   </span>
                                 </div>
                               ) : (
-                                <Input
+                                <input
                                   type="number"
                                   min="0"
                                   step="1"
+                                  placeholder="0"
                                   value={item.quantity || ""}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      item.id,
-                                      "quantity",
-                                      parseFloat(e.target.value) || 0
-                                    )
-                                  }
+                                  onChange={(e) => handleItemChange(item.id, "quantity", parseFloat(e.target.value) || 0)}
                                   disabled={isSaving}
-                                  className="h-9 w-20 text-sm"
+                                  className={fieldCls}
+                                  style={{ MozAppearance: "textfield" } as React.CSSProperties}
                                   required
                                 />
                               )}
-                            </td>
-                            <td className="py-2 pr-2">
-                              <Input
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                                Rate ($)
+                              </label>
+                              <input
                                 type="number"
                                 min="0"
                                 step="0.01"
+                                placeholder="0.00"
                                 value={item.rate || ""}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "rate",
-                                    parseFloat(e.target.value) || 0
-                                  )
-                                }
+                                onChange={(e) => handleItemChange(item.id, "rate", parseFloat(e.target.value) || 0)}
                                 disabled={isSaving}
-                                className="h-9 w-24 text-sm"
+                                className={fieldCls}
+                                style={{ MozAppearance: "textfield" } as React.CSSProperties}
                                 required
                               />
-                            </td>
-                            <td className="py-2 pr-2">
-                              <Input
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                                Disc %
+                              </label>
+                              <input
                                 type="number"
                                 min="0"
                                 max="100"
                                 step="0.5"
+                                placeholder="0"
                                 value={item.discountPercent || ""}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "discountPercent",
-                                    parseFloat(e.target.value) || 0
-                                  )
-                                }
+                                onChange={(e) => handleItemChange(item.id, "discountPercent", parseFloat(e.target.value) || 0)}
                                 disabled={isSaving}
-                                className="h-9 w-14 text-sm"
+                                className={fieldCls}
+                                style={{ MozAppearance: "textfield" } as React.CSSProperties}
                               />
-                            </td>
-                            <td className="py-2 pr-2">
-                              <Input
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                                Tax %
+                              </label>
+                              <input
                                 type="number"
                                 min="0"
                                 max="100"
                                 step="0.5"
+                                placeholder="0"
                                 value={item.taxPercent || ""}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "taxPercent",
-                                    parseFloat(e.target.value) || 0
-                                  )
-                                }
+                                onChange={(e) => handleItemChange(item.id, "taxPercent", parseFloat(e.target.value) || 0)}
                                 disabled={isSaving}
-                                className="h-9 w-14 text-sm"
+                                className={fieldCls}
+                                style={{ MozAppearance: "textfield" } as React.CSSProperties}
                               />
-                            </td>
-                            <td className="py-2 text-right font-medium text-neutral-900 dark:text-white">
-                              {formatCurrency(item.lineTotal)}
-                            </td>
-                            <td className="py-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRemoveItem(item.id)}
-                                className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
-                                disabled={items.length === 1 || isSaving}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                                Line Total
+                              </label>
+                              <div className="flex h-9.5 items-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-900 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white">
+                                {formatCurrency(item.lineTotal)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </motion.div>
@@ -719,6 +725,14 @@ export default function CreateInvoicePage() {
                     </span>
                     <span className="font-semibold">
                       {formatCurrency(subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-600 dark:text-neutral-400">
+                      Delivery Cost
+                    </span>
+                    <span className="font-semibold">
+                      {formatCurrency(DELIVERY_COST)}
                     </span>
                   </div>
                   <div className="border-t border-neutral-200 dark:border-neutral-700 pt-2">
@@ -823,7 +837,18 @@ export default function CreateInvoicePage() {
                   disabled={isLoadingData || isSaving}
                 >
                   <Save className="h-4 w-4" />
-                  {isSaving ? "Saving..." : "Save Invoice"}
+                  {isSaving && saveMode === "save" ? "Saving..." : "Save Invoice"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  size="lg"
+                  onClick={handleSaveAndSend}
+                  disabled={isLoadingData || isSaving}
+                >
+                  <Save className="h-4 w-4" />
+                  {isSaving && saveMode === "save_send" ? "Saving & Sending..." : "Save & Send Email"}
                 </Button>
                 <Button
                   type="button"
