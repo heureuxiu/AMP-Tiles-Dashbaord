@@ -6,14 +6,6 @@ import { ShoppingCart, X, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
@@ -490,120 +482,159 @@ export default function CreatePurchaseOrderPage() {
           </div>
         </div>
 
-        <div className="p-6">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="min-w-[200px]">Product <span className="text-red-500">*</span></TableHead>
-                  <TableHead className="min-w-[100px]">Unit Type</TableHead>
-                  <TableHead className="min-w-[90px]">Qty Ordered <span className="text-red-500">*</span></TableHead>
-                  <TableHead className="min-w-[110px]">Cost Rate (Per Unit)</TableHead>
-                  <TableHead className="min-w-[70px]">Disc. %</TableHead>
-                  <TableHead className="min-w-[70px]">Tax %</TableHead>
-                  <TableHead className="min-w-[90px]">Line Total</TableHead>
-                  <TableHead className="min-w-[80px]">Coverage</TableHead>
-                  <TableHead className="w-0">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <select
-                        value={item.product}
-                        onChange={(e) => handleItemChange(item.id, "product", e.target.value)}
-                        disabled={isLoadingSuppliers || isLoadingProducts || isSaving || !supplier}
-                        className="w-full rounded-md border border-gray-200 bg-slate-100 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-                      >
-                        <option value="">
-                          {!supplier ? "Select Supplier First" : isLoadingProducts ? "Loading Products..." : "Select Product"}
+        <div className="p-4 space-y-3">
+          {items.map((item, idx) => {
+            const fieldCls =
+              "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white dark:focus:border-amp-primary";
+
+            return (
+              <div
+                key={item.id}
+                className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900"
+              >
+                {/* Item header */}
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+                    Item {idx + 1}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveItem(item.id)}
+                    disabled={items.length === 1 || isSaving}
+                    className="h-7 w-7 rounded-full text-red-500 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+
+                {/* Row 1: Product / Unit */}
+                <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                      Product <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={item.product}
+                      onChange={(e) => handleItemChange(item.id, "product", e.target.value)}
+                      disabled={isLoadingSuppliers || isLoadingProducts || isSaving || !supplier}
+                      className={fieldCls}
+                    >
+                      <option value="">
+                        {!supplier ? "Select Supplier First" : isLoadingProducts ? "Loading Products…" : "Select Product"}
+                      </option>
+                      {products.map((p) => (
+                        <option key={p._id} value={p._id}>
+                          {p.name} ({p.sku})
                         </option>
-                        {products.map((p) => (
-                          <option key={p._id} value={p._id}>
-                            {p.name} ({p.sku})
-                          </option>
-                        ))}
-                      </select>
-                    </TableCell>
-                    <TableCell>
-                      <select
-                        value={item.unitType}
-                        onChange={(e) => handleItemChange(item.id, "unitType", e.target.value)}
-                        disabled={isSaving}
-                        className="w-full rounded-md border px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                      >
-                        {UNIT_TYPES.map((u) => (
-                          <option key={u} value={u}>{u}</option>
-                        ))}
-                      </select>
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={item.quantityOrdered || ""}
-                        onChange={(e) => handleItemChange(item.id, "quantityOrdered", Number(e.target.value))}
-                        disabled={isSaving}
-                        className="w-full no-spin"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={item.rate || ""}
-                        readOnly
-                        disabled={isSaving}
-                        className="w-full no-spin bg-neutral-50 dark:bg-neutral-800"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.5}
-                        value={item.discountPercent || ""}
-                        onChange={(e) => handleItemChange(item.id, "discountPercent", Number(e.target.value))}
-                        disabled={isSaving}
-                        className="w-16 no-spin"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.5}
-                        value={item.taxPercent || ""}
-                        onChange={(e) => handleItemChange(item.id, "taxPercent", Number(e.target.value))}
-                        disabled={isSaving}
-                        className="w-16 no-spin"
-                      />
-                    </TableCell>
-                    <TableCell className="font-semibold">{formatCurrency(item.lineTotal)}</TableCell>
-                    <TableCell className="text-xs text-neutral-600 dark:text-neutral-400">
-                      {item.coverageSqm != null ? `${item.coverageSqm} sq m` : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveItem(item.id)}
-                        disabled={items.length === 1 || isSaving}
-                        className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                      Unit Type
+                    </label>
+                    <select
+                      value={item.unitType}
+                      onChange={(e) => handleItemChange(item.id, "unitType", e.target.value)}
+                      disabled={isSaving}
+                      className={fieldCls}
+                    >
+                      {UNIT_TYPES.map((u) => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Row 2: Qty / Cost Rate / Disc% / Tax% / Coverage / Line Total */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                      Qty Ordered <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      placeholder="0"
+                      value={item.quantityOrdered || ""}
+                      onChange={(e) => handleItemChange(item.id, "quantityOrdered", Number(e.target.value))}
+                      disabled={isSaving}
+                      className={fieldCls}
+                      style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                      Cost Rate ($)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="0.00"
+                      value={item.rate || ""}
+                      readOnly
+                      disabled={isSaving}
+                      className={`${fieldCls} cursor-not-allowed opacity-70`}
+                      style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                      Disc %
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      placeholder="0"
+                      value={item.discountPercent || ""}
+                      onChange={(e) => handleItemChange(item.id, "discountPercent", Number(e.target.value))}
+                      disabled={isSaving}
+                      className={fieldCls}
+                      style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                      Tax %
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      placeholder="0"
+                      value={item.taxPercent || ""}
+                      onChange={(e) => handleItemChange(item.id, "taxPercent", Number(e.target.value))}
+                      disabled={isSaving}
+                      className={fieldCls}
+                      style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                      Coverage
+                    </label>
+                    <div className="flex h-9.5 items-center rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-600 dark:border-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
+                      {item.coverageSqm != null ? `${item.coverageSqm} sqm` : "—"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                      Line Total
+                    </label>
+                    <div className="flex h-9.5 items-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-900 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white">
+                      {formatCurrency(item.lineTotal)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </motion.div>
 
@@ -642,17 +673,7 @@ export default function CreatePurchaseOrderPage() {
           </Button>
         </div>
       </motion.div>
-      {/* Hide number input arrows for key PO numeric fields */}
-      <style jsx global>{`
-        .no-spin::-webkit-inner-spin-button,
-        .no-spin::-webkit-outer-spin-button {
-          -webkit-appearance: none;
-          margin: 0;
-        }
-        .no-spin {
-          -moz-appearance: textfield;
-        }
-      `}</style>
+
     </div>
   );
 }
