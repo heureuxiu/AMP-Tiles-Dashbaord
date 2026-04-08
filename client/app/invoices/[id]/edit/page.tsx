@@ -71,6 +71,7 @@ function getBoxesFromCoverage(
 }
 
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
+const DELIVERY_COST = 295;
 
 type FetchedInvoice = {
   _id: string;
@@ -318,7 +319,7 @@ export default function EditInvoicePage() {
   };
 
   const subtotal = items.reduce((sum, i) => sum + i.lineTotal, 0);
-  const grandTotal = Math.round(subtotal * 100) / 100;
+  const grandTotal = Math.round((subtotal + DELIVERY_COST) * 100) / 100;
   const paidCents = toCents(amountPaid || 0);
   const grandTotalCents = toCents(grandTotal);
   const remaining = Math.max(0, grandTotalCents - paidCents) / 100;
@@ -753,6 +754,10 @@ export default function EditInvoicePage() {
                   <div className="flex justify-between">
                     <span className="text-neutral-600 dark:text-neutral-400">Subtotal</span>
                     <span className="font-semibold">{formatCurrency(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-neutral-600 dark:text-neutral-400">Delivery Cost</span>
+                    <span className="font-semibold">{formatCurrency(DELIVERY_COST)}</span>
                   </div>
                   <div className="flex justify-between border-t border-neutral-200 pt-2 dark:border-neutral-700">
                     <span className="font-semibold">Grand Total</span>
