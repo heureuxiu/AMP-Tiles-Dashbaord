@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
 type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
 const SQFT_PER_SQM = 10.764;
+const DELIVERY_COST = 295;
 
 type Product = {
   _id: string;
@@ -845,7 +846,7 @@ export default function EditQuotationPage() {
   };
 
   const subtotal = calculateSubtotal();
-  const grandTotal = subtotal;
+  const grandTotal = Math.round((subtotal + DELIVERY_COST) * 100) / 100;
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -1413,6 +1414,14 @@ export default function EditQuotationPage() {
                     </span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
                       {formatCurrency(subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                      Delivery Cost
+                    </span>
+                    <span className="font-semibold text-neutral-900 dark:text-white">
+                      {formatCurrency(DELIVERY_COST)}
                     </span>
                   </div>
 
