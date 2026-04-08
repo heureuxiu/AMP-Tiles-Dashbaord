@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Receipt, Download, Printer, ArrowLeft, DollarSign } from "lucide-react";
+import { Receipt, Download, Printer, ArrowLeft, DollarSign, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -34,6 +34,7 @@ type InvoiceData = {
   subtotal: number;
   discountAmount?: number;
   tax?: number;
+  deliveryCost?: number;
   grandTotal: number;
   status: string;
   paymentMethod?: string;
@@ -43,11 +44,16 @@ type InvoiceData = {
 };
 
 const companyInfo = {
-  name: "AMP Tiles Australia",
-  address: "456 Business Park Drive, Melbourne VIC 3000",
-  phone: "+61 3 9999 8888",
-  email: "info@amptiles.com.au",
-  abn: "12 345 678 901",
+  name: "AMP TILES PTY LTD",
+  address: "Unit 15/55 Anderson Road, Smeaton Grange, NSW 2560",
+  abn: "14 690 181 858",
+};
+
+const bankInfo = {
+  bank: "NAB",
+  accountName: "AMP TILES PTY LTD",
+  bsb: "082-356",
+  accountNumber: "26-722-1347",
 };
 
 const SQFT_PER_SQM = 10.764;
@@ -89,6 +95,8 @@ export default function InvoiceDetailPage() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [sendEmailAfterPayment, setSendEmailAfterPayment] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -152,6 +160,33 @@ export default function InvoiceDetailPage() {
     window.print();
   };
 
+  const handleSendInvoiceEmail = async () => {
+    if (!invoice) return;
+    if (!String(invoice.customerEmail || "").trim()) {
+      toast.error("Customer email is missing for this invoice");
+      return;
+    }
+    try {
+      setIsSendingEmail(true);
+      const response = await api.sendInvoiceByEmail(invoice._id);
+      if (response.success) {
+        toast.success("Invoice emailed", {
+          description: response.message || `Invoice sent to ${invoice.customerEmail}`,
+        });
+      } else {
+        toast.error("Failed to send invoice email");
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to send invoice email";
+      toast.error("Failed to send invoice email", {
+        description: message,
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   const fetchInvoice = async () => {
     try {
       const response = await api.getInvoice(invoiceId);
@@ -182,22 +217,42 @@ export default function InvoiceDetailPage() {
       toast.error("Amount paid cannot exceed total amount");
       return;
     }
+    if (sendEmailAfterPayment && !String(invoice.customerEmail || "").trim()) {
+      toast.error("Customer email is required to send updated invoice");
+      return;
+    }
     const newTotalPaid = newTotalPaidCents / 100;
     const remaining = Math.max(0, grandTotalCents - newTotalPaidCents) / 100;
     try {
       setIsRecordingPayment(true);
-      await api.updateInvoice(invoice._id, {
+      const response = await api.updateInvoice(invoice._id, {
         amountPaid: newTotalPaid,
         ...(paymentMethod && { paymentMethod }),
+        sendEmail: sendEmailAfterPayment,
       });
-      toast.success("Payment recorded", {
-        description: `${formatCurrency(amount)} added. Total paid: ${formatCurrency(newTotalPaid)}, Remaining: ${formatCurrency(remaining)}`,
-      });
+      const defaultMessage = `${formatCurrency(amount)} added. Total paid: ${formatCurrency(newTotalPaid)}, Remaining: ${formatCurrency(remaining)}`;
+      if (sendEmailAfterPayment && response.emailSent) {
+        toast.success("Payment recorded and invoice emailed", {
+          description: response.message || defaultMessage,
+        });
+      } else if (sendEmailAfterPayment && !response.emailSent) {
+        toast.error("Payment saved but email not sent", {
+          description: response.emailError || response.message || defaultMessage,
+        });
+      } else {
+        toast.success("Payment recorded", {
+          description: defaultMessage,
+        });
+      }
       setPaymentAmount("");
       setPaymentMethod("");
       await fetchInvoice();
-    } catch {
-      toast.error("Failed to record payment");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to record payment";
+      toast.error("Failed to record payment", {
+        description: message,
+      });
     } finally {
       setIsRecordingPayment(false);
     }
@@ -212,7 +267,20 @@ export default function InvoiceDetailPage() {
   }
 
   const subtotal = invoice.subtotal ?? invoice.items.reduce((sum, i) => sum + i.lineTotal, 0);
-  const grandTotal = invoice.grandTotal ?? subtotal;
+  const discountAmount = invoice.discountAmount ?? 0;
+  const taxAmount = invoice.tax ?? 0;
+  const baseTotal = subtotal - discountAmount + taxAmount;
+  const parsedDeliveryCost = Number(invoice.deliveryCost);
+  const fallbackDeliveryCost = Math.max(
+    0,
+    Math.round((Number(invoice.grandTotal) - baseTotal) * 100) / 100
+  );
+  const deliveryCost = Number.isFinite(parsedDeliveryCost)
+    ? Math.max(0, parsedDeliveryCost)
+    : Number.isFinite(fallbackDeliveryCost)
+      ? fallbackDeliveryCost
+      : 295;
+  const grandTotal = invoice.grandTotal ?? Math.round((baseTotal + deliveryCost) * 100) / 100;
   const remainingBalance = invoice.remainingBalance ?? grandTotal;
 
   return (
@@ -238,6 +306,20 @@ export default function InvoiceDetailPage() {
             </div>
           </div>
           <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={handleSendInvoiceEmail}
+              className="gap-2"
+              disabled={isSendingEmail || !String(invoice.customerEmail || "").trim()}
+              title={
+                invoice.customerEmail
+                  ? "Send invoice by email"
+                  : "Customer email missing"
+              }
+            >
+              <Mail className="h-4 w-4" />
+              {isSendingEmail ? "Sending..." : "Send Email"}
+            </Button>
             <Button
               variant="outline"
               onClick={handleDownloadPDF}
@@ -270,8 +352,6 @@ export default function InvoiceDetailPage() {
                 </h2>
                 <div className="mt-3 space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
                   <p>{companyInfo.address}</p>
-                  <p>Phone: {companyInfo.phone}</p>
-                  <p>Email: {companyInfo.email}</p>
                   <p>ABN: {companyInfo.abn}</p>
                 </div>
               </div>
@@ -431,22 +511,41 @@ export default function InvoiceDetailPage() {
                     {formatCurrency(subtotal)}
                   </span>
                 </div>
-                {(invoice.discountAmount ?? 0) > 0 && (
+                {discountAmount > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-700 dark:text-neutral-300">Discount:</span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
-                      -{formatCurrency(invoice.discountAmount ?? 0)}
+                      -{formatCurrency(discountAmount)}
                     </span>
                   </div>
                 )}
-                {(invoice.tax ?? 0) > 0 && (
+                {taxAmount > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-700 dark:text-neutral-300">Tax (GST):</span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
-                      {formatCurrency(invoice.tax ?? 0)}
+                      {formatCurrency(taxAmount)}
                     </span>
                   </div>
                 )}
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-700 dark:text-neutral-300">
+                    Delivery Cost:
+                  </span>
+                  <span className="font-semibold text-neutral-900 dark:text-white">
+                    {formatCurrency(deliveryCost)}
+                  </span>
+                </div>
+                <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-300">
+                  <p className="mb-2 font-semibold text-neutral-800 dark:text-neutral-100">
+                    Bank Details
+                  </p>
+                  <div className="space-y-1">
+                    <p>Bank: {bankInfo.bank}</p>
+                    <p>Account Name: {bankInfo.accountName}</p>
+                    <p>BSB: {bankInfo.bsb}</p>
+                    <p>Account Number: {bankInfo.accountNumber}</p>
+                  </div>
+                </div>
                 <div className="flex items-center justify-between border-t-2 border-neutral-300 pt-3 dark:border-neutral-600">
                   <span className="text-lg font-bold text-neutral-900 dark:text-white">
                     TOTAL:
@@ -508,6 +607,16 @@ export default function InvoiceDetailPage() {
                   <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
                     Enter the amount received from the client – the remaining balance will update automatically.
                   </p>
+                  <label className="mb-3 flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
+                    <input
+                      type="checkbox"
+                      checked={sendEmailAfterPayment}
+                      onChange={(e) => setSendEmailAfterPayment(e.target.checked)}
+                      disabled={isRecordingPayment}
+                      className="h-4 w-4 rounded border-neutral-300 text-amp-primary focus:ring-amp-primary dark:border-neutral-600"
+                    />
+                    Email updated invoice to customer after this payment
+                  </label>
                   <div className="flex flex-wrap items-end gap-3">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
@@ -548,7 +657,11 @@ export default function InvoiceDetailPage() {
                       disabled={isRecordingPayment || !paymentAmount.trim()}
                       className="gap-2"
                     >
-                      {isRecordingPayment ? "Saving..." : "Record payment"}
+                      {isRecordingPayment
+                        ? sendEmailAfterPayment
+                          ? "Saving & Sending..."
+                          : "Saving..."
+                        : "Record payment"}
                     </Button>
                   </div>
                 </div>
