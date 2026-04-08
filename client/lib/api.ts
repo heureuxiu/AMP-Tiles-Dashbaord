@@ -366,6 +366,38 @@ class ApiClient {
     });
   }
 
+  async getQuotationPdfBlob(id: string): Promise<Blob> {
+    const token = localStorage.getItem('amp_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${this.baseURL}/quotations/${id}/pdf`, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let message = `HTTP ${response.status}`;
+      try {
+        const j = JSON.parse(errText);
+        if (j.message) message = j.message;
+      } catch {
+        if (errText) message = errText;
+      }
+      throw new Error(message);
+    }
+
+    return response.blob();
+  }
+
+  async sendQuotationByEmail(id: string) {
+    return this.request(`/quotations/${id}/send`, {
+      method: 'POST',
+    });
+  }
+
   async createQuotation(data: {
     customerName: string;
     customerPhone?: string;
@@ -611,6 +643,12 @@ class ApiClient {
     });
   }
 
+  async sendPurchaseOrderToSupplier(id: string) {
+    return this.request(`/purchase-orders/${id}/send-to-supplier`, {
+      method: 'POST',
+    });
+  }
+
   async receivePurchaseOrder(
     id: string,
     body?: {
@@ -640,6 +678,35 @@ class ApiClient {
     return this.request('/purchase-orders/stats/summary', {
       method: 'GET',
     });
+  }
+
+  /**
+   * Fetch purchase order PDF as blob (for download). Uses same auth as other requests.
+   */
+  async getPurchaseOrderPdfBlob(id: string): Promise<Blob> {
+    const token = localStorage.getItem('amp_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${this.baseURL}/purchase-orders/${id}/pdf`, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let message = `HTTP ${response.status}`;
+      try {
+        const j = JSON.parse(errText);
+        if (j.message) message = j.message;
+      } catch {
+        if (errText) message = errText;
+      }
+      throw new Error(message);
+    }
+
+    return response.blob();
   }
 
   // Invoice Management endpoints
@@ -695,6 +762,7 @@ class ApiClient {
     status?: string;
     paymentMethod?: string;
     amountPaid?: number;
+    sendEmail?: boolean;
   }) {
     return this.request('/invoices', {
       method: 'POST',
@@ -725,6 +793,7 @@ class ApiClient {
     status?: string;
     paymentMethod?: string;
     amountPaid?: number;
+    sendEmail?: boolean;
   }) {
     return this.request(`/invoices/${id}`, {
       method: 'PUT',
@@ -736,10 +805,17 @@ class ApiClient {
     paymentMethod?: string;
     paidAmount?: number;
     paidDate?: string;
+    sendEmail?: boolean;
   }) {
     return this.request(`/invoices/${id}/pay`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  async sendInvoiceByEmail(id: string) {
+    return this.request(`/invoices/${id}/send`, {
+      method: 'POST',
     });
   }
 
