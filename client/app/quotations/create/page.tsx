@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Plus, Trash2, FileText, Save, Send, X as XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
 type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
 const SQFT_PER_SQM = 10.764;
+const DELIVERY_COST = 295;
 
 type Product = {
   _id: string;
@@ -27,6 +28,8 @@ type Product = {
   stock?: number;
   taxPercent?: number | null;
   supplierType?: "third-party" | "own";
+  supplier?: { _id: string; name?: string; supplierNumber?: string } | string | null;
+  supplierName?: string;
 };
 
 type Supplier = {
@@ -37,6 +40,7 @@ type Supplier = {
 
 type QuotationItem = {
   id: string;
+  supplierId: string;
   product: string;
   productName: string;
   unitType: string;
@@ -299,6 +303,7 @@ function formatStockQty(value: number): string {
 
 const createEmptyItem = (id?: string): QuotationItem => ({
   id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  supplierId: "",
   product: "",
   productName: "",
   unitType: "Box",
@@ -313,8 +318,12 @@ const createEmptyItem = (id?: string): QuotationItem => ({
 export default function CreateQuotationPage() {
   const router = useRouter();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [supplier, setSupplier] = useState("");
-  const [products, setProducts] = useState<Product[]>([]);
+  const [productsBySupplier, setProductsBySupplier] = useState<
+    Record<string, Product[]>
+  >({});
+  const [isLoadingProductsBySupplier, setIsLoadingProductsBySupplier] = useState<
+    Record<string, boolean>
+  >({});
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -338,10 +347,6 @@ export default function CreateQuotationPage() {
   useEffect(() => {
     fetchSuppliers();
   }, []);
-
-  useEffect(() => {
-    fetchProducts(supplier);
-  }, [supplier]);
 
   // Default: valid until = quotationDate + 7 days (can be overridden)
   useEffect(() => {
@@ -373,37 +378,69 @@ export default function CreateQuotationPage() {
   };
 
   const fetchProducts = async (supplierId: string) => {
-    if (!supplierId) {
-      setProducts([]);
-      setIsLoadingProducts(false);
-      return;
-    }
+    if (!supplierId) return;
+    if (productsBySupplier[supplierId]) return;
     try {
       setIsLoadingProducts(true);
+      setIsLoadingProductsBySupplier((prev) => ({ ...prev, [supplierId]: true }));
       const response = await api.getProducts({ supplier: supplierId });
-      if (response.success && response.products) {
-        setProducts(response.products);
-      } else {
-        setProducts([]);
-      }
+      const supplierProducts =
+        response.success && response.products
+          ? (response.products as Product[])
+          : [];
+      setProductsBySupplier((prev) => ({
+        ...prev,
+        [supplierId]: supplierProducts,
+      }));
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to fetch products";
       toast.error("Failed to load supplier products", {
         description: errorMessage,
       });
-      setProducts([]);
+      setProductsBySupplier((prev) => ({ ...prev, [supplierId]: [] }));
     } finally {
       setIsLoadingProducts(false);
+      setIsLoadingProductsBySupplier((prev) => ({ ...prev, [supplierId]: false }));
     }
   };
 
-  const handleSupplierChange = (supplierId: string) => {
-    setSupplier(supplierId);
-    setItems([createEmptyItem()]);
+  const getProductsForSupplier = (supplierId: string) => {
+    if (!supplierId) return [];
+    return productsBySupplier[supplierId] || [];
   };
 
-  const getProduct = (id: string) => products.find((p) => p._id === id);
+  const handleItemSupplierChange = (itemId: string, supplierId: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id !== itemId
+          ? item
+          : {
+              ...item,
+              supplierId,
+              product: "",
+              productName: "",
+              coverageInput: "",
+              quantity: 0,
+              rate: 0,
+              taxPercent: 0,
+              lineTotal: 0,
+              unitType: "Box",
+            }
+      )
+    );
+
+    if (supplierId) fetchProducts(supplierId);
+  };
+
+  const getProduct = (id: string) => {
+    if (!id) return undefined;
+    for (const supplierProducts of Object.values(productsBySupplier)) {
+      const found = supplierProducts.find((p) => p._id === id);
+      if (found) return found;
+    }
+    return undefined;
+  };
   const getPreferredUnitType = (product?: Product) => {
     switch (product?.pricingUnit) {
       case "per_sqm":
@@ -539,7 +576,9 @@ export default function CreateQuotationPage() {
       return;
     }
 
-    const product = products.find((p) => p._id === productId);
+    const currentItem = items.find((item) => item.id === itemId);
+    const supplierProducts = getProductsForSupplier(currentItem?.supplierId || "");
+    const product = supplierProducts.find((p) => p._id === productId) || getProduct(productId);
     if (!product) return;
     const rate = product.retailPrice ?? product.price ?? 0;
     const taxPercent = product.taxPercent ?? 0;
@@ -696,11 +735,6 @@ export default function CreateQuotationPage() {
   };
 
   const saveQuotation = async (mode: SaveMode) => {
-    if (!supplier) {
-      toast.error("Supplier is required");
-      return;
-    }
-
     if (!customerName.trim()) {
       toast.error("Customer name is required");
       return;
@@ -757,6 +791,10 @@ export default function CreateQuotationPage() {
       const response = await api.createQuotation(quotationData);
 
       if (response.success) {
+        const createdQuotation = response.quotation as
+          | { _id?: string; quotationNumber?: string }
+          | undefined;
+
         if (mode === "send") {
           if (response.emailSent) {
             toast.success("Quotation sent by email", {
@@ -777,6 +815,10 @@ export default function CreateQuotationPage() {
         }
 
         setTimeout(() => {
+          if (createdQuotation?._id) {
+            router.push(`/quotations/${createdQuotation._id}`);
+            return;
+          }
           router.push("/quotations");
         }, 1000);
       }
@@ -812,7 +854,7 @@ export default function CreateQuotationPage() {
   };
 
   const subtotal = calculateSubtotal();
-  const grandTotal = subtotal;
+  const grandTotal = Math.round((subtotal + DELIVERY_COST) * 100) / 100;
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -880,32 +922,9 @@ export default function CreateQuotationPage() {
                   />
                 </div>
 
-                <div className="grid gap-2">
-                  <label
-                    htmlFor="supplier"
-                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
-                  >
-                    Supplier <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    id="supplier"
-                    value={supplier}
-                    onChange={(e) => handleSupplierChange(e.target.value)}
-                    disabled={isSaving || isLoadingSuppliers}
-                    className="flex h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
-                    required
-                  >
-                    <option value="">
-                      {isLoadingSuppliers ? "Loading suppliers..." : "Select supplier"}
-                    </option>
-                    {suppliers.map((sup) => (
-                      <option key={sup._id} value={sup._id}>
-                        {sup.name}
-                        {sup.supplierNumber ? ` (${sup.supplierNumber})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Select supplier per item below to include products from multiple suppliers in one quotation.
+                </p>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   {/* Customer Phone */}
@@ -1033,7 +1052,7 @@ export default function CreateQuotationPage() {
                     placeholder="Add any additional notes..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
+                    className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-gray-900 ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                   />
                 </div>
 
@@ -1052,7 +1071,7 @@ export default function CreateQuotationPage() {
                     placeholder="Add terms and conditions..."
                     value={terms}
                     onChange={(e) => setTerms(e.target.value)}
-                    className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
+                    className="flex w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-gray-900 ring-offset-white placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                   />
                 </div>
               </div>
@@ -1081,7 +1100,7 @@ export default function CreateQuotationPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleAddItem}
-                    disabled={isSaving || isLoadingProducts || !supplier}
+                    disabled={isSaving || isLoadingProducts}
                     className="gap-2"
                   >
                     <Plus className="h-4 w-4" />
@@ -1090,272 +1109,269 @@ export default function CreateQuotationPage() {
                 </div>
               </div>
 
-              {/* Items Table */}
-              <div className="p-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                        <th className="pb-2 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Product
-                        </th>
-                        <th className="pb-2 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Unit
-                        </th>
-                        <th className="pb-2 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Qty
-                        </th>
-                        <th className="pb-2 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Rate
-                        </th>
-                        <th className="pb-2 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Disc %
-                        </th>
-                        <th className="pb-2 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Tax %
-                        </th>
-                        <th className="pb-2 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Line Total
-                        </th>
-                        <th className="pb-2 w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item) => {
-                        const product = getProduct(item.product);
-                        const isStockRestricted = isStockRestrictedProduct(product);
-                        const isUnitLocked = Boolean(product?.pricingUnit);
-                        const stockUnitLabel = getStockUnitLabel(product);
-                        const maxQuantityForItem = item.product
-                          ? getMaxQuantityForItem(items, item.id, item.product)
-                          : 0;
-                        const maxQuantityLimit =
-                          item.product && Number.isFinite(maxQuantityForItem)
-                            ? maxQuantityForItem
-                            : undefined;
-                        const hasTileInfo =
-                          product &&
-                          ((product.tilesPerBox ?? 0) > 0 ||
-                            (product.coveragePerBox ?? 0) > 0 ||
-                            (product.stock ?? 0) > 0);
-                        const showCoverageInput =
-                          (item.unitType === "Sq Meter" ||
-                            item.unitType === "Sq Ft") &&
-                          product &&
-                          (product.coveragePerBox ?? 0) > 0;
-                        return (
-                          <Fragment key={item.id}>
-                            <tr className="border-b border-neutral-100 dark:border-neutral-800">
-                              <td className="py-3 pr-2 align-top">
-                                <select
-                                  value={item.product}
-                                  onChange={(e) =>
-                                    handleProductChange(item.id, e.target.value)
-                                  }
-                                  disabled={!supplier || isLoadingProducts}
-                                  className="flex h-9 w-full min-w-[160px] rounded-lg border border-neutral-200 bg-white px-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
-                                  required
-                                >
-                                  <option value="">
-                                    {!supplier
-                                      ? "Select supplier first"
-                                      : isLoadingProducts
-                                        ? "Loading..."
-                                        : "Select product"}
-                                  </option>
-                                  {products.map((product) => (
-                                    <option key={product._id} value={product._id}>
-                                      {product.name} ({product.sku})
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="py-3 pr-2 align-top">
-                                <select
-                                  value={item.unitType}
-                                  onChange={(e) =>
-                                    handleItemChange(item.id, "unitType", e.target.value)
-                                  }
-                                  disabled={isUnitLocked}
-                                  className="h-9 min-w-[90px] rounded-lg border border-neutral-200 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                                >
-                                  {UNIT_TYPES.map((u) => (
-                                    <option key={u} value={u}>
-                                      {u}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="py-3 pr-2 align-top">
-                                {showCoverageInput ? (
-                                  <div className="space-y-1">
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      placeholder={
-                                        item.unitType === "Sq Meter" ? "e.g. 20" : "e.g. 215"
-                                      }
-                                      value={item.coverageInput}
-                                      onChange={(e) =>
-                                        handleItemChange(
-                                          item.id,
-                                          "coverageInput",
-                                          e.target.value
-                                        )
-                                      }
-                                      onBlur={() => handleCoverageBlur(item.id)}
-                                      className="h-9 w-20 text-sm"
-                                    />
-                                    <span className="text-xs text-neutral-500">
-                                      → {formatQty(item.quantity) || "0"} box
-                                      {item.quantity === 1 ? "" : "es"}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    max={maxQuantityLimit}
-                                    step="1"
-                                    placeholder={item.product ? "0" : "Select product first"}
-                                    value={item.quantity || ""}
-                                    onChange={(e) => {
-                                      const typedQuantity =
-                                        Math.max(0, parseFloat(e.target.value) || 0);
-                                      const safeQuantity = item.product
-                                        ? Number.isFinite(maxQuantityForItem)
-                                          ? Math.min(typedQuantity, maxQuantityForItem)
-                                          : typedQuantity
-                                        : 0;
-                                      handleItemChange(
-                                        item.id,
-                                        "quantity",
-                                        safeQuantity
-                                      );
-                                    }}
-                                    disabled={!item.product || isLoadingProducts}
-                                    className="h-9 w-20 text-sm"
-                                    required
-                                  />
-                                )}
-                              </td>
-                              <td className="py-3 pr-2 align-top">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  value={item.rate || ""}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      item.id,
-                                      "rate",
-                                      parseFloat(e.target.value) || 0
-                                    )
-                                  }
-                                  className="h-9 w-24 text-sm"
-                                  required
-                                />
-                              </td>
-                              <td className="py-3 pr-2 align-top">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.5"
-                                  value={item.discountPercent || ""}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      item.id,
-                                      "discountPercent",
-                                      parseFloat(e.target.value) || 0
-                                    )
-                                  }
-                                  className="h-9 w-16 text-sm"
-                                />
-                              </td>
-                              <td className="py-3 pr-2 align-top">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.5"
-                                  value={item.taxPercent || ""}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      item.id,
-                                      "taxPercent",
-                                      parseFloat(e.target.value) || 0
-                                    )
-                                  }
-                                  className="h-9 w-16 text-sm"
-                                />
-                              </td>
-                              <td className="py-3 pr-2 text-right align-top font-semibold text-neutral-900 dark:text-white">
-                                {formatCurrency(item.lineTotal)}
-                              </td>
-                              <td className="py-3 align-top">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleRemoveItem(item.id)}
-                                  className="h-8 w-8 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
-                                  disabled={items.length === 1}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </td>
-                            </tr>
-                            {hasTileInfo && (
-                              <tr className="border-b border-neutral-100 text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
-                                <td colSpan={8} className="pb-3 pl-4 pr-2 pt-0">
-                                  {product?.tilesPerBox != null &&
-                                    product.tilesPerBox > 0 && (
-                                      <span className="mr-4">
-                                        Tiles/box:{" "}
-                                        <strong>{product.tilesPerBox}</strong>
-                                      </span>
-                                    )}
-                                  {product?.coveragePerBox != null &&
-                                    product.coveragePerBox > 0 && (
-                                      <span className="mr-4">
-                                        Coverage/box:{" "}
-                                        <strong>
-                                          {product.coveragePerBox}{" "}
-                                          {product.coveragePerBoxUnit === "sqm"
-                                            ? "sqm"
-                                            : "sq ft"}
-                                        </strong>
-                                      </span>
-                                    )}
-                                  {product?.stock != null && (
-                                    <span className="mr-4">
-                                      Stock available:{" "}
-                                      <strong>{product.stock}</strong> {stockUnitLabel}
-                                    </span>
-                                  )}
-                                  {product?.stock != null && item.product && isStockRestricted && (
-                                    <span className="mr-4">
-                                      Available to quote now:{" "}
-                                      <strong>{formatStockQty(maxQuantityForItem)}</strong> {stockUnitLabel}
-                                    </span>
-                                  )}
-                                  {!isStockRestricted && item.product && (
-                                    <span className="mr-4">
-                                      Stock check: <strong>Skipped (third-party)</strong>
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+              {/* Items Cards */}
+              <div className="p-4 space-y-3">
+                {items.map((item, idx) => {
+                  const product = getProduct(item.product);
+                  const isStockRestricted = isStockRestrictedProduct(product);
+                  const isUnitLocked = Boolean(product?.pricingUnit);
+                  const stockUnitLabel = getStockUnitLabel(product);
+                  const maxQuantityForItem = item.product
+                    ? getMaxQuantityForItem(items, item.id, item.product)
+                    : 0;
+                  const maxQuantityLimit =
+                    item.product && Number.isFinite(maxQuantityForItem)
+                      ? maxQuantityForItem
+                      : undefined;
+                  const hasTileInfo =
+                    product &&
+                    ((product.tilesPerBox ?? 0) > 0 ||
+                      (product.coveragePerBox ?? 0) > 0 ||
+                      (product.stock ?? 0) > 0);
+                  const showCoverageInput =
+                    (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") &&
+                    product &&
+                    (product.coveragePerBox ?? 0) > 0;
+                  const rowProducts = getProductsForSupplier(item.supplierId);
+                  const isCurrentSupplierLoading = Boolean(
+                    item.supplierId && isLoadingProductsBySupplier[item.supplierId]
+                  );
+
+                  const fieldCls =
+                    "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white dark:focus:border-amp-primary";
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900"
+                    >
+                      {/* Item number + delete */}
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+                          Item {idx + 1}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveItem(item.id)}
+                          className="h-7 w-7 rounded-full text-red-500 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20"
+                          disabled={items.length === 1}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+
+                      {/* Row 1: Supplier / Product / Unit */}
+                      <div className="mb-3 grid gap-3 sm:grid-cols-3">
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                            Supplier
+                          </label>
+                          <select
+                            value={item.supplierId}
+                            onChange={(e) => handleItemSupplierChange(item.id, e.target.value)}
+                            disabled={isSaving || isLoadingSuppliers}
+                            className={fieldCls}
+                            required
+                          >
+                            <option value="">
+                              {isLoadingSuppliers ? "Loading…" : "Select supplier"}
+                            </option>
+                            {suppliers.map((sup) => (
+                              <option key={sup._id} value={sup._id}>
+                                {sup.name}
+                                {sup.supplierNumber ? ` (${sup.supplierNumber})` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                            Product
+                          </label>
+                          <select
+                            value={item.product}
+                            onChange={(e) => handleProductChange(item.id, e.target.value)}
+                            disabled={!item.supplierId || isCurrentSupplierLoading}
+                            className={fieldCls}
+                            required
+                          >
+                            <option value="">
+                              {!item.supplierId
+                                ? "Select supplier first"
+                                : isCurrentSupplierLoading
+                                ? "Loading…"
+                                : rowProducts.length === 0
+                                ? "No products available"
+                                : "Select product"}
+                            </option>
+                            {rowProducts.map((p) => (
+                              <option key={p._id} value={p._id}>
+                                {p.name} ({p.sku})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                            Unit
+                          </label>
+                          <select
+                            value={item.unitType}
+                            onChange={(e) => handleItemChange(item.id, "unitType", e.target.value)}
+                            disabled={isUnitLocked}
+                            className={fieldCls}
+                          >
+                            {UNIT_TYPES.map((u) => (
+                              <option key={u} value={u}>{u}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Qty / Rate / Disc% / Tax% / Line Total */}
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                            Qty
+                          </label>
+                          {showCoverageInput ? (
+                            <div className="space-y-1">
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder={item.unitType === "Sq Meter" ? "e.g. 20" : "e.g. 215"}
+                                value={item.coverageInput}
+                                onChange={(e) =>
+                                  handleItemChange(item.id, "coverageInput", e.target.value)
+                                }
+                                onBlur={() => handleCoverageBlur(item.id)}
+                                className={fieldCls}
+                                style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                              />
+                              <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                                → {formatQty(item.quantity) || "0"} box{item.quantity === 1 ? "" : "es"}
+                              </span>
+                            </div>
+                          ) : (
+                            <input
+                              type="number"
+                              min="0"
+                              max={maxQuantityLimit}
+                              step="1"
+                              placeholder={item.product ? "0" : "—"}
+                              value={item.quantity || ""}
+                              onChange={(e) => {
+                                const typedQuantity = Math.max(0, parseFloat(e.target.value) || 0);
+                                const safeQuantity = item.product
+                                  ? Number.isFinite(maxQuantityForItem)
+                                    ? Math.min(typedQuantity, maxQuantityForItem)
+                                    : typedQuantity
+                                  : 0;
+                                handleItemChange(item.id, "quantity", safeQuantity);
+                              }}
+                              disabled={!item.product || isLoadingProducts}
+                              className={fieldCls}
+                              style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                              required
+                            />
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                            Rate ($)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={item.rate || ""}
+                            onChange={(e) =>
+                              handleItemChange(item.id, "rate", parseFloat(e.target.value) || 0)
+                            }
+                            className={fieldCls}
+                            style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                            Disc %
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            placeholder="0"
+                            value={item.discountPercent || ""}
+                            onChange={(e) =>
+                              handleItemChange(item.id, "discountPercent", parseFloat(e.target.value) || 0)
+                            }
+                            className={fieldCls}
+                            style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                            Tax %
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            placeholder="0"
+                            value={item.taxPercent || ""}
+                            onChange={(e) =>
+                              handleItemChange(item.id, "taxPercent", parseFloat(e.target.value) || 0)
+                            }
+                            className={fieldCls}
+                            style={{ MozAppearance: "textfield" } as React.CSSProperties}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                            Line Total
+                          </label>
+                          <div className="flex h-9.5 items-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-900 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white">
+                            {formatCurrency(item.lineTotal)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tile info row */}
+                      {hasTileInfo && (
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 rounded-lg bg-neutral-100 px-3 py-2 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+                          {product?.tilesPerBox != null && product.tilesPerBox > 0 && (
+                            <span>Tiles/box: <strong className="text-neutral-700 dark:text-neutral-300">{product.tilesPerBox}</strong></span>
+                          )}
+                          {product?.coveragePerBox != null && product.coveragePerBox > 0 && (
+                            <span>Coverage/box: <strong className="text-neutral-700 dark:text-neutral-300">{product.coveragePerBox} {product.coveragePerBoxUnit === "sqm" ? "sqm" : "sq ft"}</strong></span>
+                          )}
+                          {product?.stock != null && (
+                            <span>Stock: <strong className="text-neutral-700 dark:text-neutral-300">{product.stock}</strong> {stockUnitLabel}</span>
+                          )}
+                          {product?.stock != null && item.product && isStockRestricted && (
+                            <span>Available to quote: <strong className="text-neutral-700 dark:text-neutral-300">{formatStockQty(maxQuantityForItem)}</strong> {stockUnitLabel}</span>
+                          )}
+                          {!isStockRestricted && item.product && (
+                            <span>Stock check: <strong className="text-neutral-700 dark:text-neutral-300">Skipped (third-party)</strong></span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </motion.div>
           </div>
@@ -1383,6 +1399,14 @@ export default function CreateQuotationPage() {
                     </span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
                       {formatCurrency(subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                      Delivery Cost
+                    </span>
+                    <span className="font-semibold text-neutral-900 dark:text-white">
+                      {formatCurrency(DELIVERY_COST)}
                     </span>
                   </div>
 
