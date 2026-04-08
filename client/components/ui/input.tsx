@@ -26,9 +26,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={inputId}
           className={[
-            "w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors",
-            "placeholder:text-foreground/50",
-            "focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20",
+            "w-full rounded-md border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-colors dark:border-neutral-600 dark:bg-neutral-800 dark:text-white",
+            "placeholder:text-gray-400 dark:placeholder:text-neutral-500",
+            "focus:border-amp-primary focus:bg-white focus:ring-2 focus:ring-amp-primary/20 dark:focus:bg-neutral-800",
             "disabled:cursor-not-allowed disabled:opacity-50",
             isNumberInput &&
               "[appearance:textfield] [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0",
