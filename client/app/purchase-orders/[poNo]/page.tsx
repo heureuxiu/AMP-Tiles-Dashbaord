@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, CheckCircle, ArrowLeft, AlertCircle } from "lucide-react";
+import { ShoppingCart, CheckCircle, ArrowLeft, AlertCircle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -65,6 +65,7 @@ export default function PurchaseOrderDetailPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [receiveMode, setReceiveMode] = useState<"auto" | "manual" | null>(null);
+  const [isPdfLoading, setIsPdfLoading] = useState(false);
   const [poData, setPoData] = useState<PurchaseOrderDetail | null>(null);
 
   useEffect(() => {
@@ -86,6 +87,29 @@ export default function PurchaseOrderDetailPage() {
     };
     fetchPO();
   }, [poId, router]);
+
+  const handleDownloadPDF = async () => {
+    if (!poData) return;
+    try {
+      setIsPdfLoading(true);
+      toast.info("Generating PDF...");
+      const blob = await api.getPurchaseOrderPdfBlob(poData._id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `purchase-order-${poData.poNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded", {
+        description: `${poData.poNumber}.pdf`,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to download PDF";
+      toast.error("Failed to download PDF", { description: msg });
+    } finally {
+      setIsPdfLoading(false);
+    }
+  };
 
   const handleMarkReceived = async (applyStockUpdate = true) => {
     if (!poData) return;
@@ -197,26 +221,38 @@ export default function PurchaseOrderDetailPage() {
             </p>
           </div>
         </div>
-        {!["received", "cancelled"].includes(poData.status) && (
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => handleMarkReceived(true)}
-              disabled={receiveMode !== null}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-            >
-              <CheckCircle className="h-4 w-4" />
-              {receiveMode === "auto" ? "Marking..." : "Receive + Auto Stock"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleMarkReceived(false)}
-              disabled={receiveMode !== null}
-              className="flex items-center gap-2"
-            >
-              {receiveMode === "manual" ? "Marking..." : "Receive (Manual Stock)"}
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleDownloadPDF}
+            disabled={isPdfLoading}
+            className="flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
+            {isPdfLoading ? "Generating..." : "Download PDF"}
+          </Button>
+
+          {!["received", "cancelled"].includes(poData.status) && (
+            <>
+              <Button
+                onClick={() => handleMarkReceived(true)}
+                disabled={receiveMode !== null}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle className="h-4 w-4" />
+                {receiveMode === "auto" ? "Marking..." : "Receive + Auto Stock"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleMarkReceived(false)}
+                disabled={receiveMode !== null}
+                className="flex items-center gap-2"
+              >
+                {receiveMode === "manual" ? "Marking..." : "Receive (Manual Stock)"}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Supplier & PO Info Card */}
