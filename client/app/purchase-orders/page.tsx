@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, Eye, CheckCircle, Plus, Filter, X, Trash2, ChevronDown } from "lucide-react";
+import { ShoppingCart, Eye, CheckCircle, Plus, Filter, X, Trash2, ChevronDown, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -39,8 +39,6 @@ const PO_STATUS_OPTIONS: { value: POStatus; label: string }[] = [
 const PO_STATUS_UPDATE_OPTIONS: { value: POStatus; label: string }[] = [
   { value: "draft", label: "Draft" },
   { value: "sent_to_supplier", label: "Sent to Supplier" },
-  { value: "sent", label: "Sent" },
-  { value: "confirmed", label: "Confirmed" },
   { value: "cancelled", label: "Cancelled" },
 ];
 
@@ -141,6 +139,25 @@ export default function PurchaseOrdersPage() {
     router.push(`/purchase-orders/${id}`);
   };
 
+  const handleDownloadPDF = async (po: PurchaseOrder) => {
+    try {
+      toast.info(`Generating PDF for ${po.poNumber}...`);
+      const blob = await api.getPurchaseOrderPdfBlob(po._id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `purchase-order-${po.poNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded", {
+        description: `${po.poNumber}.pdf`,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to download PDF";
+      toast.error("Failed to download PDF", { description: errorMessage });
+    }
+  };
+
   const handleStatusChange = async (poId: string, newStatus: POStatus) => {
     if (newStatus === "partially_received" || newStatus === "received") {
       toast.error("Use Receive action", {
@@ -152,16 +169,32 @@ export default function PurchaseOrdersPage() {
 
     try {
       setUpdatingStatusId(poId);
-      const response = await api.updatePurchaseOrder(poId, { status: newStatus });
+      const response =
+        newStatus === "sent_to_supplier"
+          ? await api.sendPurchaseOrderToSupplier(poId)
+          : await api.updatePurchaseOrder(poId, { status: newStatus });
       if (response.success) {
-        toast.success("Status updated", {
-          description: `PO status changed to ${PO_STATUS_OPTIONS.find((s) => s.value === newStatus)?.label ?? newStatus}`,
-        });
+        if (newStatus === "sent_to_supplier") {
+          toast.success("Purchase order sent to supplier", {
+            description:
+              response.message ||
+              "The purchase order email has been sent to the supplier and status updated.",
+          });
+        } else {
+          toast.success("Status updated", {
+            description: `PO status changed to ${PO_STATUS_OPTIONS.find((s) => s.value === newStatus)?.label ?? newStatus}`,
+          });
+        }
         fetchData();
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to update status";
-      toast.error("Failed to update status", { description: errorMessage });
+      toast.error(
+        newStatus === "sent_to_supplier"
+          ? "Failed to send purchase order to supplier"
+          : "Failed to update status",
+        { description: errorMessage }
+      );
     } finally {
       setUpdatingStatusId(null);
     }
@@ -487,6 +520,20 @@ export default function PurchaseOrdersPage() {
                               title="View Purchase Order"
                             >
                               <Eye className="h-4 w-4" />
+                            </Button>
+                          </motion.div>
+
+                          {/* Download PDF Button */}
+                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/20"
+                              onClick={() => handleDownloadPDF(po)}
+                              aria-label={`Download ${po.poNumber}`}
+                              title="Download PDF"
+                            >
+                              <Download className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                             </Button>
                           </motion.div>
 
