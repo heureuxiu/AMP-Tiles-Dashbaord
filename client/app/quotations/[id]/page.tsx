@@ -20,6 +20,17 @@ type QuotationStatus =
 
 const CONVERTIBLE_STATUSES: QuotationStatus[] = ["draft", "sent", "accepted"];
 const SQFT_PER_SQM = 10.764;
+const companyInfo = {
+  name: "AMP TILES PTY LTD",
+  abn: "14 690 181 858",
+  address: "Unit 15/55 Anderson Road, Smeaton Grange, NSW 2560",
+};
+const bankInfo = {
+  bank: "NAB",
+  accountName: "AMP TILES PTY LTD",
+  bsb: "082-356",
+  accountNumber: "26-722-1347",
+};
 
 type QuotationItem = {
   _id: string;
@@ -42,8 +53,10 @@ type QuotationData = {
   status: QuotationStatus;
   items: QuotationItem[];
   subtotal: number;
+  discount?: number;
   tax: number;
   taxRate?: number;
+  deliveryCost?: number;
   grandTotal: number;
   convertedToInvoice?: boolean;
 };
@@ -87,6 +100,7 @@ export default function ViewQuotationPage() {
 
   const [quotation, setQuotation] = useState<QuotationData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPdfLoading, setIsPdfLoading] = useState(false);
 
   const fetchQuotation = async () => {
     try {
@@ -168,9 +182,29 @@ export default function ViewQuotationPage() {
     }
   };
 
-  const handleDownloadPDF = () => {
-    toast.info("Generating PDF...");
-    // TODO: Implement PDF generation
+  const handleDownloadPDF = async () => {
+    if (!quotation) return;
+    try {
+      setIsPdfLoading(true);
+      toast.info("Generating PDF...");
+      const blob = await api.getQuotationPdfBlob(quotation._id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `quotation-${quotation.quotationNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded", {
+        description: `${quotation.quotationNumber}.pdf`,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to download PDF";
+      toast.error("Failed to download PDF", {
+        description: errorMessage,
+      });
+    } finally {
+      setIsPdfLoading(false);
+    }
   };
 
   const getStatusBadgeClass = (status: QuotationStatus) => {
@@ -221,6 +255,24 @@ export default function ViewQuotationPage() {
     );
   }
 
+  const subtotal = Number(quotation.subtotal) || 0;
+  const discount = Number(quotation.discount) || 0;
+  const tax = Number(quotation.tax) || 0;
+  const baseTotal = subtotal - discount + tax;
+  const parsedDeliveryCost = Number(quotation.deliveryCost);
+  const fallbackDeliveryCost = Math.max(
+    0,
+    Math.round((Number(quotation.grandTotal) - baseTotal) * 100) / 100
+  );
+  const deliveryCost = Number.isFinite(parsedDeliveryCost)
+    ? Math.max(0, parsedDeliveryCost)
+    : Number.isFinite(fallbackDeliveryCost)
+      ? fallbackDeliveryCost
+      : 295;
+  const grandTotal = Number.isFinite(Number(quotation.grandTotal))
+    ? Number(quotation.grandTotal)
+    : Math.round((baseTotal + deliveryCost) * 100) / 100;
+
   return (
     <div className="space-y-6 p-6 lg:p-8">
       {/* Top Bar */}
@@ -243,9 +295,14 @@ export default function ViewQuotationPage() {
           </div>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
+          <Button
+            variant="outline"
+            onClick={handleDownloadPDF}
+            className="gap-2"
+            disabled={isPdfLoading}
+          >
             <Download className="h-4 w-4" />
-            Download PDF
+            {isPdfLoading ? "Generating..." : "Download PDF"}
           </Button>
           {quotation.status !== "converted" && (
             <>
@@ -437,16 +494,36 @@ export default function ViewQuotationPage() {
                   Subtotal
                 </span>
                 <span className="font-semibold text-neutral-900 dark:text-white">
-                  {formatCurrency(quotation.subtotal)}
+                  {formatCurrency(subtotal)}
                 </span>
               </div>
+
+              {discount > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                    Discount
+                  </span>
+                  <span className="font-semibold text-neutral-900 dark:text-white">
+                    -{formatCurrency(discount)}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between">
                 <span className="text-sm text-neutral-600 dark:text-neutral-400">
                   Tax (GST {quotation.taxRate || 10}%)
                 </span>
                 <span className="font-semibold text-neutral-900 dark:text-white">
-                  {formatCurrency(quotation.tax)}
+                  {formatCurrency(tax)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                  Delivery Cost
+                </span>
+                <span className="font-semibold text-neutral-900 dark:text-white">
+                  {formatCurrency(deliveryCost)}
                 </span>
               </div>
 
@@ -457,9 +534,25 @@ export default function ViewQuotationPage() {
                   Grand Total
                 </span>
                 <span className="text-2xl font-bold text-neutral-900 dark:text-white">
-                  {formatCurrency(quotation.grandTotal)}
+                  {formatCurrency(grandTotal)}
                 </span>
               </div>
+            </div>
+          </div>
+          <div className="mt-4 rounded-2xl border border-neutral-200/60 bg-white p-4 text-xs text-neutral-600 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 dark:text-neutral-300">
+            <p className="font-semibold text-neutral-800 dark:text-neutral-100">
+              {companyInfo.name}
+            </p>
+            <p className="mt-1">{companyInfo.address}</p>
+            <p>ABN: {companyInfo.abn}</p>
+            <div className="mt-3 space-y-1">
+              <p className="font-semibold text-neutral-800 dark:text-neutral-100">
+                Bank Details
+              </p>
+              <p>Bank: {bankInfo.bank}</p>
+              <p>Account Name: {bankInfo.accountName}</p>
+              <p>BSB: {bankInfo.bsb}</p>
+              <p>Account Number: {bankInfo.accountNumber}</p>
             </div>
           </div>
         </motion.div>
