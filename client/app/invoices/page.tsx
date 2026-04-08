@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Receipt, Eye, Download, Search, X, Trash2, Pencil } from "lucide-react";
+import { Receipt, Eye, Download, Search, X, Trash2, Pencil, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +81,7 @@ export default function InvoicesPage() {
   });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
+  const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInvoices();
@@ -183,6 +184,32 @@ export default function InvoicesPage() {
       month: "short",
       year: "numeric",
     });
+  };
+
+  const handleSendInvoiceEmail = async (invoice: Invoice) => {
+    if (!String(invoice.customerEmail || "").trim()) {
+      toast.error("Customer email is missing on this invoice");
+      return;
+    }
+    try {
+      setSendingInvoiceId(invoice._id);
+      const response = await api.sendInvoiceByEmail(invoice._id);
+      if (response.success) {
+        toast.success("Invoice emailed", {
+          description: response.message || `${invoice.invoiceNumber} sent`,
+        });
+      } else {
+        toast.error("Failed to send invoice email");
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to send invoice email";
+      toast.error("Failed to send invoice email", {
+        description: message,
+      });
+    } finally {
+      setSendingInvoiceId(null);
+    }
   };
 
   const formatPaymentStatus = (status?: string) => {
@@ -373,6 +400,29 @@ export default function InvoicesPage() {
                               </Button>
                             </motion.div>
                           )}
+
+                          {/* Email Button */}
+                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-8 w-8 rounded-full ${
+                                invoice.customerEmail
+                                  ? "hover:bg-emerald-100 dark:hover:bg-emerald-900/20"
+                                  : "cursor-not-allowed opacity-50"
+                              }`}
+                              onClick={() => handleSendInvoiceEmail(invoice)}
+                              disabled={!invoice.customerEmail || sendingInvoiceId === invoice._id}
+                              aria-label={`Email ${invoice.invoiceNumber}`}
+                              title={
+                                invoice.customerEmail
+                                  ? "Send Invoice Email"
+                                  : "Customer email missing"
+                              }
+                            >
+                              <Mail className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            </Button>
+                          </motion.div>
 
                           {/* Download PDF Button */}
                           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
