@@ -21,9 +21,17 @@ type POStatus = "draft" | "sent_to_supplier" | "confirmed" | "partially_received
 
 type POItem = {
   _id: string;
-  product?: { name: string; sku: string; unit?: string; coveragePerBox?: number; coveragePerBoxUnit?: string };
+  product?: {
+    name: string;
+    sku: string;
+    size?: string;
+    unit?: string;
+    coveragePerBox?: number;
+    coveragePerBoxUnit?: string;
+  };
   productName: string;
   sku?: string;
+  size?: string;
   unitType?: string;
   quantityOrdered: number;
   rate: number;
@@ -179,7 +187,12 @@ export default function PurchaseOrderDetailPage() {
   const getProductDisplay = (item: POItem) => {
     const name = item.productName || item.product?.name;
     const sku = item.product?.sku;
-    return sku ? `${name} (${sku})` : name || "—";
+    return sku ? `${name} (${sku})` : name || "-";
+  };
+
+  const getItemSize = (item: POItem) => {
+    const size = item.product?.size ?? item.size;
+    return size && String(size).trim().length > 0 ? String(size) : "-";
   };
 
   if (isLoading) {
@@ -363,6 +376,7 @@ export default function PurchaseOrderDetailPage() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Product</TableHead>
+                  <TableHead>Size</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Qty Ordered</TableHead>
                   <TableHead>Cost Rate</TableHead>
@@ -386,18 +400,19 @@ export default function PurchaseOrderDetailPage() {
                   return (
                     <TableRow key={item._id}>
                       <TableCell className="font-medium text-neutral-900 dark:text-white">{getProductDisplay(item)}</TableCell>
+                      <TableCell>{getItemSize(item)}</TableCell>
                       <TableCell>{item.unitType ?? "Box"}</TableCell>
                       <TableCell className="font-semibold">{qtyOrdered}</TableCell>
                       <TableCell>{formatCurrency(item.rate)}</TableCell>
                       <TableCell>{item.discountPercent ?? 0}%</TableCell>
                       <TableCell>{item.taxPercent ?? 0}%</TableCell>
                       <TableCell className="font-semibold">{formatCurrency(item.lineTotal)}</TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400">{item.coverageSqm != null ? `${item.coverageSqm} sq m` : "—"}</TableCell>
+                      <TableCell className="text-neutral-600 dark:text-neutral-400">{item.coverageSqm != null ? `${item.coverageSqm} sq m` : "-"}</TableCell>
                       <TableCell className="text-green-600 dark:text-green-400">{qtyRec}</TableCell>
                       <TableCell>{remaining}</TableCell>
                       <TableCell className="text-amber-600 dark:text-amber-400">{damaged}</TableCell>
-                      <TableCell className="text-xs">{item.batchNumber || "—"}</TableCell>
-                      <TableCell className="text-xs">{item.receivedDate ? formatDate(item.receivedDate) : "—"}</TableCell>
+                      <TableCell className="text-xs">{item.batchNumber || "-"}</TableCell>
+                      <TableCell className="text-xs">{item.receivedDate ? formatDate(item.receivedDate) : "-"}</TableCell>
                     </TableRow>
                   );
                 })}
