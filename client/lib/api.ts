@@ -403,8 +403,10 @@ class ApiClient {
     customerPhone?: string;
     customerEmail?: string;
     customerAddress?: string;
+    deliveryAddress?: string;
     quotationDate?: string;
     validUntil?: string;
+    deliveryCost?: number;
     items: Array<{
       product: string;
       unitType?: string;
@@ -433,8 +435,10 @@ class ApiClient {
     customerPhone?: string;
     customerEmail?: string;
     customerAddress?: string;
+    deliveryAddress?: string;
     quotationDate?: string;
     validUntil?: string;
+    deliveryCost?: number;
     items?: Array<{
       product: string;
       unitType?: string;
@@ -744,8 +748,10 @@ class ApiClient {
     customerPhone?: string;
     customerEmail?: string;
     customerAddress?: string;
+    deliveryAddress?: string;
     invoiceDate?: string;
     dueDate?: string;
+    deliveryCost?: number;
     items: Array<{
       product: string;
       unitType?: string;
@@ -775,8 +781,10 @@ class ApiClient {
     customerPhone?: string;
     customerEmail?: string;
     customerAddress?: string;
+    deliveryAddress?: string;
     invoiceDate?: string;
     dueDate?: string;
+    deliveryCost?: number;
     items?: Array<{
       product: string;
       unitType?: string;
