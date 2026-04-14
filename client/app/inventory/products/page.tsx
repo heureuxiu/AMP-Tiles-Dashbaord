@@ -77,10 +77,10 @@ type Product = {
   profitMargin?: number | null;
 };
 
-const isSqmUnit = (unit?: string) =>
-  String(unit || "")
-    .trim()
-    .toLowerCase() === "sqm";
+const isSqmUnit = (unit?: string) => {
+  const u = String(unit || "").trim().toLowerCase();
+  return u === "sqm" || u === "sq ft";
+};
 
 const normalizeStockQuantity = (value: number, unit: string) => {
   const numericValue = Number.isFinite(value) ? value : 0;
@@ -143,7 +143,7 @@ export default function ProductsPage() {
     pricingUnit: "per_box" as "per_box" | "per_sqft" | "per_sqm" | "per_piece",
     discountSalePrice: null as number | null,
     builderPrice: null as number | null,
-    taxPercent: null as number | null,
+    taxPercent: 10 as number | null,
     costPrice: 0,
   });
 
@@ -171,7 +171,7 @@ export default function ProductsPage() {
     pricingUnit: "per_box" as "per_box" | "per_sqft" | "per_sqm" | "per_piece",
     discountSalePrice: null as number | null,
     builderPrice: null as number | null,
-    taxPercent: null as number | null,
+    taxPercent: 10 as number | null,
     costPrice: 0,
   });
 
@@ -1166,12 +1166,10 @@ export default function ProductsPage() {
                   <select
                     className="flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-800"
                     value={formData.pricingUnit}
-                    onChange={(e) => setFormData({ ...formData, pricingUnit: e.target.value as "per_box" | "per_sqft" | "per_sqm" | "per_piece" })}
+                    onChange={(e) => setFormData({ ...formData, pricingUnit: e.target.value as "per_sqft" | "per_sqm" })}
                   >
-                    <option value="per_box">Per Box</option>
                     <option value="per_sqft">Per Sq Ft</option>
                     <option value="per_sqm">Per Sq Meter</option>
-                    <option value="per_piece">Per Piece</option>
                   </select>
                   <p className="text-xs text-neutral-500">System will auto-convert using coverage per box & tiles per box.</p>
                 </div>
@@ -1233,7 +1231,7 @@ export default function ProductsPage() {
                   <Input
                     type="number"
                     min={0}
-                    step={isSqmUnit(formData.unit) ? 0.01 : 1}
+                    step={0.01}
                     value={formData.stock || ""}
                     onChange={(e) =>
                       setFormData({
@@ -1257,11 +1255,8 @@ export default function ProductsPage() {
                       });
                     }}
                   >
-                    <option value="boxes">Per Box</option>
                     <option value="sq ft">Per Sq Ft</option>
                     <option value="sqm">Per Sq Meter</option>
-                    <option value="piece">Per Piece</option>
-                    <option value="pieces">Per Pieces</option>
                   </select>
                 </div>
               </div>
