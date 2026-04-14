@@ -34,10 +34,19 @@ const bankInfo = {
 
 type QuotationItem = {
   _id: string;
+  product?: {
+    name?: string;
+    sku?: string;
+    description?: string;
+    size?: string;
+  } | null;
   productName: string;
+  size?: string;
   unitType?: string;
   quantity: number;
   rate: number;
+  discountPercent?: number;
+  taxPercent?: number;
   lineTotal: number;
   coverageSqm?: number;
 };
@@ -48,8 +57,12 @@ type QuotationData = {
   customerName: string;
   customerPhone?: string;
   customerEmail?: string;
+  customerAddress?: string;
+  deliveryAddress?: string;
   quotationDate: string;
+  validUntil?: string;
   notes?: string;
+  terms?: string;
   status: QuotationStatus;
   items: QuotationItem[];
   subtotal: number;
@@ -86,12 +99,27 @@ const getDisplayQuantity = (item: QuotationItem) => {
   return formatQty(item.quantity);
 };
 
-const getDisplayUnit = (item: QuotationItem) => {
-  if (item.unitType === "Sq Meter") return "sqm";
-  if (item.unitType === "Sq Ft") return "sq ft";
-  if (item.unitType === "Piece") return "pcs";
-  return "box";
-};
+  const getDisplayUnit = (item: QuotationItem) => {
+    if (item.unitType === "Sq Meter") return "sqm";
+    if (item.unitType === "Sq Ft") return "sq ft";
+    if (item.unitType === "Piece") return "pcs";
+    return "box";
+  };
+
+  const getItemSku = (item: QuotationItem) => {
+    const value = item.product?.sku;
+    return value && String(value).trim().length > 0 ? value : "-";
+  };
+
+  const getItemDescription = (item: QuotationItem) => {
+    const value = item.product?.description;
+    return value && String(value).trim().length > 0 ? value : "-";
+  };
+
+  const getItemSize = (item: QuotationItem) => {
+    const value = item.product?.size ?? item.size;
+    return value && String(value).trim().length > 0 ? String(value) : "-";
+  };
 
 export default function ViewQuotationPage() {
   const params = useParams();
@@ -268,7 +296,7 @@ export default function ViewQuotationPage() {
     ? Math.max(0, parsedDeliveryCost)
     : Number.isFinite(fallbackDeliveryCost)
       ? fallbackDeliveryCost
-      : 295;
+      : 0;
   const grandTotal = Number.isFinite(Number(quotation.grandTotal))
     ? Number(quotation.grandTotal)
     : Math.round((baseTotal + deliveryCost) * 100) / 100;
@@ -370,11 +398,11 @@ export default function ViewQuotationPage() {
               </div>
             </div>
             <div className="p-6 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                    Customer Name
-                  </label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                      Customer Name
+                    </label>
                   <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
                     {quotation.customerName}
                   </p>
@@ -384,22 +412,46 @@ export default function ViewQuotationPage() {
                     Phone Number
                   </label>
                   <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
-                    {quotation.customerPhone || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                    Quotation Date
-                  </label>
-                  <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
-                    {formatDate(quotation.quotationDate)}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                    Quote Number
-                  </label>
-                  <p className="mt-1 text-base font-mono font-semibold text-neutral-900 dark:text-white">
+                      {quotation.customerPhone || "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                      Customer Email
+                    </label>
+                    <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
+                      {quotation.customerEmail || "N/A"}
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                      Delivery Address
+                    </label>
+                    <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
+                      {quotation.deliveryAddress || quotation.customerAddress || "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                      Quotation Date
+                    </label>
+                    <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
+                      {formatDate(quotation.quotationDate)}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                      Valid Until
+                    </label>
+                    <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
+                      {quotation.validUntil ? formatDate(quotation.validUntil) : "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                      Quote Number
+                    </label>
+                    <p className="mt-1 text-base font-mono font-semibold text-neutral-900 dark:text-white">
                     {quotation.quotationNumber}
                   </p>
                 </div>
@@ -411,6 +463,16 @@ export default function ViewQuotationPage() {
                   </label>
                   <p className="mt-1 text-base text-neutral-900 dark:text-white">
                     {quotation.notes}
+                  </p>
+                </div>
+              )}
+              {quotation.terms && (
+                <div>
+                  <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                    Terms
+                  </label>
+                  <p className="mt-1 text-base text-neutral-900 dark:text-white">
+                    {quotation.terms}
                   </p>
                 </div>
               )}
@@ -437,11 +499,26 @@ export default function ViewQuotationPage() {
                       <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                         Product
                       </th>
+                      <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                        SKU
+                      </th>
+                      <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                        Description
+                      </th>
+                      <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                        Size
+                      </th>
+                      <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                        Unit
+                      </th>
                       <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                         Quantity
                       </th>
                       <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                         Rate
+                      </th>
+                      <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                        Tax
                       </th>
                       <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                         Amount
@@ -455,13 +532,28 @@ export default function ViewQuotationPage() {
                         className="border-b border-neutral-100 dark:border-neutral-800"
                       >
                         <td className="py-4 text-neutral-900 dark:text-white">
-                          {item.productName}
+                          {item.productName || item.product?.name || "-"}
+                        </td>
+                        <td className="py-4 text-neutral-600 dark:text-neutral-400">
+                          {getItemSku(item)}
+                        </td>
+                        <td className="py-4 text-neutral-600 dark:text-neutral-400">
+                          {getItemDescription(item)}
+                        </td>
+                        <td className="py-4 text-neutral-600 dark:text-neutral-400">
+                          {getItemSize(item)}
+                        </td>
+                        <td className="py-4 text-neutral-600 dark:text-neutral-400">
+                          {item.unitType || "-"}
                         </td>
                         <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                           {getDisplayQuantity(item)} {getDisplayUnit(item)}
                         </td>
                         <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                           {formatCurrency(item.rate)}
+                        </td>
+                        <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
+                          {`${Number.isFinite(Number(item.taxPercent)) ? Number(item.taxPercent) : (quotation.taxRate || 10)}%`}
                         </td>
                         <td className="py-4 text-right font-semibold text-neutral-900 dark:text-white">
                           {formatCurrency(item.lineTotal)}
