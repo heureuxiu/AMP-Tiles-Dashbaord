@@ -13,7 +13,6 @@ import { api } from "@/lib/api";
 const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
 type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
 const SQFT_PER_SQM = 10.764;
-const DELIVERY_COST = 295;
 
 type Product = {
   _id: string;
@@ -60,10 +59,12 @@ type Quotation = {
   customerPhone?: string;
   customerEmail?: string;
   customerAddress?: string;
+  deliveryAddress?: string;
   quotationDate: string;
   validUntil?: string;
   notes?: string;
   terms?: string;
+  deliveryCost?: number;
   status: QuotationStatus;
   items: Array<{
     _id?: string;
@@ -216,7 +217,7 @@ function calcLineTotal(item: QuotationItem, product?: Product): number {
   const billableQty = getBillableQuantity(item, product);
   const base = billableQty * item.rate;
   const afterDisc = base * (1 - (item.discountPercent || 0) / 100);
-  return Math.round(afterDisc * (1 + (item.taxPercent || 0) / 100) * 100) / 100;
+  return Math.round(afterDisc * (1 + ((item.taxPercent ?? 10) / 100)) * 100) / 100;
 }
 
 function getBoxesFromCoverage(
@@ -380,6 +381,7 @@ export default function EditQuotationPage() {
   const [validUntil, setValidUntil] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
+  const [deliveryCost, setDeliveryCost] = useState<number>(0);
   const [status, setStatus] = useState<QuotationStatus>("draft");
   const [items, setItems] = useState<QuotationItem[]>([]);
 
@@ -408,13 +410,14 @@ export default function EditQuotationPage() {
           setCustomerName(q.customerName || "");
           setCustomerPhone(q.customerPhone || "");
           setCustomerEmail(q.customerEmail || "");
-          setCustomerAddress(q.customerAddress || "");
+          setCustomerAddress(q.deliveryAddress || q.customerAddress || "");
           setQuotationDate(
             q.quotationDate ? q.quotationDate.split("T")[0] : new Date().toISOString().split("T")[0]
           );
           setValidUntil(q.validUntil ? q.validUntil.split("T")[0] : "");
           setNotes(q.notes || "");
           setTerms(q.terms || "");
+          setDeliveryCost(Math.max(0, Number(q.deliveryCost) || 0));
           setStatus(q.status);
 
           const mappedItems: QuotationItem[] = (q.items || []).map((item, index) => {
@@ -429,7 +432,7 @@ export default function EditQuotationPage() {
               quantity: item.quantity || 0,
               rate: item.rate || 0,
               discountPercent: item.discountPercent ?? 0,
-              taxPercent: item.taxPercent ?? 0,
+              taxPercent: item.taxPercent ?? 10,
               lineTotal: item.lineTotal || 0,
               coverageInput: getCoverageInputFromStoredItem(item, matchedProduct),
             };
@@ -446,7 +449,7 @@ export default function EditQuotationPage() {
                     quantity: 0,
                     rate: 0,
                     discountPercent: 0,
-                    taxPercent: 0,
+                    taxPercent: 10,
                     lineTotal: 0,
                     coverageInput: "",
                   },
@@ -580,7 +583,7 @@ export default function EditQuotationPage() {
       quantity: 0,
       rate: 0,
       discountPercent: 0,
-      taxPercent: 0,
+      taxPercent: 10,
       lineTotal: 0,
       coverageInput: "",
     };
@@ -603,7 +606,7 @@ export default function EditQuotationPage() {
     const product = products.find((p) => p._id === productId);
     if (!product) return;
     const rate = product.retailPrice ?? product.price ?? 0;
-    const taxPercent = product.taxPercent ?? 0;
+    const taxPercent = product.taxPercent ?? 10;
     const preferredUnitType = getPreferredUnitType(product);
     let stockMessage: string | null = null;
 
@@ -794,10 +797,12 @@ export default function EditQuotationPage() {
         customerPhone: customerPhone.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
         customerAddress: customerAddress.trim() || undefined,
+        deliveryAddress: customerAddress.trim() || undefined,
         quotationDate,
         validUntil: validUntil || undefined,
         notes: notes.trim() || undefined,
         terms: terms.trim() || undefined,
+        deliveryCost,
         status,
       };
 
@@ -808,7 +813,7 @@ export default function EditQuotationPage() {
           quantity: item.quantity,
           rate: item.rate,
           discountPercent: item.discountPercent || 0,
-          taxPercent: item.taxPercent || 0,
+          taxPercent: item.taxPercent ?? 10,
           coverageSqm: getCoverageSqmForPayload(item, getProduct(item.product)),
         }));
       }
@@ -846,7 +851,7 @@ export default function EditQuotationPage() {
   };
 
   const subtotal = calculateSubtotal();
-  const grandTotal = Math.round((subtotal + DELIVERY_COST) * 100) / 100;
+  const grandTotal = Math.round((subtotal + deliveryCost) * 100) / 100;
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -1009,7 +1014,7 @@ export default function EditQuotationPage() {
                     htmlFor="customerAddress"
                     className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                   >
-                    Customer Address{" "}
+                    Delivery Address{" "}
                     <span className="text-neutral-400">(Optional)</span>
                   </label>
                   <Input
@@ -1309,7 +1314,7 @@ export default function EditQuotationPage() {
                                   min="0"
                                   max="100"
                                   step="0.5"
-                                  value={item.taxPercent || ""}
+                                  value={item.taxPercent ?? ""}
                                   onChange={(e) =>
                                     handleItemChange(
                                       item.id,
@@ -1420,9 +1425,17 @@ export default function EditQuotationPage() {
                     <span className="text-sm text-neutral-600 dark:text-neutral-400">
                       Delivery Cost
                     </span>
-                    <span className="font-semibold text-neutral-900 dark:text-white">
-                      {formatCurrency(DELIVERY_COST)}
-                    </span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={deliveryCost}
+                      onChange={(e) =>
+                        setDeliveryCost(Math.max(0, parseFloat(e.target.value) || 0))
+                      }
+                      disabled={isReadOnly || isSaving}
+                      className="h-8 w-28 text-right"
+                    />
                   </div>
 
                   <div className="border-t border-neutral-200 dark:border-neutral-700"></div>
