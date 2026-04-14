@@ -69,7 +69,7 @@ export default function CreatePurchaseOrderPage() {
     quantityOrdered: 0,
     rate: 0,
     discountPercent: 0,
-    taxPercent: 0,
+    taxPercent: 10,
     lineTotal: 0,
   });
   const [items, setItems] = useState<POItem[]>([createEmptyItem()]);
@@ -139,7 +139,7 @@ export default function CreatePurchaseOrderPage() {
     const q = item.quantityOrdered || 0;
     const r = item.rate || 0;
     const d = item.discountPercent || 0;
-    const t = item.taxPercent || 0;
+    const t = item.taxPercent ?? 10;
     return Math.round(q * r * (1 - d / 100) * (1 + t / 100) * 100) / 100;
   };
 
@@ -607,8 +607,8 @@ export default function CreatePurchaseOrderPage() {
                       min={0}
                       max={100}
                       step={0.5}
-                      placeholder="0"
-                      value={item.taxPercent || ""}
+                      placeholder="10"
+                      value={item.taxPercent ?? ""}
                       onChange={(e) => handleItemChange(item.id, "taxPercent", Number(e.target.value))}
                       disabled={isSaving}
                       className={fieldCls}
