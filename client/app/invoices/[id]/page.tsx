@@ -11,6 +11,10 @@ import { api } from "@/lib/api";
 type InvoiceItem = {
   _id?: string;
   productName: string;
+  product?: {
+    size?: string;
+  };
+  size?: string;
   unitType?: string;
   quantity: number;
   rate: number;
@@ -27,6 +31,7 @@ type InvoiceData = {
   customerPhone?: string;
   customerEmail?: string;
   customerAddress?: string;
+  deliveryAddress?: string;
   invoiceDate: string;
   dueDate?: string;
   quotation?: { quotationNumber: string };
@@ -63,6 +68,11 @@ const formatQty = (value: number) => {
   const rounded = Math.round(numeric * 1000) / 1000;
   if (Number.isInteger(rounded)) return String(rounded);
   return rounded.toFixed(3).replace(/\.?0+$/, "");
+};
+
+const getItemSize = (item: InvoiceItem) => {
+  const value = item.product?.size ?? item.size;
+  return value && String(value).trim().length > 0 ? String(value) : "-";
 };
 
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
@@ -279,7 +289,7 @@ export default function InvoiceDetailPage() {
     ? Math.max(0, parsedDeliveryCost)
     : Number.isFinite(fallbackDeliveryCost)
       ? fallbackDeliveryCost
-      : 295;
+      : 0;
   const grandTotal = invoice.grandTotal ?? Math.round((baseTotal + deliveryCost) * 100) / 100;
   const remainingBalance = invoice.remainingBalance ?? grandTotal;
 
@@ -382,9 +392,9 @@ export default function InvoiceDetailPage() {
                   <p className="font-semibold text-neutral-900 dark:text-white">
                     {invoice.customerName}
                   </p>
-                  {invoice.customerAddress && (
+                  {(invoice.deliveryAddress || invoice.customerAddress) && (
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                      {invoice.customerAddress}
+                      Delivery Address: {invoice.deliveryAddress || invoice.customerAddress}
                     </p>
                   )}
                   {invoice.customerPhone && (
@@ -422,7 +432,7 @@ export default function InvoiceDetailPage() {
                       Status:
                     </span>
                     <span className="capitalize text-neutral-900 dark:text-white">
-                      {invoice.status?.replace(/_/g, " ") ?? "—"}
+                      {invoice.status?.replace(/_/g, " ") ?? "-"}
                     </span>
                   </div>
                   {invoice.quotation?.quotationNumber && (
@@ -446,6 +456,9 @@ export default function InvoiceDetailPage() {
                   <tr className="border-b-2 border-neutral-300 dark:border-neutral-600">
                     <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                       PRODUCT
+                    </th>
+                    <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                      SIZE
                     </th>
                     <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                       UNIT
@@ -477,7 +490,10 @@ export default function InvoiceDetailPage() {
                         {item.productName}
                       </td>
                       <td className="py-4 text-neutral-600 dark:text-neutral-400">
-                        {item.unitType ?? "—"}
+                        {getItemSize(item)}
+                      </td>
+                      <td className="py-4 text-neutral-600 dark:text-neutral-400">
+                        {item.unitType ?? "-"}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                         {getDisplayQuantity(item)}
@@ -486,10 +502,10 @@ export default function InvoiceDetailPage() {
                         {formatCurrency(item.rate)}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
-                        {item.discountPercent != null ? `${item.discountPercent}%` : "—"}
+                        {item.discountPercent != null ? `${item.discountPercent}%` : "-"}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
-                        {item.taxPercent != null ? `${item.taxPercent}%` : "—"}
+                        {item.taxPercent != null ? `${item.taxPercent}%` : "-"}
                       </td>
                       <td className="py-4 text-right font-semibold text-neutral-900 dark:text-white">
                         {formatCurrency(item.lineTotal)}
@@ -559,7 +575,7 @@ export default function InvoiceDetailPage() {
 
             {/* Payment & Status */}
             <div className="mb-8 space-y-6 border-t border-neutral-200 pt-8 dark:border-neutral-700">
-              {/* Payment summary – clear record: Total | Paid | Remaining */}
+              {/* Payment summary - clear record: Total | Paid | Remaining */}
               <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-600 dark:bg-neutral-800/50">
                 <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                   <DollarSign className="h-4 w-4" />
@@ -598,14 +614,14 @@ export default function InvoiceDetailPage() {
                 )}
               </div>
 
-              {/* Record new payment – when there is remaining balance and not cancelled */}
+              {/* Record new payment - when there is remaining balance and not cancelled */}
               {toCents(remainingBalance) > 0 && invoice.status !== "cancelled" && (
                 <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-600 dark:bg-neutral-800/30 print:hidden">
                   <h4 className="mb-3 text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                     Record new payment
                   </h4>
                   <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
-                    Enter the amount received from the client – the remaining balance will update automatically.
+                    Enter the amount received from the client - the remaining balance will update automatically.
                   </p>
                   <label className="mb-3 flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
                     <input
@@ -643,7 +659,7 @@ export default function InvoiceDetailPage() {
                         disabled={isRecordingPayment}
                         className="h-10 rounded-lg border border-neutral-200 bg-white px-3 text-sm dark:border-neutral-600 dark:bg-neutral-800"
                       >
-                        <option value="">— Optional —</option>
+                        <option value="">- Optional -</option>
                         <option value="cash">Cash</option>
                         <option value="card">Card</option>
                         <option value="bank_transfer">Bank Transfer</option>
