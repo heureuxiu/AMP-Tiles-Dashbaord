@@ -12,7 +12,6 @@ import { api } from "@/lib/api";
 const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
 type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
 const SQFT_PER_SQM = 10.764;
-const DELIVERY_COST = 295;
 
 type Product = {
   _id: string;
@@ -185,7 +184,7 @@ function calcLineTotal(item: QuotationItem, product?: Product): number {
   const billableQty = getBillableQuantity(item, product);
   const base = billableQty * item.rate;
   const afterDisc = base * (1 - (item.discountPercent || 0) / 100);
-  return Math.round(afterDisc * (1 + (item.taxPercent || 0) / 100) * 100) / 100;
+  return Math.round(afterDisc * (1 + ((item.taxPercent ?? 10) / 100)) * 100) / 100;
 }
 
 function getBoxesFromCoverage(
@@ -311,7 +310,7 @@ const createEmptyItem = (id?: string): QuotationItem => ({
   rate: 0,
   lineTotal: 0,
   discountPercent: 0,
-  taxPercent: 0,
+  taxPercent: 10,
   coverageInput: "",
 });
 
@@ -340,6 +339,7 @@ export default function CreateQuotationPage() {
     d.setDate(d.getDate() + 7);
     return d.toISOString().split("T")[0];
   });
+  const [deliveryCost, setDeliveryCost] = useState<number>(0);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [items, setItems] = useState<QuotationItem[]>([createEmptyItem("1")]);
@@ -423,7 +423,7 @@ export default function CreateQuotationPage() {
               coverageInput: "",
               quantity: 0,
               rate: 0,
-              taxPercent: 0,
+              taxPercent: 10,
               lineTotal: 0,
               unitType: "Box",
             }
@@ -568,7 +568,7 @@ export default function CreateQuotationPage() {
                 coverageInput: "",
                 quantity: 0,
                 rate: 0,
-                taxPercent: 0,
+                taxPercent: 10,
                 lineTotal: 0,
               }
         )
@@ -581,7 +581,7 @@ export default function CreateQuotationPage() {
     const product = supplierProducts.find((p) => p._id === productId) || getProduct(productId);
     if (!product) return;
     const rate = product.retailPrice ?? product.price ?? 0;
-    const taxPercent = product.taxPercent ?? 0;
+    const taxPercent = product.taxPercent ?? 10;
     const preferredUnitType = getPreferredUnitType(product);
     let stockMessage: string | null = null;
 
@@ -771,17 +771,19 @@ export default function CreateQuotationPage() {
         customerPhone: customerPhone.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
         customerAddress: customerAddress.trim() || undefined,
+        deliveryAddress: customerAddress.trim() || undefined,
         quotationDate,
         validUntil,
         notes: notes.trim() || undefined,
         terms: terms.trim() || undefined,
+        deliveryCost,
         items: validItems.map(item => ({
           product: item.product,
           unitType: item.unitType,
           quantity: item.quantity,
           rate: item.rate,
           discountPercent: item.discountPercent || 0,
-          taxPercent: item.taxPercent || 0,
+          taxPercent: item.taxPercent ?? 10,
           coverageSqm: getCoverageSqmForPayload(item, getProduct(item.product)),
         })),
         status: "draft",
@@ -854,7 +856,7 @@ export default function CreateQuotationPage() {
   };
 
   const subtotal = calculateSubtotal();
-  const grandTotal = Math.round((subtotal + DELIVERY_COST) * 100) / 100;
+  const grandTotal = Math.round((subtotal + deliveryCost) * 100) / 100;
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -969,7 +971,7 @@ export default function CreateQuotationPage() {
                     htmlFor="customerAddress"
                     className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                   >
-                    Customer Address{" "}
+                    Delivery Address{" "}
                     <span className="text-neutral-400">(Optional)</span>
                   </label>
                   <Input
@@ -1310,7 +1312,7 @@ export default function CreateQuotationPage() {
                             min="0"
                             max="100"
                             step="0.5"
-                            placeholder="0"
+                            placeholder="10"
                             value={item.discountPercent || ""}
                             onChange={(e) =>
                               handleItemChange(item.id, "discountPercent", parseFloat(e.target.value) || 0)
@@ -1329,8 +1331,8 @@ export default function CreateQuotationPage() {
                             min="0"
                             max="100"
                             step="0.5"
-                            placeholder="0"
-                            value={item.taxPercent || ""}
+                            placeholder="10"
+                            value={item.taxPercent ?? ""}
                             onChange={(e) =>
                               handleItemChange(item.id, "taxPercent", parseFloat(e.target.value) || 0)
                             }
@@ -1405,9 +1407,17 @@ export default function CreateQuotationPage() {
                     <span className="text-sm text-neutral-600 dark:text-neutral-400">
                       Delivery Cost
                     </span>
-                    <span className="font-semibold text-neutral-900 dark:text-white">
-                      {formatCurrency(DELIVERY_COST)}
-                    </span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={deliveryCost}
+                      onChange={(e) =>
+                        setDeliveryCost(Math.max(0, parseFloat(e.target.value) || 0))
+                      }
+                      disabled={isSaving}
+                      className="h-8 w-28 text-right"
+                    />
                   </div>
 
                   <div className="border-t border-neutral-200 dark:border-neutral-700"></div>
