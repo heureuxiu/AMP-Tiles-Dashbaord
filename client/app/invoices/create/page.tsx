@@ -54,7 +54,7 @@ type InvoiceItem = {
 function calcLineTotal(item: InvoiceItem): number {
   const base = item.quantity * item.rate;
   const afterDisc = base * (1 - (item.discountPercent || 0) / 100);
-  return Math.round(afterDisc * (1 + (item.taxPercent || 0) / 100) * 100) / 100;
+  return Math.round(afterDisc * (1 + ((item.taxPercent ?? 10) / 100)) * 100) / 100;
 }
 
 function getBoxesFromCoverage(
@@ -72,7 +72,6 @@ function getBoxesFromCoverage(
 }
 
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
-const DELIVERY_COST = 295;
 
 export default function CreateInvoicePage() {
   const router = useRouter();
@@ -94,6 +93,7 @@ export default function CreateInvoicePage() {
   const [invoiceStatus, setInvoiceStatus] = useState<string>("confirmed");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [deliveryCost, setDeliveryCost] = useState<number>(0);
 
   const [items, setItems] = useState<InvoiceItem[]>([
     {
@@ -104,7 +104,7 @@ export default function CreateInvoicePage() {
       quantity: 0,
       rate: 0,
       discountPercent: 0,
-      taxPercent: 0,
+      taxPercent: 10,
       lineTotal: 0,
       coverageInput: "",
     },
@@ -140,7 +140,7 @@ export default function CreateInvoicePage() {
         quantity: 0,
         rate: 0,
         discountPercent: 0,
-        taxPercent: 0,
+        taxPercent: 10,
         lineTotal: 0,
         coverageInput: "",
       },
@@ -159,7 +159,7 @@ export default function CreateInvoicePage() {
     const product = products.find((p) => p._id === productId);
     if (!product) return;
     const rate = product.retailPrice ?? product.price ?? 0;
-    const taxPercent = product.taxPercent ?? 0;
+    const taxPercent = product.taxPercent ?? 10;
     setItems(
       items.map((item) =>
         item.id === itemId
@@ -241,7 +241,7 @@ export default function CreateInvoicePage() {
   };
 
   const subtotal = items.reduce((sum, i) => sum + i.lineTotal, 0);
-  const grandTotal = Math.round((subtotal + DELIVERY_COST) * 100) / 100;
+  const grandTotal = Math.round((subtotal + deliveryCost) * 100) / 100;
   const paidCents = toCents(amountPaid || 0);
   const grandTotalCents = toCents(grandTotal);
   const remaining = Math.max(0, grandTotalCents - paidCents) / 100;
@@ -276,6 +276,7 @@ export default function CreateInvoicePage() {
         customerPhone: customerPhone.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
         customerAddress: customerAddress.trim() || undefined,
+        deliveryAddress: customerAddress.trim() || undefined,
         invoiceDate,
         dueDate: dueDate || undefined,
         items: validItems.map((i) => ({
@@ -284,13 +285,14 @@ export default function CreateInvoicePage() {
           quantity: i.quantity,
           rate: i.rate,
           discountPercent: i.discountPercent || 0,
-          taxPercent: i.taxPercent || 0,
+          taxPercent: i.taxPercent ?? 10,
         })),
         notes: notes.trim() || undefined,
         terms: terms.trim() || undefined,
         status: invoiceStatus,
         paymentMethod: paymentMethod || undefined,
         amountPaid: amountPaid || undefined,
+        deliveryCost,
         sendEmail: mode === "save_send",
       };
       const response = await api.createInvoice(payload);
@@ -426,10 +428,10 @@ export default function CreateInvoicePage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Address
+                    Delivery Address
                   </label>
                   <Input
-                    placeholder="Address"
+                    placeholder="Delivery address"
                     value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
                     disabled={isSaving}
@@ -629,7 +631,7 @@ export default function CreateInvoicePage() {
                                 min="0"
                                 max="100"
                                 step="0.5"
-                                placeholder="0"
+                                placeholder="10"
                                 value={item.discountPercent || ""}
                                 onChange={(e) => handleItemChange(item.id, "discountPercent", parseFloat(e.target.value) || 0)}
                                 disabled={isSaving}
@@ -646,8 +648,8 @@ export default function CreateInvoicePage() {
                                 min="0"
                                 max="100"
                                 step="0.5"
-                                placeholder="0"
-                                value={item.taxPercent || ""}
+                                placeholder="10"
+                                value={item.taxPercent ?? ""}
                                 onChange={(e) => handleItemChange(item.id, "taxPercent", parseFloat(e.target.value) || 0)}
                                 disabled={isSaving}
                                 className={fieldCls}
@@ -731,9 +733,17 @@ export default function CreateInvoicePage() {
                     <span className="text-neutral-600 dark:text-neutral-400">
                       Delivery Cost
                     </span>
-                    <span className="font-semibold">
-                      {formatCurrency(DELIVERY_COST)}
-                    </span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={deliveryCost}
+                      onChange={(e) =>
+                        setDeliveryCost(Math.max(0, parseFloat(e.target.value) || 0))
+                      }
+                      disabled={isSaving}
+                      className="h-8 w-28 text-right"
+                    />
                   </div>
                   <div className="border-t border-neutral-200 dark:border-neutral-700 pt-2">
                     <div className="flex justify-between text-base font-semibold">
