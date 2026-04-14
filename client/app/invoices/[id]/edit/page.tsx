@@ -53,7 +53,7 @@ type InvoiceItem = {
 function calcLineTotal(item: InvoiceItem): number {
   const base = item.quantity * item.rate;
   const afterDisc = base * (1 - (item.discountPercent || 0) / 100);
-  return Math.round(afterDisc * (1 + (item.taxPercent || 0) / 100) * 100) / 100;
+  return Math.round(afterDisc * (1 + ((item.taxPercent ?? 10) / 100)) * 100) / 100;
 }
 
 function getBoxesFromCoverage(
@@ -71,7 +71,6 @@ function getBoxesFromCoverage(
 }
 
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
-const DELIVERY_COST = 295;
 
 type FetchedInvoice = {
   _id: string;
@@ -80,6 +79,7 @@ type FetchedInvoice = {
   customerPhone?: string;
   customerEmail?: string;
   customerAddress?: string;
+  deliveryAddress?: string;
   invoiceDate: string;
   dueDate?: string;
   items: Array<{
@@ -97,6 +97,7 @@ type FetchedInvoice = {
   status: string;
   paymentMethod?: string;
   amountPaid?: number;
+  deliveryCost?: number;
   grandTotal?: number;
 };
 
@@ -121,6 +122,7 @@ export default function EditInvoicePage() {
   const [invoiceStatus, setInvoiceStatus] = useState<string>("draft");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [deliveryCost, setDeliveryCost] = useState<number>(0);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [isDraft, setIsDraft] = useState(true);
 
@@ -144,7 +146,7 @@ export default function EditInvoicePage() {
         setCustomerName(inv.customerName || "");
         setCustomerPhone(inv.customerPhone || "");
         setCustomerEmail(inv.customerEmail || "");
-        setCustomerAddress(inv.customerAddress || "");
+        setCustomerAddress(inv.deliveryAddress || inv.customerAddress || "");
         setInvoiceDate(
           inv.invoiceDate
             ? new Date(inv.invoiceDate).toISOString().split("T")[0]
@@ -160,6 +162,7 @@ export default function EditInvoicePage() {
         setInvoiceStatus(inv.status || "draft");
         setPaymentMethod(inv.paymentMethod || "");
         setAmountPaid(inv.amountPaid ?? 0);
+        setDeliveryCost(Math.max(0, Number(inv.deliveryCost) || 0));
         setIsDraft(inv.status === "draft");
 
         const productId = (p: { _id: string } | string) =>
@@ -173,7 +176,7 @@ export default function EditInvoicePage() {
             quantity: it.quantity || 0,
             rate: it.rate || 0,
             discountPercent: it.discountPercent ?? 0,
-            taxPercent: it.taxPercent ?? 0,
+            taxPercent: it.taxPercent ?? 10,
             lineTotal: it.lineTotal || 0,
             coverageInput: "",
           }))
@@ -188,7 +191,7 @@ export default function EditInvoicePage() {
               quantity: 0,
               rate: 0,
               discountPercent: 0,
-              taxPercent: 0,
+              taxPercent: 10,
               lineTotal: 0,
               coverageInput: "",
             },
@@ -218,7 +221,7 @@ export default function EditInvoicePage() {
         quantity: 0,
         rate: 0,
         discountPercent: 0,
-        taxPercent: 0,
+        taxPercent: 10,
         lineTotal: 0,
         coverageInput: "",
       },
@@ -237,7 +240,7 @@ export default function EditInvoicePage() {
     const product = products.find((p) => p._id === productId);
     if (!product) return;
     const rate = product.retailPrice ?? product.price ?? 0;
-    const taxPercent = product.taxPercent ?? 0;
+    const taxPercent = product.taxPercent ?? 10;
     setItems((prev) =>
       prev.map((item) =>
         item.id === itemId
@@ -319,7 +322,7 @@ export default function EditInvoicePage() {
   };
 
   const subtotal = items.reduce((sum, i) => sum + i.lineTotal, 0);
-  const grandTotal = Math.round((subtotal + DELIVERY_COST) * 100) / 100;
+  const grandTotal = Math.round((subtotal + deliveryCost) * 100) / 100;
   const paidCents = toCents(amountPaid || 0);
   const grandTotalCents = toCents(grandTotal);
   const remaining = Math.max(0, grandTotalCents - paidCents) / 100;
@@ -350,6 +353,7 @@ export default function EditInvoicePage() {
         customerPhone: customerPhone.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
         customerAddress: customerAddress.trim() || undefined,
+        deliveryAddress: customerAddress.trim() || undefined,
         invoiceDate,
         dueDate: dueDate || undefined,
         notes: notes.trim() || undefined,
@@ -357,6 +361,7 @@ export default function EditInvoicePage() {
         status: invoiceStatus,
         paymentMethod: paymentMethod || undefined,
         amountPaid: amountPaid || undefined,
+        deliveryCost,
       };
       if (isDraft && validItems.length > 0) {
         payload.items = validItems.map((i) => ({
@@ -365,7 +370,7 @@ export default function EditInvoicePage() {
           quantity: i.quantity,
           rate: i.rate,
           discountPercent: i.discountPercent || 0,
-          taxPercent: i.taxPercent || 0,
+          taxPercent: i.taxPercent ?? 10,
         }));
       }
       await api.updateInvoice(invoiceId, payload);
@@ -486,7 +491,7 @@ export default function EditInvoicePage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Address</label>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Delivery Address</label>
                   <Input
                     value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
@@ -678,7 +683,7 @@ export default function EditInvoicePage() {
                                 min="0"
                                 max="100"
                                 step="0.5"
-                                value={item.taxPercent || ""}
+                                value={item.taxPercent ?? ""}
                                 onChange={(e) =>
                                   handleItemChange(item.id, "taxPercent", parseFloat(e.target.value) || 0)
                                 }
@@ -757,7 +762,17 @@ export default function EditInvoicePage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-neutral-600 dark:text-neutral-400">Delivery Cost</span>
-                    <span className="font-semibold">{formatCurrency(DELIVERY_COST)}</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={deliveryCost}
+                      onChange={(e) =>
+                        setDeliveryCost(Math.max(0, parseFloat(e.target.value) || 0))
+                      }
+                      disabled={isSaving}
+                      className="h-8 w-28 text-right"
+                    />
                   </div>
                   <div className="flex justify-between border-t border-neutral-200 pt-2 dark:border-neutral-700">
                     <span className="font-semibold">Grand Total</span>
