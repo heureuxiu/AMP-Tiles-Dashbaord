@@ -128,7 +128,7 @@ export default function ProductsPage() {
     size: "",
     price: 0,
     stock: 0,
-    unit: "boxes",
+    unit: "sqm",
     image: "",
     supplierType: "own" as "third-party" | "own",
     supplier: "",
@@ -137,10 +137,10 @@ export default function ProductsPage() {
     boxCoveragePackingDetails: "",
     tilesPerBox: 0,
     coveragePerBox: 0,
-    coveragePerBoxUnit: "sqft" as "sqft" | "sqm",
+    coveragePerBoxUnit: "sqm" as "sqft" | "sqm",
     weightPerBox: 0,
     retailPrice: 0,
-    pricingUnit: "per_box" as "per_box" | "per_sqft" | "per_sqm" | "per_piece",
+    pricingUnit: "per_sqm" as "per_box" | "per_sqft" | "per_sqm" | "per_piece",
     discountSalePrice: null as number | null,
     builderPrice: null as number | null,
     taxPercent: 10 as number | null,
@@ -156,7 +156,7 @@ export default function ProductsPage() {
     size: "",
     price: 0,
     stock: 0,
-    unit: "boxes",
+    unit: "sqm",
     image: "",
     supplierType: "own" as "third-party" | "own",
     supplier: "",
@@ -165,10 +165,10 @@ export default function ProductsPage() {
     boxCoveragePackingDetails: "",
     tilesPerBox: 0,
     coveragePerBox: 0,
-    coveragePerBoxUnit: "sqft" as "sqft" | "sqm",
+    coveragePerBoxUnit: "sqm" as "sqft" | "sqm",
     weightPerBox: 0,
     retailPrice: 0,
-    pricingUnit: "per_box" as "per_box" | "per_sqft" | "per_sqm" | "per_piece",
+    pricingUnit: "per_sqm" as "per_box" | "per_sqft" | "per_sqm" | "per_piece",
     discountSalePrice: null as number | null,
     builderPrice: null as number | null,
     taxPercent: 10 as number | null,
@@ -320,7 +320,7 @@ export default function ProductsPage() {
       size: product.size ?? "",
       price: product.price,
       stock: product.stock,
-      unit: product.unit,
+      unit: "sqm",
       image: product.image ?? "",
       supplierType: product.supplierType ?? "own",
       supplier: supplierIdFromProduct,
@@ -329,10 +329,10 @@ export default function ProductsPage() {
       boxCoveragePackingDetails: product.boxCoveragePackingDetails ?? "",
       tilesPerBox: product.tilesPerBox ?? 0,
       coveragePerBox: product.coveragePerBox ?? 0,
-      coveragePerBoxUnit: product.coveragePerBoxUnit ?? "sqft",
+      coveragePerBoxUnit: "sqm",
       weightPerBox: product.weightPerBox ?? 0,
       retailPrice: product.retailPrice ?? product.price,
-      pricingUnit: product.pricingUnit ?? "per_box",
+      pricingUnit: "per_sqm",
       discountSalePrice: product.discountSalePrice ?? null,
       builderPrice: product.builderPrice ?? null,
       taxPercent: product.taxPercent ?? null,
@@ -899,8 +899,8 @@ export default function ProductsPage() {
                         <TableCell className="font-medium text-neutral-900 dark:text-white">
                           {item.retailPrice != null ? `$${Number(item.retailPrice).toFixed(2)}` : item.price != null ? `$${Number(item.price).toFixed(2)}` : "—"}
                         </TableCell>
-                        <TableCell className="hidden text-neutral-600 dark:text-neutral-400 xl:table-cell text-xs capitalize">
-                          {item.pricingUnit ? item.pricingUnit.replace("per_", "per ") : "—"}
+                        <TableCell className="hidden text-neutral-600 dark:text-neutral-400 xl:table-cell text-xs">
+                          per sqm
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1 sm:gap-2">
@@ -916,7 +916,7 @@ export default function ProductsPage() {
                               {formatStockQuantity(item.stock, item.unit)}
                             </span>
                             <span className="text-[10px] text-neutral-500 dark:text-neutral-400 sm:text-xs">
-                              {item.unit}
+                              sqm
                             </span>
                           </div>
                         </TableCell>
@@ -1143,14 +1143,9 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Coverage Unit</label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                    value={formData.coveragePerBoxUnit}
-                    onChange={(e) => setFormData({ ...formData, coveragePerBoxUnit: e.target.value as "sqft" | "sqm" })}
-                  >
-                    <option value="sqft">Sq Ft</option>
-                    <option value="sqm">Sq Meter</option>
-                  </select>
+                  <div className="flex h-9 items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+                    Sq Meter (sqm)
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Weight per Box (kg) (Optional)</label>
@@ -1162,16 +1157,10 @@ export default function ProductsPage() {
               <div className="border-t border-neutral-200 dark:border-neutral-700 pt-3 mt-1">
                 <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-2">Sale (Customer Facing)</p>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Pricing Unit <span className="text-red-500">*</span></label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                    value={formData.pricingUnit}
-                    onChange={(e) => setFormData({ ...formData, pricingUnit: e.target.value as "per_sqft" | "per_sqm" })}
-                  >
-                    <option value="per_sqft">Per Sq Ft</option>
-                    <option value="per_sqm">Per Sq Meter</option>
-                  </select>
-                  <p className="text-xs text-neutral-500">System will auto-convert using coverage per box & tiles per box.</p>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Pricing Unit</label>
+                  <div className="flex h-9 items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+                    Per Sq Meter (sqm)
+                  </div>
                 </div>
                 <div className="grid gap-2 mt-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Retail Price (per selected unit) <span className="text-red-500">*</span></label>
@@ -1227,7 +1216,7 @@ export default function ProductsPage() {
               {/* Stock (optional) */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Stock Qty</label>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Stock Qty (sqm)</label>
                   <Input
                     type="number"
                     min={0}
@@ -1236,28 +1225,16 @@ export default function ProductsPage() {
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        stock: parseStockInput(e.target.value, formData.unit),
+                        stock: parseStockInput(e.target.value, "sqm"),
                       })
                     }
                   />
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Unit</label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                    value={formData.unit || "boxes"}
-                    onChange={(e) => {
-                      const nextUnit = e.target.value;
-                      setFormData({
-                        ...formData,
-                        unit: nextUnit,
-                        stock: normalizeStockQuantity(formData.stock, nextUnit),
-                      });
-                    }}
-                  >
-                    <option value="sq ft">Per Sq Ft</option>
-                    <option value="sqm">Per Sq Meter</option>
-                  </select>
+                  <div className="flex h-9 items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+                    sqm
+                  </div>
                 </div>
               </div>
             </div>
@@ -1302,14 +1279,14 @@ export default function ProductsPage() {
                 <span className="text-neutral-500 dark:text-neutral-400">Supplier</span><span>{(productToView.supplierType ?? "own") === "third-party" ? "Third-Party" : "Own"}{productToView.supplierName ? ` · ${productToView.supplierName}` : ""}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Box / Packing</span><span className="col-span-1">{productToView.boxCoveragePackingDetails ?? "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Tiles per Box</span><span>{productToView.tilesPerBox ?? "—"}</span>
-                <span className="text-neutral-500 dark:text-neutral-400">Coverage per Box</span><span>{productToView.coveragePerBox != null ? `${productToView.coveragePerBox} ${productToView.coveragePerBoxUnit ?? "sqft"}` : "—"}</span>
+                <span className="text-neutral-500 dark:text-neutral-400">Coverage per Box</span><span>{productToView.coveragePerBox != null ? `${productToView.coveragePerBox} sqm` : "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Weight per Box (kg)</span><span>{productToView.weightPerBox ?? "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Retail Price</span><span className="font-medium">${Number(productToView.retailPrice ?? productToView.price ?? 0).toFixed(2)}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Builder Price</span><span>{productToView.builderPrice != null ? `$${Number(productToView.builderPrice).toFixed(2)}` : "—"}</span>
-                <span className="text-neutral-500 dark:text-neutral-400">Pricing Unit</span><span>{productToView.pricingUnit ? String(productToView.pricingUnit).replace("per_", "per ") : "—"}</span>
+                <span className="text-neutral-500 dark:text-neutral-400">Pricing Unit</span><span>per sqm</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Cost Price</span><span>${Number(productToView.costPrice ?? 0).toFixed(2)}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Profit Margin</span><span>{productToView.profitMargin != null ? `${productToView.profitMargin}%` : "—"}</span>
-                <span className="text-neutral-500 dark:text-neutral-400">Stock</span><span>{formatStockQuantity(productToView.stock, productToView.unit)} {productToView.unit}</span>
+                <span className="text-neutral-500 dark:text-neutral-400">Stock</span><span>{formatStockQuantity(productToView.stock, "sqm")} sqm</span>
               </div>
               {productToView.description && (
                 <>
