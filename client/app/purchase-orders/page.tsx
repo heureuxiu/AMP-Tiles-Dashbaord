@@ -207,12 +207,25 @@ export default function PurchaseOrdersPage() {
   ) => {
     try {
       const response = await api.receivePurchaseOrder(id, { applyStockUpdate });
-      if (response.success) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res = response as any;
+      if (res.success) {
+        const receivedSqmTotal = Number(res.receivedSqmTotal);
+        const boxesExact = Number(res.boxesEquivalentTotal);
+        const boxesFull = Number(res.boxesRoundedUpTotal);
+        const conversionSummary =
+          applyStockUpdate &&
+          Number.isFinite(receivedSqmTotal) &&
+          receivedSqmTotal > 0
+            ? ` | Received: ${receivedSqmTotal.toFixed(3)} sqm | Boxes: ${
+                Number.isFinite(boxesExact) ? boxesExact.toFixed(3) : "N/A"
+              } (Full: ${Number.isFinite(boxesFull) ? boxesFull : "N/A"})`
+            : "";
         const successDescription =
-          typeof response.message === "string" && response.message.trim().length > 0
-            ? response.message
+          typeof res.message === "string" && res.message.trim().length > 0
+            ? `${res.message}${conversionSummary}`
             : applyStockUpdate
-            ? `${poNumber} has been marked as received and stock updated`
+            ? `${poNumber} has been marked as received and stock updated${conversionSummary}`
             : `${poNumber} has been marked as received (manual stock update mode)`;
         toast.success(
           applyStockUpdate
