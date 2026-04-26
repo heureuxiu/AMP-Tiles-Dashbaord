@@ -404,6 +404,7 @@ class ApiClient {
     customerEmail?: string;
     customerAddress?: string;
     deliveryAddress?: string;
+    reference?: string;
     quotationDate?: string;
     validUntil?: string;
     deliveryCost?: number;
@@ -436,6 +437,7 @@ class ApiClient {
     customerEmail?: string;
     customerAddress?: string;
     deliveryAddress?: string;
+    reference?: string;
     quotationDate?: string;
     validUntil?: string;
     deliveryCost?: number;
@@ -744,6 +746,7 @@ class ApiClient {
 
   async createInvoice(data: {
     quotation?: string;
+    reference?: string;
     customerName: string;
     customerPhone?: string;
     customerEmail?: string;
@@ -777,6 +780,7 @@ class ApiClient {
   }
 
   async updateInvoice(id: string, data: {
+    reference?: string;
     customerName?: string;
     customerPhone?: string;
     customerEmail?: string;
