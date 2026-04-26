@@ -20,6 +20,7 @@ type QuotationStatus =
 
 const CONVERTIBLE_STATUSES: QuotationStatus[] = ["draft", "sent", "accepted"];
 const SQFT_PER_SQM = 10.764;
+const DELIVERY_GST_RATE = 10;
 const companyInfo = {
   name: "AMP TILES PTY LTD",
   abn: "14 690 181 858",
@@ -59,6 +60,7 @@ type QuotationData = {
   customerEmail?: string;
   customerAddress?: string;
   deliveryAddress?: string;
+  reference?: string;
   quotationDate: string;
   validUntil?: string;
   notes?: string;
@@ -297,9 +299,10 @@ export default function ViewQuotationPage() {
     : Number.isFinite(fallbackDeliveryCost)
       ? fallbackDeliveryCost
       : 0;
+  const deliveryGst = Math.round((deliveryCost * (DELIVERY_GST_RATE / 100)) * 100) / 100;
   const grandTotal = Number.isFinite(Number(quotation.grandTotal))
     ? Number(quotation.grandTotal)
-    : Math.round((baseTotal + deliveryCost) * 100) / 100;
+    : Math.round((baseTotal + deliveryCost + deliveryGst) * 100) / 100;
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -453,6 +456,14 @@ export default function ViewQuotationPage() {
                     </label>
                     <p className="mt-1 text-base font-mono font-semibold text-neutral-900 dark:text-white">
                     {quotation.quotationNumber}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                    Reference
+                  </label>
+                  <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
+                    {quotation.reference || "N/A"}
                   </p>
                 </div>
               </div>
@@ -616,6 +627,14 @@ export default function ViewQuotationPage() {
                 </span>
                 <span className="font-semibold text-neutral-900 dark:text-white">
                   {formatCurrency(deliveryCost)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                  Delivery GST ({DELIVERY_GST_RATE}%)
+                </span>
+                <span className="font-semibold text-neutral-900 dark:text-white">
+                  {formatCurrency(deliveryGst)}
                 </span>
               </div>
 
