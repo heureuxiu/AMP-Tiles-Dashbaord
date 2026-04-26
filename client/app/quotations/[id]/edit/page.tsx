@@ -10,9 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 
-const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
+const UNIT_TYPES = ["Sq Meter"] as const;
 type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
 const SQFT_PER_SQM = 10.764;
+const DELIVERY_GST_RATE = 10;
 
 type Product = {
   _id: string;
@@ -60,6 +61,7 @@ type Quotation = {
   customerEmail?: string;
   customerAddress?: string;
   deliveryAddress?: string;
+  reference?: string;
   quotationDate: string;
   validUntil?: string;
   notes?: string;
@@ -195,46 +197,83 @@ function getSqmPerBox(product?: Product): number {
   return covUnit === "sqm" ? cov : cov / SQFT_PER_SQM;
 }
 
-function getBillableQuantity(item: QuotationItem, product?: Product): number {
-  const quantity = Number(item.quantity) || 0;
-  if (!product) return quantity;
+function getTilesPerBox(product?: Product): number {
+  if (!product) return 0;
+  const tilesPerBox = Number(product.tilesPerBox) || 0;
+  return tilesPerBox > 0 ? tilesPerBox : 0;
+}
+
+function getSqmPerPiece(product?: Product): number {
+  const sqmPerBox = getSqmPerBox(product);
+  const tilesPerBox = getTilesPerBox(product);
+  if (sqmPerBox <= 0 || tilesPerBox <= 0) return 0;
+  return sqmPerBox / tilesPerBox;
+}
+
+function getRatePerSqm(product?: Product): number {
+  if (!product) return 0;
+
+  const baseRate = Number(product.retailPrice ?? product.price) || 0;
+  if (baseRate <= 0) return 0;
+
+  const pricingUnit = product.pricingUnit || "per_box";
+  if (pricingUnit === "per_sqm") return baseRate;
+  if (pricingUnit === "per_sqft") return baseRate * SQFT_PER_SQM;
 
   const sqmPerBox = getSqmPerBox(product);
-  const pricingUnit = product.pricingUnit || "per_box";
-
-  if (pricingUnit === "per_sqm") {
-    return sqmPerBox > 0 ? quantity * sqmPerBox : quantity;
+  if (pricingUnit === "per_box") {
+    return sqmPerBox > 0 ? baseRate / sqmPerBox : baseRate;
   }
 
-  if (pricingUnit === "per_sqft") {
-    return sqmPerBox > 0 ? quantity * sqmPerBox * SQFT_PER_SQM : quantity;
+  const sqmPerPiece = getSqmPerPiece(product);
+  if (pricingUnit === "per_piece") {
+    return sqmPerPiece > 0 ? baseRate / sqmPerPiece : baseRate;
   }
 
-  return quantity;
+  return baseRate;
 }
 
-function calcLineTotal(item: QuotationItem, product?: Product): number {
-  const billableQty = getBillableQuantity(item, product);
-  const base = billableQty * item.rate;
-  const afterDisc = base * (1 - (item.discountPercent || 0) / 100);
-  return Math.round(afterDisc * (1 + ((item.taxPercent ?? 10) / 100)) * 100) / 100;
-}
-
-function getBoxesFromCoverage(
-  coverageValue: number,
-  unitType: string,
-  product: Product
+function getStoredRatePerSqm(
+  item: Quotation["items"][number],
+  product?: Product
 ): number {
-  const cov = product.coveragePerBox;
-  const covUnit = normalizeCoverageUnit(
-    product.coveragePerBoxUnit,
-    product.pricingUnit
-  );
-  if (!cov || cov <= 0) return 0;
-  let coverageInSqm = coverageValue;
-  if (unitType === "Sq Ft") coverageInSqm = coverageValue / SQFT_PER_SQM;
-  const sqmPerBox = covUnit === "sqm" ? cov : cov / SQFT_PER_SQM;
-  return Math.ceil(coverageInSqm / sqmPerBox) || 0;
+  const baseRate = Number(item?.rate) || 0;
+  if (baseRate <= 0) return 0;
+
+  const itemUnit = normalizeItemUnitType(item?.unitType);
+  if (itemUnit === "sqm") return baseRate;
+  if (itemUnit === "sqft") return baseRate * SQFT_PER_SQM;
+
+  const sqmPerBox = getSqmPerBox(product);
+  if (itemUnit === "box") {
+    return sqmPerBox > 0 ? baseRate / sqmPerBox : baseRate;
+  }
+
+  const sqmPerPiece = getSqmPerPiece(product);
+  if (itemUnit === "piece") {
+    return sqmPerPiece > 0 ? baseRate / sqmPerPiece : baseRate;
+  }
+
+  return baseRate;
+}
+
+function getBillableQuantity(item: QuotationItem): number {
+  return Number(item.quantity) || 0;
+}
+
+function calcLineTotal(item: QuotationItem): number {
+  const billableQty = getBillableQuantity(item);
+  const base = billableQty * item.rate;
+  const taxPercent = Number(item.taxPercent ?? 10);
+  const taxAmount = base * (taxPercent / 100);
+  return Math.round((base + taxAmount) * 100) / 100;
+}
+
+function getBoxesFromSqm(sqmValue: number, product?: Product): number | null {
+  const sqmPerBox = getSqmPerBox(product);
+  if (sqmPerBox <= 0) return null;
+  if (!Number.isFinite(sqmValue) || sqmValue <= 0) return null;
+  return sqmValue / sqmPerBox;
 }
 
 function formatQty(value: number): string {
@@ -245,32 +284,33 @@ function formatQty(value: number): string {
 }
 
 function getItemCoverageSqm(product: Product, item: QuotationItem): number | null {
+  const explicitCoverageSqm = Number((item as { coverageSqm?: number }).coverageSqm);
+  if (Number.isFinite(explicitCoverageSqm) && explicitCoverageSqm > 0) {
+    return explicitCoverageSqm;
+  }
   const quantity = Number(item.quantity) || 0;
-  const itemUnit = normalizeItemUnitType(item.unitType);
-  const sqmPerBox = getSqmPerBox(product);
-  const hasCoveragePerBox = sqmPerBox > 0;
-
-  if (itemUnit === "box") {
-    return hasCoveragePerBox ? quantity * sqmPerBox : null;
-  }
-  if (itemUnit === "sqm") {
-    return hasCoveragePerBox ? quantity * sqmPerBox : quantity;
-  }
-  if (itemUnit === "sqft") {
-    return hasCoveragePerBox ? quantity * sqmPerBox : quantity / SQFT_PER_SQM;
-  }
-  return null;
+  return quantity > 0 ? quantity : null;
 }
 
 function getItemStockDemand(product: Product, item: QuotationItem): number {
   const quantity = Number(item.quantity) || 0;
-  const stockUnit = normalizeStockUnit(product.unit, product.pricingUnit);
-  if (stockUnit === "box" || stockUnit === "piece") return quantity;
-
   const coverageSqm = getItemCoverageSqm(product, item);
   if (coverageSqm == null) return quantity;
+  const stockUnit = normalizeStockUnit(product.unit, product.pricingUnit);
   if (stockUnit === "sqm") return coverageSqm;
-  return coverageSqm * SQFT_PER_SQM;
+  if (stockUnit === "sqft") return coverageSqm * SQFT_PER_SQM;
+
+  const sqmPerBox = getSqmPerBox(product);
+  if (stockUnit === "box") {
+    return sqmPerBox > 0 ? coverageSqm / sqmPerBox : quantity;
+  }
+
+  const sqmPerPiece = getSqmPerPiece(product);
+  if (stockUnit === "piece") {
+    return sqmPerPiece > 0 ? coverageSqm / sqmPerPiece : quantity;
+  }
+
+  return quantity;
 }
 
 function getCoverageSqmForPayload(
@@ -278,82 +318,65 @@ function getCoverageSqmForPayload(
   product?: Product
 ): number | undefined {
   if (!product) return undefined;
-
-  const coverageInput = Number(item.coverageInput);
-  if (item.unitType === "Sq Meter" && Number.isFinite(coverageInput) && coverageInput > 0) {
-    return roundQty(coverageInput);
+  const derivedCoverageSqm = getItemCoverageSqm(product, item);
+  if (derivedCoverageSqm != null && derivedCoverageSqm > 0) {
+    return roundQty(derivedCoverageSqm);
   }
-  if (item.unitType === "Sq Ft" && Number.isFinite(coverageInput) && coverageInput > 0) {
-    return roundQty(coverageInput / SQFT_PER_SQM);
-  }
-
-  if (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") {
-    const derivedCoverageSqm = getItemCoverageSqm(product, item);
-    if (derivedCoverageSqm != null && derivedCoverageSqm > 0) {
-      return roundQty(derivedCoverageSqm);
-    }
-  }
-
   return undefined;
 }
 
-function getCoverageInputFromStoredItem(
+function getStoredQuantitySqm(
   item: Quotation["items"][number],
   product?: Product
-): string {
-  if (!item || (item.unitType !== "Sq Meter" && item.unitType !== "Sq Ft")) {
-    return "";
-  }
+): number {
+  if (!item) return 0;
 
   const explicitCoverageSqm = Number(item.coverageSqm);
   if (Number.isFinite(explicitCoverageSqm) && explicitCoverageSqm > 0) {
-    if (item.unitType === "Sq Ft") {
-      return formatQty(explicitCoverageSqm * SQFT_PER_SQM);
-    }
-    return formatQty(explicitCoverageSqm);
+    return roundQty(explicitCoverageSqm);
   }
 
   const quantity = Number(item.quantity) || 0;
+  const itemUnit = normalizeItemUnitType(item.unitType);
   const sqmPerBox = getSqmPerBox(product);
-  if (sqmPerBox > 0) {
-    const derivedCoverageSqm = quantity * sqmPerBox;
-    if (item.unitType === "Sq Ft") {
-      return formatQty(derivedCoverageSqm * SQFT_PER_SQM);
-    }
-    return formatQty(derivedCoverageSqm);
-  }
+  const sqmPerPiece = getSqmPerPiece(product);
 
-  if (item.unitType === "Sq Ft") return formatQty(quantity);
-  return formatQty(quantity);
+  if (itemUnit === "sqm") {
+    return roundQty(quantity);
+  }
+  if (itemUnit === "sqft") {
+    return roundQty(quantity / SQFT_PER_SQM);
+  }
+  if (itemUnit === "box") {
+    return roundQty(sqmPerBox > 0 ? quantity * sqmPerBox : quantity);
+  }
+  if (itemUnit === "piece") {
+    return roundQty(sqmPerPiece > 0 ? quantity * sqmPerPiece : quantity);
+  }
+  return roundQty(quantity);
 }
 
 function getMaxQuantityFromAvailableStock(
   product: Product,
-  item: QuotationItem,
   availableStockInUnit: number
 ): number {
   const safeAvailable = Math.max(0, availableStockInUnit || 0);
   const stockUnit = normalizeStockUnit(product.unit, product.pricingUnit);
-  const itemUnit = normalizeItemUnitType(item.unitType);
   const sqmPerBox = getSqmPerBox(product);
-  const hasCoveragePerBox = sqmPerBox > 0;
-
-  if (stockUnit === "box" || stockUnit === "piece") {
-    return safeAvailable;
-  }
+  const sqmPerPiece = getSqmPerPiece(product);
 
   if (stockUnit === "sqm") {
-    if (hasCoveragePerBox) {
-      return safeAvailable / sqmPerBox;
-    }
-    if (itemUnit === "sqft") return safeAvailable * SQFT_PER_SQM;
     return safeAvailable;
   }
-
-  if (hasCoveragePerBox) {
-    return safeAvailable / (sqmPerBox * SQFT_PER_SQM);
+  if (stockUnit === "sqft") {
+    return safeAvailable / SQFT_PER_SQM;
   }
-  if (itemUnit === "sqm") return safeAvailable / SQFT_PER_SQM;
+  if (stockUnit === "box") {
+    return sqmPerBox > 0 ? safeAvailable * sqmPerBox : safeAvailable;
+  }
+  if (stockUnit === "piece") {
+    return sqmPerPiece > 0 ? safeAvailable * sqmPerPiece : safeAvailable;
+  }
   return safeAvailable;
 }
 
@@ -377,6 +400,7 @@ export default function EditQuotationPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [reference, setReference] = useState("");
   const [quotationDate, setQuotationDate] = useState("");
   const [validUntil, setValidUntil] = useState("");
   const [notes, setNotes] = useState("");
@@ -411,6 +435,7 @@ export default function EditQuotationPage() {
           setCustomerPhone(q.customerPhone || "");
           setCustomerEmail(q.customerEmail || "");
           setCustomerAddress(q.deliveryAddress || q.customerAddress || "");
+          setReference(q.reference || "");
           setQuotationDate(
             q.quotationDate ? q.quotationDate.split("T")[0] : new Date().toISOString().split("T")[0]
           );
@@ -424,17 +449,23 @@ export default function EditQuotationPage() {
             const productId =
               typeof item.product === "string" ? item.product : item.product?._id;
             const matchedProduct = productsList.find((product) => product._id === productId);
-            return {
+            const quantitySqm = getStoredQuantitySqm(item, matchedProduct);
+            const rate = getStoredRatePerSqm(item, matchedProduct);
+            const normalizedItem: QuotationItem = {
               id: `${item._id || index}`,
               product: productId || "",
               productName: item.productName || "",
-              unitType: item.unitType || "Box",
-              quantity: item.quantity || 0,
-              rate: item.rate || 0,
-              discountPercent: item.discountPercent ?? 0,
+              unitType: "Sq Meter",
+              quantity: quantitySqm,
+              rate,
+              discountPercent: 0,
               taxPercent: item.taxPercent ?? 10,
-              lineTotal: item.lineTotal || 0,
-              coverageInput: getCoverageInputFromStoredItem(item, matchedProduct),
+              lineTotal: 0,
+              coverageInput: "",
+            };
+            return {
+              ...normalizedItem,
+              lineTotal: calcLineTotal(normalizedItem),
             };
           });
           setItems(
@@ -445,7 +476,7 @@ export default function EditQuotationPage() {
                     id: "1",
                     product: "",
                     productName: "",
-                    unitType: "Box",
+                    unitType: "Sq Meter",
                     quantity: 0,
                     rate: 0,
                     discountPercent: 0,
@@ -471,21 +502,9 @@ export default function EditQuotationPage() {
   }, [quotationId]);
 
   const getProduct = (id: string) => products.find((p) => p._id === id);
-  const getPreferredUnitType = (product?: Product) => {
-    switch (product?.pricingUnit) {
-      case "per_sqm":
-        return "Sq Meter";
-      case "per_sqft":
-        return "Sq Ft";
-      case "per_piece":
-        return "Piece";
-      default:
-        return "Box";
-    }
-  };
+  const getPreferredUnitType = () => "Sq Meter";
   const getStockUnitLabel = (product?: Product) => product?.unit || "boxes";
-  const isStockRestrictedProduct = (product?: Product) =>
-    (product?.supplierType || "own") !== "third-party";
+  const isStockRestrictedProduct = (product?: Product) => Boolean(product);
 
   const getMaxQuantityForItem = (
     currentItems: QuotationItem[],
@@ -496,18 +515,13 @@ export default function EditQuotationPage() {
     if (!product) return 0;
     if (!isStockRestrictedProduct(product)) return Number.POSITIVE_INFINITY;
 
-    const currentItem = currentItems.find((item) => item.id === itemId);
-    if (!currentItem) return 0;
-
     const available = Number(product.stock ?? 0);
     const usedInOtherRows = currentItems.reduce((sum, item) => {
       if (item.id === itemId || item.product !== productId) return sum;
       return sum + getItemStockDemand(product, item);
     }, 0);
     const availableForCurrentRow = roundQty(Math.max(0, available - usedInOtherRows));
-    return roundQty(
-      getMaxQuantityFromAvailableStock(product, currentItem, availableForCurrentRow)
-    );
+    return roundQty(getMaxQuantityFromAvailableStock(product, availableForCurrentRow));
   };
 
   const clampQuantityToStock = (
@@ -566,7 +580,13 @@ export default function EditQuotationPage() {
       const requested = roundQty(entry.requested);
       const available = roundQty(entry.available);
       if (requested > available) {
-        return `${entry.product.name}: requested ${formatStockQty(requested)}, available ${formatStockQty(available)} ${getStockUnitLabel(entry.product)}`;
+        const requestedSqm = roundQty(
+          getMaxQuantityFromAvailableStock(entry.product, requested)
+        );
+        const availableSqm = roundQty(
+          getMaxQuantityFromAvailableStock(entry.product, available)
+        );
+        return `${entry.product.name}: requested ${formatStockQty(requestedSqm)} sqm, available ${formatStockQty(availableSqm)} sqm`;
       }
     }
 
@@ -579,7 +599,7 @@ export default function EditQuotationPage() {
       id: Date.now().toString(),
       product: "",
       productName: "",
-      unitType: "Box",
+      unitType: "Sq Meter",
       quantity: 0,
       rate: 0,
       discountPercent: 0,
@@ -605,9 +625,9 @@ export default function EditQuotationPage() {
     if (isReadOnly) return;
     const product = products.find((p) => p._id === productId);
     if (!product) return;
-    const rate = product.retailPrice ?? product.price ?? 0;
-    const taxPercent = product.taxPercent ?? 10;
-    const preferredUnitType = getPreferredUnitType(product);
+    const rate = getRatePerSqm(product);
+    const taxPercent = 10;
+    const preferredUnitType = getPreferredUnitType();
     let stockMessage: string | null = null;
 
     setItems((prev) =>
@@ -618,7 +638,7 @@ export default function EditQuotationPage() {
         const { quantity: safeQuantity, wasClamped, maxQuantity } =
           clampQuantityToStock(prev, itemId, productId, requestedQuantity);
         if (wasClamped && !stockMessage) {
-          stockMessage = `Only ${formatStockQty(maxQuantity)} ${getStockUnitLabel(product)} available for ${product.name}`;
+          stockMessage = `Only ${formatStockQty(maxQuantity)} sqm available for ${product.name}`;
         }
 
         const next = {
@@ -633,7 +653,7 @@ export default function EditQuotationPage() {
         };
         return {
           ...next,
-          lineTotal: calcLineTotal(next, product),
+          lineTotal: calcLineTotal(next),
         };
       })
     );
@@ -657,34 +677,7 @@ export default function EditQuotationPage() {
         if (item.id !== itemId) return item;
         const next = { ...item, [field]: value };
         const product = next.product ? getProduct(next.product) : undefined;
-
-        if (field === "unitType" && product) {
-          if (
-            (next.unitType === "Sq Meter" || next.unitType === "Sq Ft") &&
-            (product.coveragePerBox ?? 0) > 0
-          ) {
-            const coverageNum = parseFloat(next.coverageInput) || 0;
-            next.quantity =
-              coverageNum > 0
-                ? getBoxesFromCoverage(coverageNum, next.unitType, product)
-                : 0;
-          } else {
-            next.coverageInput = "";
-          }
-        }
-
-        if (field === "coverageInput" && typeof value === "string") {
-          const num = parseFloat(value) || 0;
-          if (
-            product &&
-            (next.unitType === "Sq Meter" || next.unitType === "Sq Ft") &&
-            num > 0
-          ) {
-            next.quantity = getBoxesFromCoverage(num, next.unitType, product);
-          } else if (field === "coverageInput") {
-            next.quantity = 0;
-          }
-        }
+        next.unitType = "Sq Meter";
 
         if (next.product) {
           const requestedQuantity = Number(next.quantity) || 0;
@@ -693,7 +686,7 @@ export default function EditQuotationPage() {
           next.quantity = safeQuantity;
 
           if (wasClamped && !stockMessage && product) {
-            stockMessage = `Only ${formatStockQty(maxQuantity)} ${getStockUnitLabel(product)} available for ${product.name}`;
+            stockMessage = `Only ${formatStockQty(maxQuantity)} sqm available for ${product.name}`;
           }
         }
 
@@ -702,52 +695,15 @@ export default function EditQuotationPage() {
           field === "rate" ||
           field === "discountPercent" ||
           field === "taxPercent" ||
-          field === "coverageInput" ||
           field === "unitType"
         ) {
-          next.lineTotal = calcLineTotal(next, product);
+          next.lineTotal = calcLineTotal(next);
         }
 
         return next;
       })
     );
 
-    if (stockMessage) {
-      toast.error("Insufficient stock", {
-        description: stockMessage,
-      });
-    }
-  };
-
-  const handleCoverageBlur = (itemId: string) => {
-    if (isReadOnly) return;
-    const item = items.find((i) => i.id === itemId);
-    if (!item?.coverageInput) return;
-    const product = getProduct(item.product);
-    if (
-      !product ||
-      (item.unitType !== "Sq Meter" && item.unitType !== "Sq Ft")
-    )
-      return;
-    const num = parseFloat(item.coverageInput) || 0;
-    if (num <= 0) return;
-    let stockMessage: string | null = null;
-    setItems((prev) =>
-      prev.map((i) => {
-        if (i.id !== itemId) return i;
-        const boxes = getBoxesFromCoverage(num, item.unitType, product);
-        const { quantity: safeQuantity, wasClamped, maxQuantity } =
-          clampQuantityToStock(prev, itemId, item.product, boxes);
-        if (wasClamped && !stockMessage) {
-          stockMessage = `Only ${formatStockQty(maxQuantity)} ${getStockUnitLabel(product)} available for ${product.name}`;
-        }
-        return {
-          ...i,
-          quantity: safeQuantity,
-          lineTotal: calcLineTotal({ ...i, quantity: safeQuantity }, product),
-        };
-      })
-    );
     if (stockMessage) {
       toast.error("Insufficient stock", {
         description: stockMessage,
@@ -798,6 +754,7 @@ export default function EditQuotationPage() {
         customerEmail: customerEmail.trim() || undefined,
         customerAddress: customerAddress.trim() || undefined,
         deliveryAddress: customerAddress.trim() || undefined,
+        reference: reference.trim() || undefined,
         quotationDate,
         validUntil: validUntil || undefined,
         notes: notes.trim() || undefined,
@@ -809,10 +766,10 @@ export default function EditQuotationPage() {
       if (!isReadOnly && validItems.length > 0) {
         quotationData.items = validItems.map((item) => ({
           product: item.product,
-          unitType: item.unitType,
+          unitType: "Sq Meter",
           quantity: item.quantity,
           rate: item.rate,
-          discountPercent: item.discountPercent || 0,
+          discountPercent: 0,
           taxPercent: item.taxPercent ?? 10,
           coverageSqm: getCoverageSqmForPayload(item, getProduct(item.product)),
         }));
@@ -851,7 +808,8 @@ export default function EditQuotationPage() {
   };
 
   const subtotal = calculateSubtotal();
-  const grandTotal = Math.round((subtotal + deliveryCost) * 100) / 100;
+  const deliveryGst = Math.round((deliveryCost * (DELIVERY_GST_RATE / 100)) * 100) / 100;
+  const grandTotal = Math.round((subtotal + deliveryCost + deliveryGst) * 100) / 100;
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -1026,6 +984,22 @@ export default function EditQuotationPage() {
                   />
                 </div>
 
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="reference"
+                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                  >
+                    Reference <span className="text-neutral-400">(Optional)</span>
+                  </label>
+                  <Input
+                    id="reference"
+                    placeholder="Client reference"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    disabled={isReadOnly || isSaving}
+                  />
+                </div>
+
                 {/* Dates */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
@@ -1145,10 +1119,10 @@ export default function EditQuotationPage() {
                           Product
                         </th>
                         <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Quantity
+                          Qty (sqm)
                         </th>
                         <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Rate
+                          Rate ($/sqm)
                         </th>
                         <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                           Line Total
@@ -1160,7 +1134,7 @@ export default function EditQuotationPage() {
                       {items.map((item) => {
                         const product = getProduct(item.product);
                         const isStockRestricted = isStockRestrictedProduct(product);
-                        const isUnitLocked = Boolean(product?.pricingUnit);
+                        const isUnitLocked = true;
                         const stockUnitLabel = getStockUnitLabel(product);
                         const maxQuantityForItem = item.product
                           ? getMaxQuantityForItem(items, item.id, item.product)
@@ -1174,11 +1148,7 @@ export default function EditQuotationPage() {
                           ((product.tilesPerBox ?? 0) > 0 ||
                             (product.coveragePerBox ?? 0) > 0 ||
                             (product.stock ?? 0) > 0);
-                        const showCoverageInput =
-                          (item.unitType === "Sq Meter" ||
-                            item.unitType === "Sq Ft") &&
-                          product &&
-                          (product.coveragePerBox ?? 0) > 0;
+                        const estimatedBoxes = getBoxesFromSqm(item.quantity, product);
                         return (
                           <Fragment key={item.id}>
                             <tr className="border-b border-neutral-100 dark:border-neutral-800">
@@ -1217,59 +1187,33 @@ export default function EditQuotationPage() {
                                 </select>
                               </td>
                               <td className="py-3 pr-2 align-top">
-                                {showCoverageInput ? (
-                                  <div className="space-y-1">
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      placeholder={
-                                        item.unitType === "Sq Meter" ? "e.g. 20" : "e.g. 215"
-                                      }
-                                      value={item.coverageInput}
-                                      onChange={(e) =>
-                                        handleItemChange(
-                                          item.id,
-                                          "coverageInput",
-                                          e.target.value
-                                        )
-                                      }
-                                      onBlur={() => handleCoverageBlur(item.id)}
-                                      disabled={isReadOnly || isSaving}
-                                      className="h-9 w-20 text-sm"
-                                    />
-                                    <span className="text-xs text-neutral-500">
-                                      → {formatQty(item.quantity) || "0"} box
-                                      {item.quantity === 1 ? "" : "es"}
-                                    </span>
-                                  </div>
-                                ) : (
+                                <div className="space-y-1">
                                   <Input
                                     type="number"
                                     min="0"
                                     max={maxQuantityLimit}
-                                    step="1"
-                                    placeholder={item.product ? "0" : "Select product first"}
+                                    step="0.001"
+                                    placeholder={item.product ? "e.g. 32" : "Select product first"}
                                     value={item.quantity || ""}
                                     onChange={(e) => {
                                       const typedQuantity =
                                         Math.max(0, parseFloat(e.target.value) || 0);
-                                      const safeQuantity = item.product
-                                        ? Number.isFinite(maxQuantityForItem)
-                                          ? Math.min(typedQuantity, maxQuantityForItem)
-                                          : typedQuantity
-                                        : 0;
                                       handleItemChange(
                                         item.id,
                                         "quantity",
-                                        safeQuantity
+                                        typedQuantity
                                       );
                                     }}
                                     disabled={isReadOnly || isSaving || !item.product}
                                     className="h-9 w-20 text-sm"
                                     required
                                   />
-                                )}
+                                  {estimatedBoxes != null && (
+                                    <span className="text-xs text-neutral-500">
+                                      ≈ {formatQty(estimatedBoxes) || "0"} boxes
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-3 pr-2 align-top">
                                 <Input
@@ -1296,15 +1240,9 @@ export default function EditQuotationPage() {
                                   min="0"
                                   max="100"
                                   step="0.5"
-                                  value={item.discountPercent || ""}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      item.id,
-                                      "discountPercent",
-                                      parseFloat(e.target.value) || 0
-                                    )
-                                  }
-                                  disabled={isReadOnly || isSaving}
+                                  value={0}
+                                  readOnly
+                                  disabled
                                   className="h-9 w-16 text-sm"
                                 />
                               </td>
@@ -1314,7 +1252,7 @@ export default function EditQuotationPage() {
                                   min="0"
                                   max="100"
                                   step="0.5"
-                                  value={item.taxPercent ?? ""}
+                                  value={item.taxPercent ?? 10}
                                   onChange={(e) =>
                                     handleItemChange(
                                       item.id,
@@ -1375,7 +1313,7 @@ export default function EditQuotationPage() {
                                   {product?.stock != null && item.product && isStockRestricted && (
                                     <span className="mr-4">
                                       Available to quote now:{" "}
-                                      <strong>{formatStockQty(maxQuantityForItem)}</strong> {stockUnitLabel}
+                                      <strong>{formatStockQty(maxQuantityForItem)}</strong> sqm
                                     </span>
                                   )}
                                   {!isStockRestricted && item.product && (
@@ -1436,6 +1374,14 @@ export default function EditQuotationPage() {
                       disabled={isReadOnly || isSaving}
                       className="h-8 w-28 text-right"
                     />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                      Delivery GST ({DELIVERY_GST_RATE}%)
+                    </span>
+                    <span className="font-semibold text-neutral-900 dark:text-white">
+                      {formatCurrency(deliveryGst)}
+                    </span>
                   </div>
 
                   <div className="border-t border-neutral-200 dark:border-neutral-700"></div>
