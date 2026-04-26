@@ -34,11 +34,13 @@ type InvoiceData = {
   deliveryAddress?: string;
   invoiceDate: string;
   dueDate?: string;
+  reference?: string;
   quotation?: { quotationNumber: string };
   items: InvoiceItem[];
   subtotal: number;
   discountAmount?: number;
   tax?: number;
+  taxRate?: number;
   deliveryCost?: number;
   grandTotal: number;
   status: string;
@@ -276,22 +278,26 @@ export default function InvoiceDetailPage() {
     );
   }
 
-  const subtotal = invoice.subtotal ?? invoice.items.reduce((sum, i) => sum + i.lineTotal, 0);
+  // Derive effective GST rate from items (each item has taxPercent); fallback to invoice.taxRate or 10
+  const effectiveTaxRate = invoice.items.length > 0
+    ? Number(invoice.items[0].taxPercent ?? invoice.taxRate ?? 10)
+    : Number(invoice.taxRate ?? 10);
+  const taxRate = effectiveTaxRate > 0 ? effectiveTaxRate : 10;
+  // Always recompute from line items so old DB values don't cause wrong display
+  const subtotal = Math.round(invoice.items.reduce((sum, i) => {
+    const taxP = Number(i.taxPercent ?? taxRate);
+    return sum + (i.lineTotal / (1 + taxP / 100));
+  }, 0) * 100) / 100;
   const discountAmount = invoice.discountAmount ?? 0;
-  const taxAmount = invoice.tax ?? 0;
-  const baseTotal = subtotal - discountAmount + taxAmount;
-  const parsedDeliveryCost = Number(invoice.deliveryCost);
-  const fallbackDeliveryCost = Math.max(
-    0,
-    Math.round((Number(invoice.grandTotal) - baseTotal) * 100) / 100
-  );
-  const deliveryCost = Number.isFinite(parsedDeliveryCost)
-    ? Math.max(0, parsedDeliveryCost)
-    : Number.isFinite(fallbackDeliveryCost)
-      ? fallbackDeliveryCost
-      : 0;
-  const grandTotal = invoice.grandTotal ?? Math.round((baseTotal + deliveryCost) * 100) / 100;
-  const remainingBalance = invoice.remainingBalance ?? grandTotal;
+  const taxAmount = Math.round(invoice.items.reduce((sum, i) => {
+    const taxP = Number(i.taxPercent ?? taxRate);
+    const lt = i.lineTotal;
+    return sum + (lt - lt / (1 + taxP / 100));
+  }, 0) * 100) / 100;
+  const deliveryCost = Math.max(0, Number(invoice.deliveryCost) || 0);
+  const deliveryGst = Math.round(deliveryCost * (taxRate / 100) * 100) / 100;
+  const grandTotal = Math.round((subtotal - discountAmount + taxAmount + deliveryCost + deliveryGst) * 100) / 100;
+  const remainingBalance = Math.max(0, Math.round((grandTotal - (invoice.amountPaid ?? 0)) * 100) / 100);
 
   return (
     <>
@@ -435,13 +441,13 @@ export default function InvoiceDetailPage() {
                       {invoice.status?.replace(/_/g, " ") ?? "-"}
                     </span>
                   </div>
-                  {invoice.quotation?.quotationNumber && (
+                  {(invoice.reference || invoice.quotation?.quotationNumber) && (
                     <div className="flex justify-end gap-3">
                       <span className="font-semibold text-neutral-700 dark:text-neutral-300">
-                        Quote Reference:
+                        Reference:
                       </span>
                       <span className="font-mono text-neutral-600 dark:text-neutral-400">
-                        {invoice.quotation.quotationNumber}
+                        {invoice.reference || invoice.quotation?.quotationNumber}
                       </span>
                     </div>
                   )}
@@ -521,7 +527,7 @@ export default function InvoiceDetailPage() {
               <div className="w-full max-w-xs space-y-3">
                 <div className="flex items-center justify-between border-b border-neutral-200 pb-3 dark:border-neutral-700">
                   <span className="text-neutral-700 dark:text-neutral-300">
-                    Subtotal:
+                    Subtotal (ex. GST):
                   </span>
                   <span className="font-semibold text-neutral-900 dark:text-white">
                     {formatCurrency(subtotal)}
@@ -537,7 +543,7 @@ export default function InvoiceDetailPage() {
                 )}
                 {taxAmount > 0 && (
                   <div className="flex items-center justify-between">
-                    <span className="text-neutral-700 dark:text-neutral-300">Tax (GST):</span>
+                    <span className="text-neutral-700 dark:text-neutral-300">Items GST ({taxRate}%):</span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
                       {formatCurrency(taxAmount)}
                     </span>
@@ -551,6 +557,16 @@ export default function InvoiceDetailPage() {
                     {formatCurrency(deliveryCost)}
                   </span>
                 </div>
+                {deliveryGst > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-700 dark:text-neutral-300">
+                      Delivery GST ({taxRate}%):
+                    </span>
+                    <span className="font-semibold text-neutral-900 dark:text-white">
+                      {formatCurrency(deliveryGst)}
+                    </span>
+                  </div>
+                )}
                 <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-300">
                   <p className="mb-2 font-semibold text-neutral-800 dark:text-neutral-100">
                     Bank Details
