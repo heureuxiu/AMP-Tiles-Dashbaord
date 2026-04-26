@@ -240,8 +240,13 @@ export default function CreateInvoicePage() {
     );
   };
 
-  const subtotal = items.reduce((sum, i) => sum + i.lineTotal, 0);
-  const grandTotal = Math.round((subtotal + deliveryCost) * 100) / 100;
+  const itemsPreTax = Math.round(items.reduce((sum, i) => sum + (i.lineTotal / (1 + i.taxPercent / 100)), 0) * 100) / 100;
+  const itemsGst = Math.round(items.reduce((sum, i) => {
+    return sum + (i.lineTotal - i.lineTotal / (1 + i.taxPercent / 100));
+  }, 0) * 100) / 100;
+  const deliveryGst = Math.round(deliveryCost * 0.1 * 100) / 100;
+  const subtotal = itemsPreTax;
+  const grandTotal = Math.round((itemsPreTax + itemsGst + deliveryCost + deliveryGst) * 100) / 100;
   const paidCents = toCents(amountPaid || 0);
   const grandTotalCents = toCents(grandTotal);
   const remaining = Math.max(0, grandTotalCents - paidCents) / 100;
@@ -723,10 +728,18 @@ export default function CreateInvoicePage() {
                 <div className="space-y-4 p-6">
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-600 dark:text-neutral-400">
-                      Subtotal
+                      Subtotal (ex. GST)
                     </span>
                     <span className="font-semibold">
                       {formatCurrency(subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-600 dark:text-neutral-400">
+                      Items GST (10%)
+                    </span>
+                    <span className="font-semibold">
+                      {formatCurrency(itemsGst)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -745,6 +758,16 @@ export default function CreateInvoicePage() {
                       className="h-8 w-28 text-right"
                     />
                   </div>
+                  {deliveryGst > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-600 dark:text-neutral-400">
+                        Delivery GST (10%)
+                      </span>
+                      <span className="font-semibold">
+                        {formatCurrency(deliveryGst)}
+                      </span>
+                    </div>
+                  )}
                   <div className="border-t border-neutral-200 dark:border-neutral-700 pt-2">
                     <div className="flex justify-between text-base font-semibold">
                       <span>Grand Total</span>
