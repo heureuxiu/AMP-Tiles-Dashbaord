@@ -60,6 +60,64 @@ const normalizeTransactionQuantity = (
   return Math.floor(numeric);
 };
 
+const SQM_PER_SQFT = 0.092903;
+
+const roundTo3 = (value: number) => Math.round((Number(value) || 0) * 1000) / 1000;
+
+const normalizeStockUnit = (value?: string) => {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "");
+
+  if (
+    normalized.includes("sqm") ||
+    normalized.includes("sqmeter") ||
+    normalized.includes("sqmetre") ||
+    normalized.includes("m2") ||
+    normalized.includes("sqrmtr")
+  ) {
+    return "sqm";
+  }
+  if (
+    normalized.includes("sqft") ||
+    normalized.includes("sqfeet") ||
+    normalized.includes("ft2")
+  ) {
+    return "sqft";
+  }
+  if (normalized.includes("box")) return "box";
+  if (normalized.includes("piece")) return "piece";
+  return "unknown";
+};
+
+const getSqmPerBox = (product?: Product | null) => {
+  if (!product) return null;
+  const coveragePerBox = Number(product.coveragePerBox) || 0;
+  if (coveragePerBox <= 0) return null;
+  return product.coveragePerBoxUnit === "sqm"
+    ? coveragePerBox
+    : coveragePerBox * SQM_PER_SQFT;
+};
+
+const getStockInSqm = (product?: Product | null) => {
+  if (!product) return null;
+  const stock = Number(product.stock) || 0;
+  const unit = normalizeStockUnit(product.unit);
+  const sqmPerBox = getSqmPerBox(product);
+
+  if (unit === "sqm") return roundTo3(stock);
+  if (unit === "sqft") return roundTo3(stock * SQM_PER_SQFT);
+  if (unit === "box" && sqmPerBox) return roundTo3(stock * sqmPerBox);
+  return null;
+};
+
+const getBoxesFromSqm = (stockSqm: number | null, sqmPerBox: number | null) => {
+  if (stockSqm === null || sqmPerBox === null || sqmPerBox <= 0) return null;
+  const exactBoxes = roundTo3(stockSqm / sqmPerBox);
+  const fullBoxes = Math.ceil((stockSqm / sqmPerBox) - 1e-9);
+  return { exactBoxes, fullBoxes };
+};
+
 export default function StockUpdatePage() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [actionType, setActionType] = useState<"stock-in" | "stock-out" | "">("");
@@ -184,14 +242,17 @@ export default function StockUpdatePage() {
       : Math.max(0, selectedProduct.stock - quantity)
     : 0;
 
-  const sqmPerBox =
-    selectedProduct?.coveragePerBox
-      ? selectedProduct.coveragePerBoxUnit === "sqm"
-        ? selectedProduct.coveragePerBox
-        : selectedProduct.coveragePerBox * 0.0929
+  const sqmPerBox = getSqmPerBox(selectedProduct || null);
+  const currentSqm = getStockInSqm(selectedProduct || null);
+  const currentBoxes = getBoxesFromSqm(currentSqm, sqmPerBox);
+  const newSqm =
+    selectedProduct
+      ? getStockInSqm({
+          ...selectedProduct,
+          stock: newStock,
+        })
       : null;
-  const currentSqm = sqmPerBox !== null ? selectedProduct!.stock * sqmPerBox : null;
-  const newSqm = sqmPerBox !== null ? newStock * sqmPerBox : null;
+  const newBoxes = getBoxesFromSqm(newSqm, sqmPerBox);
 
   return (
     <div className="min-w-0 w-full space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8">
@@ -445,13 +506,41 @@ export default function StockUpdatePage() {
                       </span>
                     </div>
                     {currentSqm !== null && (
-                      <div className="mt-2 flex items-baseline gap-1 border-t border-neutral-200 pt-2 dark:border-neutral-700">
-                        <span className="text-lg font-semibold text-neutral-700 dark:text-neutral-300">
-                          {currentSqm.toFixed(2)}
-                        </span>
-                        <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                          m² (Sqr Mtr)
-                        </span>
+                      <div className="mt-2 space-y-1 border-t border-neutral-200 pt-2 dark:border-neutral-700">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-lg font-semibold text-neutral-700 dark:text-neutral-300">
+                            {currentSqm.toFixed(3)}
+                          </span>
+                          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                            sqm
+                          </span>
+                        </div>
+                        {currentBoxes && (
+                          <div className="space-y-0.5 text-xs text-neutral-600 dark:text-neutral-400">
+                            <div>
+                              Boxes (exact):{" "}
+                              <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                                {currentBoxes.exactBoxes}
+                              </span>
+                            </div>
+                            <div>
+                              Full boxes:{" "}
+                              <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                                {currentBoxes.fullBoxes}
+                              </span>
+                              {sqmPerBox && (
+                                <span className="ml-1 text-neutral-500 dark:text-neutral-400">
+                                  @{sqmPerBox.toFixed(3)} sqm/box
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {!currentBoxes && (
+                          <div className="text-xs text-amber-700 dark:text-amber-400">
+                            Add `coveragePerBox` to view box equivalent.
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -495,19 +584,39 @@ export default function StockUpdatePage() {
                               </span>
                             </div>
                             {newSqm !== null && (
-                              <div className="flex items-baseline gap-1">
-                                <span
-                                  className={`text-sm font-semibold ${
-                                    actionType === "stock-in"
-                                      ? "text-green-800 dark:text-green-400"
-                                      : "text-red-800 dark:text-red-400"
-                                  }`}
-                                >
-                                  {newSqm.toFixed(2)}
-                                </span>
-                                <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                                  m²
-                                </span>
+                              <div className="space-y-0.5">
+                                <div className="flex items-baseline gap-1">
+                                  <span
+                                    className={`text-sm font-semibold ${
+                                      actionType === "stock-in"
+                                        ? "text-green-800 dark:text-green-400"
+                                        : "text-red-800 dark:text-red-400"
+                                    }`}
+                                  >
+                                    {newSqm.toFixed(3)}
+                                  </span>
+                                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                    sqm
+                                  </span>
+                                </div>
+                                {newBoxes && (
+                                  <div className="text-xs text-neutral-600 dark:text-neutral-400">
+                                    Boxes:{" "}
+                                    <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                                      {newBoxes.exactBoxes}
+                                    </span>
+                                    {" | "}
+                                    Full:{" "}
+                                    <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                                      {newBoxes.fullBoxes}
+                                    </span>
+                                  </div>
+                                )}
+                                {!newBoxes && (
+                                  <div className="text-xs text-amber-700 dark:text-amber-400">
+                                    Box equivalent requires `coveragePerBox`.
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
