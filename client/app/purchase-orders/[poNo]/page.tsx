@@ -124,13 +124,26 @@ export default function PurchaseOrderDetailPage() {
     try {
       setReceiveMode(applyStockUpdate ? "auto" : "manual");
       const response = await api.receivePurchaseOrder(poData._id, { applyStockUpdate });
-      if (response.success && response.purchaseOrder) {
-        setPoData(response.purchaseOrder as PurchaseOrderDetail);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res = response as any;
+      if (res.success && res.purchaseOrder) {
+        setPoData(res.purchaseOrder as PurchaseOrderDetail);
+        const receivedSqmTotal = Number(res.receivedSqmTotal);
+        const boxesExact = Number(res.boxesEquivalentTotal);
+        const boxesFull = Number(res.boxesRoundedUpTotal);
+        const conversionSummary =
+          applyStockUpdate &&
+          Number.isFinite(receivedSqmTotal) &&
+          receivedSqmTotal > 0
+            ? ` | Received: ${receivedSqmTotal.toFixed(3)} sqm | Boxes: ${
+                Number.isFinite(boxesExact) ? boxesExact.toFixed(3) : "N/A"
+              } (Full: ${Number.isFinite(boxesFull) ? boxesFull : "N/A"})`
+            : "";
         const successDescription =
-          typeof response.message === "string" && response.message.trim().length > 0
-            ? response.message
+          typeof res.message === "string" && res.message.trim().length > 0
+            ? `${res.message}${conversionSummary}`
             : applyStockUpdate
-            ? `${poData.poNumber} has been received and stock updated`
+            ? `${poData.poNumber} has been received and stock updated${conversionSummary}`
             : `${poData.poNumber} has been received (manual stock update mode)`;
         toast.success(
           applyStockUpdate
