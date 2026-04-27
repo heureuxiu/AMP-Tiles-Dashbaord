@@ -52,7 +52,8 @@ type InvoiceData = {
 
 const companyInfo = {
   name: "AMP TILES PTY LTD",
-  address: "Unit 15/55 Anderson Road, Smeaton Grange, NSW 2560",
+  addressLine1: "Unit 15/55 Anderson Road",
+  addressLine2: "Smeaton Grange, NSW 2560",
   abn: "14 690 181 858",
 };
 
@@ -367,7 +368,8 @@ export default function InvoiceDetailPage() {
                   {companyInfo.name}
                 </h2>
                 <div className="mt-3 space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
-                  <p>{companyInfo.address}</p>
+                  <p>{companyInfo.addressLine1}</p>
+                  <p>{companyInfo.addressLine2}</p>
                   <p>ABN: {companyInfo.abn}</p>
                 </div>
               </div>
@@ -441,16 +443,7 @@ export default function InvoiceDetailPage() {
                       {invoice.status?.replace(/_/g, " ") ?? "-"}
                     </span>
                   </div>
-                  {(invoice.reference || invoice.quotation?.quotationNumber) && (
-                    <div className="flex justify-end gap-3">
-                      <span className="font-semibold text-neutral-700 dark:text-neutral-300">
-                        Reference:
-                      </span>
-                      <span className="font-mono text-neutral-600 dark:text-neutral-400">
-                        {invoice.reference || invoice.quotation?.quotationNumber}
-                      </span>
-                    </div>
-                  )}
+
                 </div>
               </div>
             </div>
@@ -470,7 +463,7 @@ export default function InvoiceDetailPage() {
                       UNIT
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                      QTY
+                      PIECE
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                       RATE
