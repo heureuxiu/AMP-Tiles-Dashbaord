@@ -391,13 +391,13 @@ export default function PurchaseOrderDetailPage() {
                   <TableHead>Product</TableHead>
                   <TableHead>Size</TableHead>
                   <TableHead>Unit</TableHead>
-                  <TableHead>Qty Ordered</TableHead>
+                  <TableHead>Piece Ordered</TableHead>
                   <TableHead>Cost Rate</TableHead>
                   <TableHead>Disc %</TableHead>
                   <TableHead>Tax %</TableHead>
                   <TableHead>Line Total</TableHead>
                   <TableHead>Coverage</TableHead>
-                  <TableHead>Qty Received</TableHead>
+                  <TableHead>Piece Received</TableHead>
                   <TableHead>Remaining</TableHead>
                   <TableHead>Damaged</TableHead>
                   <TableHead>Batch</TableHead>
