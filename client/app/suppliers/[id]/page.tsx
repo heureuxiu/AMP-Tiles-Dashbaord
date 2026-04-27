@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Users,
@@ -74,12 +74,7 @@ export default function SupplierDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    fetchSupplier();
-  }, [supplierId]);
-
-  const fetchSupplier = async () => {
+  const fetchSupplier = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await api.getSupplier(supplierId);
@@ -96,7 +91,11 @@ export default function SupplierDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router, supplierId]);
+
+  useEffect(() => {
+    fetchSupplier();
+  }, [fetchSupplier]);
 
   const fetchProducts = async (supplierName: string) => {
     try {
