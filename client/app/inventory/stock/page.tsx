@@ -122,7 +122,7 @@ export default function StockUpdatePage() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [actionType, setActionType] = useState<"stock-in" | "stock-out" | "">("");
   const [quantity, setQuantity] = useState(0);
-  const [unit, setUnit] = useState<"boxes" | "sqrMtr">("boxes");
+  const [unit, setUnit] = useState<"boxes" | "sqrMtr">("sqrMtr");
   const [remarks, setRemarks] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [stats, setStats] = useState<StockStats>({
@@ -401,7 +401,6 @@ export default function StockUpdatePage() {
                     disabled={isSubmitting}
                     className="h-10 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:focus-visible:ring-neutral-300"
                   >
-                    <option value="boxes">Boxes</option>
                     <option value="sqrMtr">Sqr Mtr</option>
                   </select>
                 </div>
