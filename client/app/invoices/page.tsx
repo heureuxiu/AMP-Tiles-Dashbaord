@@ -38,6 +38,8 @@ type Invoice = {
   paymentStatus?: string;
   amountPaid?: number;
   remainingBalance?: number;
+  emailSent?: boolean;
+  lastEmailedAt?: string;
   items: Array<{
     _id: string;
     product: string;
@@ -198,6 +200,7 @@ export default function InvoicesPage() {
         toast.success("Invoice emailed", {
           description: response.message || `${invoice.invoiceNumber} sent`,
         });
+        fetchInvoices();
       } else {
         toast.error("Failed to send invoice email");
       }
@@ -304,6 +307,7 @@ export default function InvoicesPage() {
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Invoice No</TableHead>
                     <TableHead>Customer Name</TableHead>
+                    <TableHead>Email Status</TableHead>
                     <TableHead>Invoice Date</TableHead>
                     <TableHead>Due Date</TableHead>
                     <TableHead>Total Amount</TableHead>
@@ -316,7 +320,7 @@ export default function InvoicesPage() {
                 <TableBody>
                   {filteredInvoices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-32 text-center">
+                      <TableCell colSpan={10} className="h-32 text-center">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <Receipt
                             className="h-12 w-12 text-neutral-300 dark:text-neutral-600"
@@ -347,6 +351,17 @@ export default function InvoicesPage() {
                         </TableCell>
                         <TableCell className="font-medium text-neutral-900 dark:text-white">
                           {invoice.customerName}
+                        </TableCell>
+                        <TableCell>
+                          {invoice.emailSent ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                              <Mail className="h-3 w-3" /> Emailed
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500 dark:bg-neutral-700/40 dark:text-neutral-400">
+                              <Mail className="h-3 w-3" /> Not emailed
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-neutral-600 dark:text-neutral-400">
                           {formatDate(invoice.invoiceDate)}
