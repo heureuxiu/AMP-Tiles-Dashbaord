@@ -1150,7 +1150,7 @@ export default function CreateQuotationPage() {
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                         <div className="space-y-1">
                           <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                            Qty (sqm)
+                            Piece (sqm)
                           </label>
                           <div className="space-y-1">
                             <input
