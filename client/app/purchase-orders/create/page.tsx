@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-const UNIT_TYPES = ["Box", "Sq Ft", "Sqm", "Piece", "Pallet"] as const;
+const UNIT_TYPES = ["Sqm"] as const;
 const PAYMENT_TERMS = ["", "COD", "Net 7", "Net 15", "Net 30", "Net 60"];
 const CURRENCIES = ["AUD", "USD", "EUR", "GBP"];
 
@@ -65,7 +65,7 @@ export default function CreatePurchaseOrderPage() {
     id: Date.now().toString(),
     product: "",
     productName: "",
-    unitType: "Box",
+    unitType: "Sqm",
     quantityOrdered: 0,
     rate: 0,
     discountPercent: 0,
