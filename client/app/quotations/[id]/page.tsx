@@ -466,6 +466,7 @@ export default function ViewQuotationPage() {
                     {quotation.reference || "N/A"}
                   </p>
                 </div>
+
               </div>
               {quotation.notes && (
                 <div>
@@ -523,7 +524,7 @@ export default function ViewQuotationPage() {
                         Unit
                       </th>
                       <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                        Quantity
+                        Piece
                       </th>
                       <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                         Rate
