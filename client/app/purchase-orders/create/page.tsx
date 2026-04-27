@@ -551,7 +551,7 @@ export default function CreatePurchaseOrderPage() {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                      Qty Ordered <span className="text-red-500">*</span>
+                      Piece Ordered <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
