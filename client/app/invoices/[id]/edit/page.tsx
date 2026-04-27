@@ -553,7 +553,7 @@ export default function EditInvoicePage() {
                     <tr className="border-b border-neutral-200 dark:border-neutral-700">
                       <th className="pb-2 text-left font-semibold">Product</th>
                       <th className="pb-2 text-left font-semibold">Unit</th>
-                      <th className="pb-2 text-left font-semibold">Qty</th>
+                      <th className="pb-2 text-left font-semibold">Piece</th>
                       <th className="pb-2 text-left font-semibold">Rate</th>
                       <th className="pb-2 text-left font-semibold">Disc %</th>
                       <th className="pb-2 text-left font-semibold">Tax %</th>
