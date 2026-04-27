@@ -39,6 +39,12 @@ export const sidebarNav: SidebarNavSection[] = [
     ],
   },
   {
+    label: "Packing Slips",
+    items: [
+      { label: "All Packing Slips", href: "/packing-slips" },
+    ],
+  },
+  {
     label: "Suppliers",
     items: [
       { label: "All Suppliers", href: "/suppliers" },
