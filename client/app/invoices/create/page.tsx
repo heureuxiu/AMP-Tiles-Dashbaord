@@ -575,7 +575,7 @@ export default function CreateInvoicePage() {
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                             <div className="space-y-1">
                               <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                                Qty <span className="text-red-500">*</span>
+                                Piece <span className="text-red-500">*</span>
                               </label>
                               {showCoverage ? (
                                 <div className="space-y-1">
