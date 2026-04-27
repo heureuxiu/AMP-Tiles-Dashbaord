@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Edit, Save, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export default function EditSupplierPage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleting] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     supplierNumber: "",
@@ -38,12 +38,7 @@ export default function EditSupplierPage() {
     notes: "",
   });
 
-  // Load supplier data
-  useEffect(() => {
-    fetchSupplier();
-  }, [supplierId]);
-
-  const fetchSupplier = async () => {
+  const fetchSupplier = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await api.getSupplier(supplierId);
@@ -95,7 +90,12 @@ export default function EditSupplierPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router, supplierId]);
+
+  // Load supplier data
+  useEffect(() => {
+    fetchSupplier();
+  }, [fetchSupplier]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
