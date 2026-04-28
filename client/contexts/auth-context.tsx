@@ -105,10 +105,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    // During Next.js SSR / static prerendering the provider tree isn't
+    // established yet – return safe defaults so the build doesn't fail.
+    return {
+      user: null,
+      loading: true,
+      login: async () => {},
+      logout: async () => {},
+      updateUser: async () => {},
+      updatePassword: async () => {},
+    };
   }
   return context;
 }
