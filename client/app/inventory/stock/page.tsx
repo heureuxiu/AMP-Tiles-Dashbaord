@@ -23,6 +23,12 @@ type Product = {
   coveragePerBoxUnit?: string;
 };
 
+type Supplier = {
+  _id: string;
+  name: string;
+  supplierNumber?: string;
+};
+
 type StockStats = {
   totalProducts: number;
   totalStock: number;
@@ -119,11 +125,13 @@ const getBoxesFromSqm = (stockSqm: number | null, sqmPerBox: number | null) => {
 };
 
 export default function StockUpdatePage() {
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [selectedProductId, setSelectedProductId] = useState("");
   const [actionType, setActionType] = useState<"stock-in" | "stock-out" | "">("");
   const [quantity, setQuantity] = useState(0);
   const [unit, setUnit] = useState<"boxes" | "sqrMtr">("sqrMtr");
   const [remarks, setRemarks] = useState("");
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [stats, setStats] = useState<StockStats>({
     totalProducts: 0,
@@ -134,6 +142,7 @@ export default function StockUpdatePage() {
   });
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedProduct = products.find((p) => p._id === selectedProductId);
@@ -148,14 +157,17 @@ export default function StockUpdatePage() {
       setIsLoading(true);
       
       // Fetch core data in parallel
-      const [productsResponse, statsResponse] = await Promise.all([
-        api.getProducts(),
+      const [suppliersResponse, statsResponse] = await Promise.all([
+        api.getSuppliers({ status: "active", sortBy: "name", sortOrder: "asc" }),
         api.getStockStats(),
       ]);
 
-      if (productsResponse.success && productsResponse.products) {
-        setProducts(productsResponse.products);
+      if (suppliersResponse.success && suppliersResponse.suppliers) {
+        setSuppliers(suppliersResponse.suppliers as Supplier[]);
+      } else {
+        setSuppliers([]);
       }
+      setProducts([]);
 
       if (statsResponse.success && statsResponse.stats) {
         setStats(statsResponse.stats as StockStats);
@@ -179,6 +191,31 @@ export default function StockUpdatePage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchProductsBySupplier = async (supplierId: string) => {
+    if (!supplierId) {
+      setProducts([]);
+      return;
+    }
+    try {
+      setIsLoadingProducts(true);
+      const response = await api.getProducts({ supplier: supplierId, status: "active" });
+      if (response.success && response.products) {
+        setProducts(response.products as Product[]);
+      } else {
+        setProducts([]);
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to fetch products";
+      toast.error("Failed to load supplier products", {
+        description: errorMessage,
+      });
+      setProducts([]);
+    } finally {
+      setIsLoadingProducts(false);
     }
   };
 
@@ -230,10 +267,12 @@ export default function StockUpdatePage() {
 
   const handleReset = () => {
     setSelectedProductId("");
+    setSelectedSupplierId("");
     setActionType("");
     setQuantity(0);
     setUnit("boxes");
     setRemarks("");
+    setProducts([]);
   };
 
   const newStock = selectedProduct
@@ -300,6 +339,36 @@ export default function StockUpdatePage() {
               {/* Product Selection */}
               <div className="grid gap-2">
                 <label
+                  htmlFor="supplier"
+                  className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                >
+                  Select Supplier <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="supplier"
+                  value={selectedSupplierId}
+                  onChange={(e) => {
+                    const supplierId = e.target.value;
+                    setSelectedSupplierId(supplierId);
+                    setSelectedProductId("");
+                    fetchProductsBySupplier(supplierId);
+                  }}
+                  className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
+                  required
+                  disabled={isLoading || isSubmitting}
+                >
+                  <option value="">Choose a supplier</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier._id} value={supplier._id}>
+                      {supplier.name}
+                      {supplier.supplierNumber ? ` (${supplier.supplierNumber})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <label
                   htmlFor="product"
                   className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
@@ -312,9 +381,17 @@ export default function StockUpdatePage() {
                   className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400 dark:focus-visible:ring-neutral-300"
                   required
 
-                  disabled={isLoading || isSubmitting}
+                  disabled={isLoading || isSubmitting || isLoadingProducts || !selectedSupplierId}
                 >
-                  <option value="">Choose a product</option>
+                  <option value="">
+                    {!selectedSupplierId
+                      ? "Select supplier first"
+                      : isLoadingProducts
+                        ? "Loading products..."
+                        : products.length === 0
+                          ? "No products available"
+                          : "Choose a product"}
+                  </option>
                   {products.map((product) => (
                     <option key={product._id} value={product._id}>
                       {product.name} ({product.sku})
