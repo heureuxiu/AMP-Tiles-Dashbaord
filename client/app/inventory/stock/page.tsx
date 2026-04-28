@@ -68,7 +68,7 @@ const normalizeTransactionQuantity = (
 
 const SQM_PER_SQFT = 0.092903;
 
-const roundTo3 = (value: number) => Math.round((Number(value) || 0) * 1000) / 1000;
+const roundTo2 = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
 
 const normalizeStockUnit = (value?: string) => {
   const normalized = String(value || "")
@@ -111,15 +111,15 @@ const getStockInSqm = (product?: Product | null) => {
   const unit = normalizeStockUnit(product.unit);
   const sqmPerBox = getSqmPerBox(product);
 
-  if (unit === "sqm") return roundTo3(stock);
-  if (unit === "sqft") return roundTo3(stock * SQM_PER_SQFT);
-  if (unit === "box" && sqmPerBox) return roundTo3(stock * sqmPerBox);
+  if (unit === "sqm") return roundTo2(stock);
+  if (unit === "sqft") return roundTo2(stock * SQM_PER_SQFT);
+  if (unit === "box" && sqmPerBox) return roundTo2(stock * sqmPerBox);
   return null;
 };
 
 const getBoxesFromSqm = (stockSqm: number | null, sqmPerBox: number | null) => {
   if (stockSqm === null || sqmPerBox === null || sqmPerBox <= 0) return null;
-  const exactBoxes = roundTo3(stockSqm / sqmPerBox);
+  const exactBoxes = roundTo2(stockSqm / sqmPerBox);
   const fullBoxes = Math.ceil((stockSqm / sqmPerBox) - 1e-9);
   return { exactBoxes, fullBoxes };
 };
@@ -585,7 +585,7 @@ export default function StockUpdatePage() {
                       <div className="mt-2 space-y-1 border-t border-neutral-200 pt-2 dark:border-neutral-700">
                         <div className="flex items-baseline gap-1">
                           <span className="text-lg font-semibold text-neutral-700 dark:text-neutral-300">
-                            {currentSqm.toFixed(3)}
+                            {currentSqm.toFixed(2)}
                           </span>
                           <span className="text-xs text-neutral-500 dark:text-neutral-400">
                             sqm
@@ -606,7 +606,7 @@ export default function StockUpdatePage() {
                               </span>
                               {sqmPerBox && (
                                 <span className="ml-1 text-neutral-500 dark:text-neutral-400">
-                                  @{sqmPerBox.toFixed(3)} sqm/box
+                                  @{sqmPerBox.toFixed(2)} sqm/box
                                 </span>
                               )}
                             </div>
@@ -669,7 +669,7 @@ export default function StockUpdatePage() {
                                         : "text-red-800 dark:text-red-400"
                                     }`}
                                   >
-                                    {newSqm.toFixed(3)}
+                                    {newSqm.toFixed(2)}
                                   </span>
                                   <span className="text-xs text-neutral-500 dark:text-neutral-400">
                                     sqm
