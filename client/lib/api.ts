@@ -752,6 +752,7 @@ class ApiClient {
     customerName: string;
     customerPhone?: string;
     customerEmail?: string;
+    customerCcEmails?: string[];
     customerAddress?: string;
     deliveryAddress?: string;
     invoiceDate?: string;
@@ -786,6 +787,7 @@ class ApiClient {
     customerName?: string;
     customerPhone?: string;
     customerEmail?: string;
+    customerCcEmails?: string[];
     customerAddress?: string;
     deliveryAddress?: string;
     invoiceDate?: string;
