@@ -402,6 +402,8 @@ class ApiClient {
     customerName: string;
     customerPhone?: string;
     customerEmail?: string;
+    customerEmails?: string[];
+    customerCcEmails?: string[];
     customerAddress?: string;
     deliveryAddress?: string;
     reference?: string;
