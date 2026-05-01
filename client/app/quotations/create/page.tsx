@@ -271,6 +271,22 @@ function formatStockQty(value: number): string {
   return rounded.toFixed(3).replace(/\.?0+$/, "");
 }
 
+function parseEmailList(value: string): string[] {
+  const seen = new Set<string>();
+  const parts = String(value || "")
+    .split(/[,\n;\s]+/g)
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+
+  const emails: string[] = [];
+  for (const email of parts) {
+    if (seen.has(email)) continue;
+    seen.add(email);
+    emails.push(email);
+  }
+  return emails;
+}
+
 const createEmptyItem = (id?: string): QuotationItem => ({
   id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   supplierId: "",
@@ -300,7 +316,8 @@ export default function CreateQuotationPage() {
   const [saveMode, setSaveMode] = useState<SaveMode | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPrimaryEmail, setCustomerPrimaryEmail] = useState("");
+  const [customerCcEmails, setCustomerCcEmails] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [reference, setReference] = useState("");
   const [quotationDate, setQuotationDate] = useState(
@@ -638,8 +655,14 @@ export default function CreateQuotationPage() {
       return;
     }
 
-    if (mode === "send" && !customerEmail.trim()) {
-      toast.error("Customer email is required to send quotation");
+    const primaryEmail = parseEmailList(customerPrimaryEmail)[0] || "";
+    const ccEmails = parseEmailList(customerCcEmails);
+    const normalizedCustomerEmails = primaryEmail
+      ? [primaryEmail, ...ccEmails.filter((email) => email !== primaryEmail)]
+      : ccEmails;
+
+    if (mode === "send" && normalizedCustomerEmails.length === 0) {
+      toast.error("Primary customer email is required to send quotation");
       return;
     }
 
@@ -667,7 +690,10 @@ export default function CreateQuotationPage() {
       const quotationData = {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || undefined,
-        customerEmail: customerEmail.trim() || undefined,
+        customerEmail: primaryEmail || undefined,
+        customerEmails:
+          normalizedCustomerEmails.length > 0 ? normalizedCustomerEmails : undefined,
+        customerCcEmails: ccEmails.length > 0 ? ccEmails : undefined,
         customerAddress: customerAddress.trim() || undefined,
         deliveryAddress: customerAddress.trim() || undefined,
         reference: reference.trim() || undefined,
@@ -846,24 +872,41 @@ export default function CreateQuotationPage() {
                       onChange={(e) => setCustomerPhone(e.target.value)}
                     />
                   </div>
-                  {/* Customer Email */}
+                  {/* Primary Customer Email */}
                   <div className="grid gap-2">
                     <label
-                      htmlFor="customerEmail"
+                      htmlFor="customerPrimaryEmail"
                       className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                     >
-                      Customer Email{" "}
-                      <span className="text-neutral-400">(Optional)</span>
+                      Primary Customer Email{" "}
+                      <span className="text-neutral-400">(Required to send)</span>
                     </label>
                     <Input
-                      id="customerEmail"
+                      id="customerPrimaryEmail"
                       type="email"
-                      placeholder="Enter email"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      placeholder="client@example.com"
+                      value={customerPrimaryEmail}
+                      onChange={(e) => setCustomerPrimaryEmail(e.target.value)}
                     />
                   </div>
                 </div>
+
+                {/* CC Emails */}
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="customerCcEmails"
+                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                  >
+                    CC Emails <span className="text-neutral-400">(Optional)</span>
+                  </label>
+                  <Input
+                    id="customerCcEmails"
+                    type="text"
+                    placeholder="cc1@example.com, cc2@example.com"
+                    value={customerCcEmails}
+                    onChange={(e) => setCustomerCcEmails(e.target.value)}
+                    />
+                  </div>
 
                 {/* Address */}
                 <div className="grid gap-2">
@@ -1368,8 +1411,8 @@ export default function CreateQuotationPage() {
               <div className="rounded-xl bg-blue-50 p-4 dark:bg-blue-950/30">
                 <p className="text-xs text-blue-700 dark:text-blue-400">
                   <strong>Note:</strong> Save as draft for later edits, or use
-                  Save &amp; Send Email to send the quotation directly to the
-                  customer.
+                  Save &amp; Send Email to send the quotation to the primary
+                  customer email with optional CC recipients.
                 </p>
               </div>
             </div>
