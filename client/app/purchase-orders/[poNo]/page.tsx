@@ -392,7 +392,7 @@ export default function PurchaseOrderDetailPage() {
                   <TableHead>Size</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Piece Ordered</TableHead>
-                  <TableHead>Cost Rate</TableHead>
+                  <TableHead>Unit Price</TableHead>
                   <TableHead>Disc %</TableHead>
                   <TableHead>Tax %</TableHead>
                   <TableHead>Line Total</TableHead>
