@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-const UNIT_TYPES = ["Sqm"] as const;
+const UNIT_TYPES = ["Sqm", "LM", "Piece"] as const;
 const PAYMENT_TERMS = ["", "COD", "Net 7", "Net 15", "Net 30", "Net 60"];
 const CURRENCIES = ["AUD", "USD", "EUR", "GBP"];
 
@@ -43,6 +43,19 @@ type Product = {
   coveragePerBox?: number;
   coveragePerBoxUnit?: string;
   tilesPerBox?: number;
+  unit?: string;
+};
+
+const normalizeUnitLabel = (unit?: string) => {
+  const normalized = String(unit || "").trim().toLowerCase();
+  if (normalized === "lm" || normalized.includes("linear")) return "LM";
+  if (normalized.includes("piece") || normalized === "pcs" || normalized === "pc") return "Piece";
+  return "Sqm";
+};
+
+const isDecimalUnitType = (unitType?: string) => {
+  const normalized = normalizeUnitLabel(unitType).toLowerCase();
+  return normalized === "sqm" || normalized === "lm";
 };
 
 export default function CreatePurchaseOrderPage() {
@@ -164,6 +177,9 @@ export default function CreatePurchaseOrderPage() {
     if (item.unitType === "Sqm") {
       return Math.round(item.quantityOrdered * 100) / 100;
     }
+    if (item.unitType === "LM") {
+      return undefined;
+    }
 
     return undefined;
   };
@@ -186,7 +202,13 @@ export default function CreatePurchaseOrderPage() {
           if (p) {
             updatedItem.productName = p.name;
             updatedItem.rate = p.costPrice ?? 0;
+            updatedItem.unitType = normalizeUnitLabel(p.unit);
           }
+        }
+        if (field === "unitType" || field === "quantityOrdered") {
+          updatedItem.quantityOrdered = isDecimalUnitType(updatedItem.unitType)
+            ? Math.round((Number(updatedItem.quantityOrdered) || 0) * 100) / 100
+            : Math.floor(Number(updatedItem.quantityOrdered) || 0);
         }
         updatedItem.lineTotal = calcLineTotal(updatedItem);
         updatedItem.coverageSqm = calcCoverageSqm(updatedItem);
@@ -547,16 +569,16 @@ export default function CreatePurchaseOrderPage() {
                   </div>
                 </div>
 
-                {/* Row 2: Qty / Cost Rate / Disc% / Tax% / Coverage / Line Total */}
+                {/* Row 2: Qty / Unit Price / Disc% / Tax% / Coverage / Line Total */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                      Piece Ordered <span className="text-red-500">*</span>
+                      Quantity Ordered <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
                       min={0}
-                      step={1}
+                      step={isDecimalUnitType(item.unitType) ? 0.01 : 1}
                       placeholder="0"
                       value={item.quantityOrdered || ""}
                       onChange={(e) => handleItemChange(item.id, "quantityOrdered", Number(e.target.value))}
@@ -567,7 +589,7 @@ export default function CreatePurchaseOrderPage() {
                   </div>
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                      Cost Rate ($)
+                      Unit Price ($)
                     </label>
                     <input
                       type="number"
