@@ -463,10 +463,10 @@ export default function InvoiceDetailPage() {
                       UNIT
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                      PIECE
+                      QTY
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                      RATE
+                      UNIT PRICE
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                       DISC %
