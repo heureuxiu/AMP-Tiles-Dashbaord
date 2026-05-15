@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
+const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece", "LM"] as const;
 const PAYMENT_METHODS = [
   { value: "", label: "— Select —" },
   { value: "cash", label: "Cash" },
@@ -36,6 +36,15 @@ type Product = {
   coveragePerBox?: number | null;
   coveragePerBoxUnit?: string;
   taxPercent?: number | null;
+  unit?: string;
+};
+
+const normalizeUnitTypeFromProduct = (unit?: string) => {
+  const normalized = String(unit || "").trim().toLowerCase();
+  if (normalized === "lm" || normalized.includes("linear")) return "LM";
+  if (normalized.includes("piece") || normalized === "pcs" || normalized === "pc") return "Piece";
+  if (normalized.includes("sqm")) return "Sq Meter";
+  return "Box";
 };
 
 type InvoiceItem = {
@@ -167,6 +176,7 @@ export default function CreateInvoicePage() {
               ...item,
               product: product._id,
               productName: product.name,
+              unitType: normalizeUnitTypeFromProduct(product.unit),
               rate,
               taxPercent,
               lineTotal: calcLineTotal({
@@ -549,7 +559,7 @@ export default function CreateInvoicePage() {
                                 <option value="">Select product</option>
                                 {products.map((p) => (
                                   <option key={p._id} value={p._id}>
-                                    {p.name} ({p.sku}) — Stock: {p.stock}
+                                    {p.name} ({p.sku}) — Stock: {p.stock} {p.unit || ""}
                                   </option>
                                 ))}
                               </select>
@@ -571,11 +581,11 @@ export default function CreateInvoicePage() {
                             </div>
                           </div>
 
-                          {/* Row 2: Qty / Rate / Disc% / Tax% / Line Total */}
+                          {/* Row 2: Qty / Unit Price / Disc% / Tax% / Line Total */}
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                             <div className="space-y-1">
                               <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                                Piece <span className="text-red-500">*</span>
+                                Qty <span className="text-red-500">*</span>
                               </label>
                               {showCoverage ? (
                                 <div className="space-y-1">
@@ -599,7 +609,7 @@ export default function CreateInvoicePage() {
                                 <input
                                   type="number"
                                   min="0"
-                                  step="1"
+                                  step={item.unitType === "Piece" ? "1" : "0.01"}
                                   placeholder="0"
                                   value={item.quantity || ""}
                                   onChange={(e) => handleItemChange(item.id, "quantity", parseFloat(e.target.value) || 0)}
@@ -612,7 +622,7 @@ export default function CreateInvoicePage() {
                             </div>
                             <div className="space-y-1">
                               <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                                Rate ($)
+                                Unit Price ($)
                               </label>
                               <input
                                 type="number"
