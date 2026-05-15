@@ -77,15 +77,31 @@ type Product = {
   profitMargin?: number | null;
 };
 
-const isSqmUnit = (unit?: string) => {
-  const u = String(unit || "").trim().toLowerCase();
-  return u === "sqm" || u === "sq ft";
+const normalizeUnitLabel = (unit?: string) => {
+  const normalized = String(unit || "").trim().toLowerCase();
+  if (
+    normalized === "pieces" ||
+    normalized === "piece" ||
+    normalized === "pcs" ||
+    normalized === "pc"
+  ) {
+    return "pieces";
+  }
+  if (normalized === "lm" || normalized === "linear meter" || normalized === "linear meters") {
+    return "LM";
+  }
+  return "sqm";
+};
+
+const isDecimalUnit = (unit?: string) => {
+  const normalized = normalizeUnitLabel(unit).toLowerCase();
+  return normalized === "sqm" || normalized === "lm";
 };
 
 const normalizeStockQuantity = (value: number, unit: string) => {
   const numericValue = Number.isFinite(value) ? value : 0;
   if (numericValue <= 0) return 0;
-  if (isSqmUnit(unit)) return Math.round(numericValue * 100) / 100;
+  if (isDecimalUnit(unit)) return Math.round(numericValue * 100) / 100;
   return Math.floor(numericValue);
 };
 
@@ -98,10 +114,38 @@ const parseStockInput = (rawValue: string, unit: string) => {
 
 const formatStockQuantity = (stock: number, unit?: string) => {
   const numericStock = Number(stock) || 0;
-  if (isSqmUnit(unit)) {
+  if (isDecimalUnit(unit)) {
     return (Math.round(numericStock * 100) / 100).toFixed(2);
   }
   return String(numericStock);
+};
+
+const formatPricingUnit = (
+  pricingUnit?: Product["pricingUnit"],
+  unit?: string
+) => {
+  const normalizedUnit = normalizeUnitLabel(unit).toLowerCase();
+  if (normalizedUnit === "lm") return "per LM";
+  if (normalizedUnit === "pieces") return "per piece";
+
+  switch (pricingUnit) {
+    case "per_box":
+      return "per box";
+    case "per_sqft":
+      return "per sq ft";
+    case "per_piece":
+      return "per piece";
+    case "per_sqm":
+      return "per sqm";
+    default:
+      return "per sqm";
+  }
+};
+
+const unitToPricingUnit = (unit?: string): "per_sqm" | "per_piece" => {
+  const normalized = normalizeUnitLabel(unit).toLowerCase();
+  if (normalized === "pieces") return "per_piece";
+  return "per_sqm";
 };
 
 export default function ProductsPage() {
@@ -320,7 +364,7 @@ export default function ProductsPage() {
       size: product.size ?? "",
       price: product.price,
       stock: product.stock,
-      unit: "sqm",
+      unit: normalizeUnitLabel(product.unit),
       image: product.image ?? "",
       supplierType: product.supplierType ?? "own",
       supplier: supplierIdFromProduct,
@@ -329,10 +373,10 @@ export default function ProductsPage() {
       boxCoveragePackingDetails: product.boxCoveragePackingDetails ?? "",
       tilesPerBox: product.tilesPerBox ?? 0,
       coveragePerBox: product.coveragePerBox ?? 0,
-      coveragePerBoxUnit: "sqm",
+      coveragePerBoxUnit: product.coveragePerBoxUnit ?? "sqm",
       weightPerBox: product.weightPerBox ?? 0,
       retailPrice: product.retailPrice ?? product.price,
-      pricingUnit: "per_sqm",
+      pricingUnit: unitToPricingUnit(product.unit),
       discountSalePrice: product.discountSalePrice ?? null,
       builderPrice: product.builderPrice ?? null,
       taxPercent: product.taxPercent ?? null,
@@ -900,7 +944,7 @@ export default function ProductsPage() {
                           {item.retailPrice != null ? `$${Number(item.retailPrice).toFixed(2)}` : item.price != null ? `$${Number(item.price).toFixed(2)}` : "—"}
                         </TableCell>
                         <TableCell className="hidden text-neutral-600 dark:text-neutral-400 xl:table-cell text-xs">
-                          per sqm
+                          {formatPricingUnit(item.pricingUnit, item.unit)}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1 sm:gap-2">
@@ -916,7 +960,7 @@ export default function ProductsPage() {
                               {formatStockQuantity(item.stock, item.unit)}
                             </span>
                             <span className="text-[10px] text-neutral-500 dark:text-neutral-400 sm:text-xs">
-                              sqm
+                              {normalizeUnitLabel(item.unit)}
                             </span>
                           </div>
                         </TableCell>
@@ -1143,9 +1187,26 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Coverage Unit</label>
-                  <div className="flex h-9 items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
-                    Sq Meter (sqm)
-                  </div>
+                  <select
+                    value={normalizeUnitLabel(formData.unit)}
+                    onChange={(e) =>
+                      setFormData((prev) => {
+                        const nextUnit = e.target.value;
+                        return {
+                          ...prev,
+                          unit: nextUnit,
+                          stock: normalizeStockQuantity(prev.stock, nextUnit),
+                          pricingUnit: unitToPricingUnit(nextUnit),
+                          coveragePerBoxUnit: "sqm",
+                        };
+                      })
+                    }
+                    className="flex h-9 w-full items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-400"
+                  >
+                    <option value="sqm">sqm</option>
+                    <option value="LM">LM</option>
+                    <option value="pieces">pieces</option>
+                  </select>
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Weight per Box (kg) (Optional)</label>
@@ -1158,9 +1219,25 @@ export default function ProductsPage() {
                 <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-2">Sale (Customer Facing)</p>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Pricing Unit</label>
-                  <div className="flex h-9 items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
-                    Per Sq Meter (sqm)
-                  </div>
+                  <select
+                    value={normalizeUnitLabel(formData.unit)}
+                    onChange={(e) =>
+                      setFormData((prev) => {
+                        const nextUnit = e.target.value;
+                        return {
+                          ...prev,
+                          unit: nextUnit,
+                          stock: normalizeStockQuantity(prev.stock, nextUnit),
+                          pricingUnit: unitToPricingUnit(nextUnit),
+                        };
+                      })
+                    }
+                    className="flex h-9 w-full items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-400"
+                  >
+                    <option value="sqm">sqm</option>
+                    <option value="LM">LM</option>
+                    <option value="pieces">pieces</option>
+                  </select>
                 </div>
                 <div className="grid gap-2 mt-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Retail Price (per selected unit) <span className="text-red-500">*</span></label>
@@ -1216,25 +1293,41 @@ export default function ProductsPage() {
               {/* Stock (optional) */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Stock Qty (sqm)</label>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Stock Qty ({formData.unit})</label>
                   <Input
                     type="number"
                     min={0}
-                    step={0.01}
+                    step={isDecimalUnit(formData.unit) ? 0.01 : 1}
                     value={formData.stock || ""}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        stock: parseStockInput(e.target.value, "sqm"),
+                        stock: parseStockInput(e.target.value, formData.unit),
                       })
                     }
                   />
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Unit</label>
-                  <div className="flex h-9 items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
-                    sqm
-                  </div>
+                  <select
+                    value={formData.unit}
+                    onChange={(e) =>
+                      setFormData((prev) => {
+                        const nextUnit = e.target.value;
+                        return {
+                          ...prev,
+                          unit: nextUnit,
+                          stock: normalizeStockQuantity(prev.stock, nextUnit),
+                          pricingUnit: unitToPricingUnit(nextUnit),
+                        };
+                      })
+                    }
+                    className="flex h-9 w-full items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-400"
+                  >
+                    <option value="sqm">sqm</option>
+                    <option value="LM">LM</option>
+                    <option value="pieces">Pieces</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -1279,14 +1372,14 @@ export default function ProductsPage() {
                 <span className="text-neutral-500 dark:text-neutral-400">Supplier</span><span>{(productToView.supplierType ?? "own") === "third-party" ? "Third-Party" : "Own"}{productToView.supplierName ? ` · ${productToView.supplierName}` : ""}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Box / Packing</span><span className="col-span-1">{productToView.boxCoveragePackingDetails ?? "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Tiles per Box</span><span>{productToView.tilesPerBox ?? "—"}</span>
-                <span className="text-neutral-500 dark:text-neutral-400">Coverage per Box</span><span>{productToView.coveragePerBox != null ? `${productToView.coveragePerBox} sqm` : "—"}</span>
+                <span className="text-neutral-500 dark:text-neutral-400">Coverage per Box</span><span>{productToView.coveragePerBox != null ? `${productToView.coveragePerBox} ${normalizeUnitLabel(productToView.unit)}` : "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Weight per Box (kg)</span><span>{productToView.weightPerBox ?? "—"}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Retail Price</span><span className="font-medium">${Number(productToView.retailPrice ?? productToView.price ?? 0).toFixed(2)}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Builder Price</span><span>{productToView.builderPrice != null ? `$${Number(productToView.builderPrice).toFixed(2)}` : "—"}</span>
-                <span className="text-neutral-500 dark:text-neutral-400">Pricing Unit</span><span>per sqm</span>
+                <span className="text-neutral-500 dark:text-neutral-400">Pricing Unit</span><span>{formatPricingUnit(productToView.pricingUnit, productToView.unit)}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Cost Price</span><span>${Number(productToView.costPrice ?? 0).toFixed(2)}</span>
                 <span className="text-neutral-500 dark:text-neutral-400">Profit Margin</span><span>{productToView.profitMargin != null ? `${productToView.profitMargin}%` : "—"}</span>
-                <span className="text-neutral-500 dark:text-neutral-400">Stock</span><span>{formatStockQuantity(productToView.stock, "sqm")} sqm</span>
+                <span className="text-neutral-500 dark:text-neutral-400">Stock</span><span>{formatStockQuantity(productToView.stock, productToView.unit)} {normalizeUnitLabel(productToView.unit)}</span>
               </div>
               {productToView.description && (
                 <>
