@@ -92,21 +92,33 @@ const formatQty = (value: number) => {
 
 const getDisplayQuantity = (item: QuotationItem) => {
   const coverageSqm = Number(item.coverageSqm);
-  if (item.unitType === "Sq Meter" && Number.isFinite(coverageSqm) && coverageSqm > 0) {
+  const normalizedUnit = String(item.unitType || "").trim().toLowerCase();
+  if (
+    (normalizedUnit === "sq meter" || normalizedUnit === "sqm") &&
+    Number.isFinite(coverageSqm) &&
+    coverageSqm > 0
+  ) {
     return formatQty(coverageSqm);
   }
-  if (item.unitType === "Sq Ft" && Number.isFinite(coverageSqm) && coverageSqm > 0) {
+  if (
+    (normalizedUnit === "sq ft" || normalizedUnit === "sqft") &&
+    Number.isFinite(coverageSqm) &&
+    coverageSqm > 0
+  ) {
     return formatQty(coverageSqm * SQFT_PER_SQM);
   }
   return formatQty(item.quantity);
 };
 
-  const getDisplayUnit = (item: QuotationItem) => {
-    if (item.unitType === "Sq Meter") return "sqm";
-    if (item.unitType === "Sq Ft") return "sq ft";
-    if (item.unitType === "Piece") return "pcs";
-    return "box";
-  };
+const getDisplayUnit = (item: QuotationItem) => {
+  const normalizedUnit = String(item.unitType || "").trim().toLowerCase();
+  if (normalizedUnit === "sq meter" || normalizedUnit === "sqm") return "sqm";
+  if (normalizedUnit === "sq ft" || normalizedUnit === "sqft") return "sq ft";
+  if (normalizedUnit === "piece" || normalizedUnit === "pieces") return "pieces";
+  if (normalizedUnit === "lm") return "LM";
+  if (normalizedUnit === "box") return "box";
+  return item.unitType || "-";
+};
 
   const getItemSku = (item: QuotationItem) => {
     const value = item.product?.sku;
@@ -556,7 +568,7 @@ export default function ViewQuotationPage() {
                           {getItemSize(item)}
                         </td>
                         <td className="py-4 text-neutral-600 dark:text-neutral-400">
-                          {item.unitType || "-"}
+                          {getDisplayUnit(item)}
                         </td>
                         <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                           {getDisplayQuantity(item)} {getDisplayUnit(item)}
