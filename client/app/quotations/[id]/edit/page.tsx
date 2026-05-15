@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 
-const UNIT_TYPES = ["Sq Meter"] as const;
+const UNIT_TYPES = ["Sq Meter", "LM", "Piece"] as const;
 type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
 const SQFT_PER_SQM = 10.764;
 const DELIVERY_GST_RATE = 10;
@@ -87,7 +87,7 @@ type Quotation = {
   }>;
 };
 
-type StockUnit = "box" | "piece" | "sqm" | "sqft";
+type StockUnit = "box" | "piece" | "sqm" | "sqft" | "lm";
 
 function roundQty(value: number): number {
   return Math.round((Number(value) || 0) * 1000) / 1000;
@@ -118,6 +118,7 @@ function normalizeStockUnit(rawUnit?: string, pricingUnit?: PricingUnit): StockU
   }
 
   if (normalized.includes("piece")) return "piece";
+  if (normalized === "lm" || normalized.includes("linearmeter") || normalized.includes("linearmetre")) return "lm";
   if (normalized.includes("box")) return "box";
 
   if (pricingUnit === "per_sqm") return "sqm";
@@ -151,6 +152,7 @@ function normalizeItemUnitType(rawUnitType?: string): StockUnit {
   }
 
   if (normalized.includes("piece")) return "piece";
+  if (normalized === "lm" || normalized.includes("linearmeter") || normalized.includes("linearmetre")) return "lm";
   return "box";
 }
 
@@ -318,6 +320,8 @@ function getCoverageSqmForPayload(
   product?: Product
 ): number | undefined {
   if (!product) return undefined;
+  const itemUnit = normalizeItemUnitType(item.unitType);
+  if (itemUnit === "lm") return undefined;
   const derivedCoverageSqm = getItemCoverageSqm(product, item);
   if (derivedCoverageSqm != null && derivedCoverageSqm > 0) {
     return roundQty(derivedCoverageSqm);
@@ -502,7 +506,12 @@ export default function EditQuotationPage() {
   }, [quotationId]);
 
   const getProduct = (id: string) => products.find((p) => p._id === id);
-  const getPreferredUnitType = () => "Sq Meter";
+  const getPreferredUnitType = (product?: Product) => {
+    const normalized = String(product?.unit || "").trim().toLowerCase();
+    if (normalized === "lm" || normalized.includes("linear")) return "LM";
+    if (normalized.includes("piece") || normalized === "pcs" || normalized === "pc") return "Piece";
+    return "Sq Meter";
+  };
   const getStockUnitLabel = (product?: Product) => product?.unit || "boxes";
   const isStockRestrictedProduct = (product?: Product) => Boolean(product);
 
@@ -627,7 +636,7 @@ export default function EditQuotationPage() {
     if (!product) return;
     const rate = getRatePerSqm(product);
     const taxPercent = 10;
-    const preferredUnitType = getPreferredUnitType();
+    const preferredUnitType = getPreferredUnitType(product);
     let stockMessage: string | null = null;
 
     setItems((prev) =>
@@ -677,7 +686,9 @@ export default function EditQuotationPage() {
         if (item.id !== itemId) return item;
         const next = { ...item, [field]: value };
         const product = next.product ? getProduct(next.product) : undefined;
-        next.unitType = "Sq Meter";
+        if (field === "unitType" && typeof value === "string") {
+          next.unitType = value;
+        }
 
         if (next.product) {
           const requestedQuantity = Number(next.quantity) || 0;
@@ -766,7 +777,7 @@ export default function EditQuotationPage() {
       if (!isReadOnly && validItems.length > 0) {
         quotationData.items = validItems.map((item) => ({
           product: item.product,
-          unitType: "Sq Meter",
+          unitType: item.unitType || "Sq Meter",
           quantity: item.quantity,
           rate: item.rate,
           discountPercent: 0,
@@ -1119,10 +1130,10 @@ export default function EditQuotationPage() {
                           Product
                         </th>
                         <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Qty (sqm)
+                          Quantity
                         </th>
                         <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Rate ($/sqm)
+                          Unit Price ($)
                         </th>
                         <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                           Line Total
