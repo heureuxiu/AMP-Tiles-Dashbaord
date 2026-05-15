@@ -58,7 +58,7 @@ type StockMovement = {
 
 const normalizeTransactionQuantity = (
   value: number,
-  unit: "boxes" | "sqrMtr"
+  unit: "sqrMtr" | "units"
 ) => {
   const numeric = Number.isFinite(value) ? value : 0;
   if (numeric <= 0) return 0;
@@ -129,7 +129,7 @@ export default function StockUpdatePage() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [actionType, setActionType] = useState<"stock-in" | "stock-out" | "">("");
   const [quantity, setQuantity] = useState(0);
-  const [unit, setUnit] = useState<"boxes" | "sqrMtr">("sqrMtr");
+  const [unit, setUnit] = useState<"sqrMtr" | "units">("sqrMtr");
   const [remarks, setRemarks] = useState("");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -146,6 +146,16 @@ export default function StockUpdatePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedProduct = products.find((p) => p._id === selectedProductId);
+  const stockUnitLabel = selectedProduct?.unit || "units";
+  const isDecimalProductUnit =
+    String(selectedProduct?.unit || "").trim().toLowerCase() === "sqm" ||
+    String(selectedProduct?.unit || "").trim().toLowerCase() === "lm";
+
+  useEffect(() => {
+    if (!selectedProduct) return;
+    setUnit(isDecimalProductUnit ? "sqrMtr" : "units");
+    setQuantity((prev) => normalizeTransactionQuantity(prev, isDecimalProductUnit ? "sqrMtr" : "units"));
+  }, [selectedProductId, isDecimalProductUnit]);
 
   // Load products and stats on mount
   useEffect(() => {
@@ -242,7 +252,7 @@ export default function StockUpdatePage() {
         toast.success(
           `Stock ${actionType === "stock-in" ? "added" : "removed"} successfully`,
           {
-            description: `${quantity} ${unit === "sqrMtr" ? "Sqr Mtr" : "Boxes"} ${
+            description: `${quantity} ${selectedProduct?.unit || (unit === "sqrMtr" ? "sqm" : "units")} ${
               actionType === "stock-in" ? "added to" : "removed from"
             } ${selectedProduct?.name}`,
 
@@ -270,7 +280,7 @@ export default function StockUpdatePage() {
     setSelectedSupplierId("");
     setActionType("");
     setQuantity(0);
-    setUnit("boxes");
+    setUnit("sqrMtr");
     setRemarks("");
     setProducts([]);
   };
@@ -450,8 +460,8 @@ export default function StockUpdatePage() {
                   <Input
                     id="quantity"
                     type="number"
-                    min={unit === "sqrMtr" ? "0.01" : "1"}
-                    step={unit === "sqrMtr" ? "0.01" : "1"}
+                    min={isDecimalProductUnit ? "0.01" : "1"}
+                    step={isDecimalProductUnit ? "0.01" : "1"}
                     placeholder="Enter quantity"
                     value={quantity || ""}
                     onChange={(e) =>
@@ -469,7 +479,7 @@ export default function StockUpdatePage() {
                   <select
                     value={unit}
                     onChange={(e) => {
-                      const nextUnit = e.target.value as "boxes" | "sqrMtr";
+                      const nextUnit = e.target.value as "sqrMtr" | "units";
                       setUnit(nextUnit);
                       setQuantity(
                         normalizeTransactionQuantity(quantity, nextUnit)
@@ -478,7 +488,9 @@ export default function StockUpdatePage() {
                     disabled={isSubmitting}
                     className="h-10 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:focus-visible:ring-neutral-300"
                   >
-                    <option value="sqrMtr">Sqr Mtr</option>
+                    <option value={isDecimalProductUnit ? "sqrMtr" : "units"}>
+                      {selectedProduct?.unit || "units"}
+                    </option>
                   </select>
                 </div>
               </div>
@@ -588,7 +600,7 @@ export default function StockUpdatePage() {
                             {currentSqm.toFixed(2)}
                           </span>
                           <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                            sqm
+                            {stockUnitLabel}
                           </span>
                         </div>
                         {currentBoxes && (
@@ -606,7 +618,7 @@ export default function StockUpdatePage() {
                               </span>
                               {sqmPerBox && (
                                 <span className="ml-1 text-neutral-500 dark:text-neutral-400">
-                                  @{sqmPerBox.toFixed(2)} sqm/box
+                                  @{sqmPerBox.toFixed(2)} {stockUnitLabel}/box
                                 </span>
                               )}
                             </div>
@@ -672,7 +684,7 @@ export default function StockUpdatePage() {
                                     {newSqm.toFixed(2)}
                                   </span>
                                   <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                                    sqm
+                                    {stockUnitLabel}
                                   </span>
                                 </div>
                                 {newBoxes && (
