@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-const UNIT_TYPES = ["Sq Meter"] as const;
+const UNIT_TYPES = ["Sq Meter", "LM", "Piece"] as const;
 type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
 const SQFT_PER_SQM = 10.764;
 const DELIVERY_GST_RATE = 10;
@@ -53,7 +53,7 @@ type QuotationItem = {
 };
 type SaveMode = "draft" | "send";
 
-type StockUnit = "box" | "piece" | "sqm" | "sqft";
+type StockUnit = "box" | "piece" | "sqm" | "sqft" | "lm";
 
 function roundQty(value: number): number {
   return Math.round((Number(value) || 0) * 1000) / 1000;
@@ -84,6 +84,7 @@ function normalizeStockUnit(rawUnit?: string, pricingUnit?: PricingUnit): StockU
   }
 
   if (normalized.includes("piece")) return "piece";
+  if (normalized === "lm" || normalized.includes("linearmeter") || normalized.includes("linearmetre")) return "lm";
   if (normalized.includes("box")) return "box";
 
   if (pricingUnit === "per_sqm") return "sqm";
@@ -197,6 +198,22 @@ function formatQty(value: number): string {
   return rounded.toFixed(3).replace(/\.?0+$/, "");
 }
 
+function normalizeItemUnitType(rawUnitType?: string): StockUnit {
+  const normalized = String(rawUnitType || "sqm")
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "");
+
+  if (normalized.includes("sqm") || normalized.includes("sqmeter") || normalized.includes("sqmetre") || normalized.includes("m2")) {
+    return "sqm";
+  }
+  if (normalized.includes("sqft") || normalized.includes("sqfeet") || normalized.includes("ft2")) {
+    return "sqft";
+  }
+  if (normalized.includes("piece")) return "piece";
+  if (normalized === "lm" || normalized.includes("linearmeter") || normalized.includes("linearmetre")) return "lm";
+  return "box";
+}
+
 function getItemCoverageSqm(product: Product, item: QuotationItem): number | null {
   const explicitCoverageSqm = Number((item as { coverageSqm?: number }).coverageSqm);
   if (Number.isFinite(explicitCoverageSqm) && explicitCoverageSqm > 0) {
@@ -204,7 +221,17 @@ function getItemCoverageSqm(product: Product, item: QuotationItem): number | nul
   }
 
   const quantity = Number(item.quantity) || 0;
-  return quantity > 0 ? quantity : null;
+  if (quantity <= 0) return null;
+  const itemUnit = normalizeItemUnitType(item.unitType);
+  const sqmPerBox = getSqmPerBox(product);
+  const sqmPerPiece = getSqmPerPiece(product);
+
+  if (itemUnit === "sqm") return quantity;
+  if (itemUnit === "sqft") return quantity / SQFT_PER_SQM;
+  if (itemUnit === "box") return sqmPerBox > 0 ? quantity * sqmPerBox : quantity;
+  if (itemUnit === "piece") return sqmPerPiece > 0 ? quantity * sqmPerPiece : quantity;
+  if (itemUnit === "lm") return null;
+  return quantity;
 }
 
 function getItemStockDemand(product: Product, item: QuotationItem): number {
@@ -235,6 +262,8 @@ function getCoverageSqmForPayload(
 ): number | undefined {
   if (!product) return undefined;
   const derivedCoverageSqm = getItemCoverageSqm(product, item);
+  const itemUnit = normalizeItemUnitType(item.unitType);
+  if (itemUnit === "lm") return undefined;
   if (derivedCoverageSqm != null && derivedCoverageSqm > 0) {
     return roundQty(derivedCoverageSqm);
   }
@@ -422,7 +451,7 @@ export default function CreateQuotationPage() {
     if (supplierId) fetchProducts(supplierId);
   };
 
-  const getProduct = (id: string) => {
+const getProduct = (id: string) => {
     if (!id) return undefined;
     for (const supplierProducts of Object.values(productsBySupplier)) {
       const found = supplierProducts.find((p) => p._id === id);
@@ -430,7 +459,12 @@ export default function CreateQuotationPage() {
     }
     return undefined;
   };
-  const getPreferredUnitType = () => "Sq Meter";
+  const getPreferredUnitType = (product?: Product) => {
+    const normalized = String(product?.unit || "").trim().toLowerCase();
+    if (normalized === "lm" || normalized.includes("linear")) return "LM";
+    if (normalized.includes("piece") || normalized === "pcs" || normalized === "pc") return "Piece";
+    return "Sq Meter";
+  };
   const getStockUnitLabel = (product?: Product) => product?.unit || "boxes";
   const isStockRestrictedProduct = (product?: Product) => Boolean(product);
 
@@ -560,7 +594,7 @@ export default function CreateQuotationPage() {
     if (!product) return;
     const rate = getRatePerSqm(product);
     const taxPercent = 10;
-    const preferredUnitType = getPreferredUnitType();
+    const preferredUnitType = getPreferredUnitType(product);
     let stockMessage: string | null = null;
 
     setItems((prev) =>
@@ -611,7 +645,9 @@ export default function CreateQuotationPage() {
         if (item.id !== itemId) return item;
         const next = { ...item, [field]: value };
         const product = next.product ? getProduct(next.product) : undefined;
-        next.unitType = "Sq Meter";
+        if (field === "unitType" && typeof value === "string") {
+          next.unitType = value;
+        }
 
         if (next.product) {
           const requestedQuantity = Number(next.quantity) || 0;
@@ -704,7 +740,7 @@ export default function CreateQuotationPage() {
         deliveryCost,
         items: validItems.map(item => ({
           product: item.product,
-          unitType: "Sq Meter",
+          unitType: item.unitType || "Sq Meter",
           quantity: item.quantity,
           rate: item.rate,
           discountPercent: 0,
@@ -1193,7 +1229,7 @@ export default function CreateQuotationPage() {
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                         <div className="space-y-1">
                           <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                            Piece (sqm)
+                            Quantity
                           </label>
                           <div className="space-y-1">
                             <input
@@ -1222,7 +1258,7 @@ export default function CreateQuotationPage() {
 
                         <div className="space-y-1">
                           <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                            Rate ($/sqm)
+                            Unit Price ($)
                           </label>
                           <input
                             type="number"
