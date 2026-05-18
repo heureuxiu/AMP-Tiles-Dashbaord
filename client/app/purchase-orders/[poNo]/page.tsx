@@ -208,6 +208,12 @@ export default function PurchaseOrderDetailPage() {
     return size && String(size).trim().length > 0 ? String(size) : "-";
   };
 
+  const getDisplayUnit = (unitType?: string) => {
+    const normalized = String(unitType || "").trim().toLowerCase();
+    if (normalized === "piece" || normalized === "pieces" || normalized === "pcs") return "Quantity";
+    return unitType ?? "Box";
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -391,13 +397,13 @@ export default function PurchaseOrderDetailPage() {
                   <TableHead>Product</TableHead>
                   <TableHead>Size</TableHead>
                   <TableHead>Unit</TableHead>
-                  <TableHead>Piece Ordered</TableHead>
+                  <TableHead>Quantity Ordered</TableHead>
                   <TableHead>Unit Price</TableHead>
                   <TableHead>Disc %</TableHead>
                   <TableHead>Tax %</TableHead>
                   <TableHead>Line Total</TableHead>
                   <TableHead>Coverage</TableHead>
-                  <TableHead>Piece Received</TableHead>
+                  <TableHead>Quantity Received</TableHead>
                   <TableHead>Remaining</TableHead>
                   <TableHead>Damaged</TableHead>
                   <TableHead>Batch</TableHead>
@@ -414,7 +420,7 @@ export default function PurchaseOrderDetailPage() {
                     <TableRow key={item._id}>
                       <TableCell className="font-medium text-neutral-900 dark:text-white">{getProductDisplay(item)}</TableCell>
                       <TableCell>{getItemSize(item)}</TableCell>
-                      <TableCell>{item.unitType ?? "Box"}</TableCell>
+                      <TableCell>{getDisplayUnit(item.unitType)}</TableCell>
                       <TableCell className="font-semibold">{qtyOrdered}</TableCell>
                       <TableCell>{formatCurrency(item.rate)}</TableCell>
                       <TableCell>{item.discountPercent ?? 0}%</TableCell>
