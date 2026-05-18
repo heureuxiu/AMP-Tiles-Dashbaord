@@ -1205,7 +1205,7 @@ export default function ProductsPage() {
                   >
                     <option value="sqm">sqm</option>
                     <option value="LM">LM</option>
-                    <option value="pieces">pieces</option>
+                    <option value="pieces">quantity</option>
                   </select>
                 </div>
                 <div className="grid gap-2">
@@ -1236,7 +1236,7 @@ export default function ProductsPage() {
                   >
                     <option value="sqm">sqm</option>
                     <option value="LM">LM</option>
-                    <option value="pieces">pieces</option>
+                    <option value="pieces">quantity</option>
                   </select>
                 </div>
                 <div className="grid gap-2 mt-2">
@@ -1326,7 +1326,7 @@ export default function ProductsPage() {
                   >
                     <option value="sqm">sqm</option>
                     <option value="LM">LM</option>
-                    <option value="pieces">Pieces</option>
+                    <option value="pieces">Quantity</option>
                   </select>
                 </div>
               </div>
