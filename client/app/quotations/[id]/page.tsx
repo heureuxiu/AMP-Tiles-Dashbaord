@@ -114,7 +114,7 @@ const getDisplayUnit = (item: QuotationItem) => {
   const normalizedUnit = String(item.unitType || "").trim().toLowerCase();
   if (normalizedUnit === "sq meter" || normalizedUnit === "sqm") return "sqm";
   if (normalizedUnit === "sq ft" || normalizedUnit === "sqft") return "sq ft";
-  if (normalizedUnit === "piece" || normalizedUnit === "pieces") return "pieces";
+  if (normalizedUnit === "piece" || normalizedUnit === "pieces") return "quantity";
   if (normalizedUnit === "lm") return "LM";
   if (normalizedUnit === "box") return "box";
   return item.unitType || "-";
@@ -536,7 +536,7 @@ export default function ViewQuotationPage() {
                         Unit
                       </th>
                       <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                        Piece
+                        Quantity
                       </th>
                       <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                         Rate
