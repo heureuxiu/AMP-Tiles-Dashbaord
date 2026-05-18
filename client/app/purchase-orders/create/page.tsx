@@ -58,6 +58,9 @@ const isDecimalUnitType = (unitType?: string) => {
   return normalized === "sqm" || normalized === "lm";
 };
 
+const getUnitTypeLabel = (unitType: (typeof UNIT_TYPES)[number]) =>
+  unitType === "Piece" ? "Quantity" : unitType;
+
 export default function CreatePurchaseOrderPage() {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
@@ -563,7 +566,7 @@ export default function CreatePurchaseOrderPage() {
                       className={fieldCls}
                     >
                       {UNIT_TYPES.map((u) => (
-                        <option key={u} value={u}>{u}</option>
+                        <option key={u} value={u}>{getUnitTypeLabel(u)}</option>
                       ))}
                     </select>
                   </div>
