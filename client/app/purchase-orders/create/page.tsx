@@ -59,7 +59,7 @@ const isDecimalUnitType = (unitType?: string) => {
 };
 
 const getUnitTypeLabel = (unitType: (typeof UNIT_TYPES)[number]) =>
-  unitType === "Piece" ? "Quantity" : unitType;
+  unitType === "Piece" ? "Pieces" : unitType;
 
 export default function CreatePurchaseOrderPage() {
   const router = useRouter();
