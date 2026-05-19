@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/contexts/auth-context";
+import { GlobalActionLoader } from "@/components/ui/global-action-loader";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -39,6 +40,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <AuthProvider>
+          <GlobalActionLoader />
           {children}
           <Toaster position="top-center" closeButton />
         </AuthProvider>
