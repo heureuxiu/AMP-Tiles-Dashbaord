@@ -79,9 +79,30 @@ interface ApiResponse<T = unknown> {
 
 class ApiClient {
   private baseURL: string;
+  private static pendingRequests = 0;
+  private static readonly LOADING_EVENT = 'amp:global-loading';
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
+  }
+
+  private emitLoadingState() {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent(ApiClient.LOADING_EVENT, {
+        detail: { isLoading: ApiClient.pendingRequests > 0 },
+      })
+    );
+  }
+
+  private beginLoading() {
+    ApiClient.pendingRequests += 1;
+    this.emitLoadingState();
+  }
+
+  private endLoading() {
+    ApiClient.pendingRequests = Math.max(0, ApiClient.pendingRequests - 1);
+    this.emitLoadingState();
   }
 
   private async request<T>(
@@ -98,6 +119,7 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    this.beginLoading();
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
@@ -131,6 +153,8 @@ class ApiClient {
       }
       // Handle unknown error types
       throw new Error('Network error occurred');
+    } finally {
+      this.endLoading();
     }
   }
 
@@ -370,26 +394,30 @@ class ApiClient {
     const token = localStorage.getItem('amp_token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    this.beginLoading();
+    try {
+      const response = await fetch(`${this.baseURL}/quotations/${id}/pdf`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
 
-    const response = await fetch(`${this.baseURL}/quotations/${id}/pdf`, {
-      method: 'GET',
-      headers,
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      let message = `HTTP ${response.status}`;
-      try {
-        const j = JSON.parse(errText);
-        if (j.message) message = j.message;
-      } catch {
-        if (errText) message = errText;
+      if (!response.ok) {
+        const errText = await response.text();
+        let message = `HTTP ${response.status}`;
+        try {
+          const j = JSON.parse(errText);
+          if (j.message) message = j.message;
+        } catch {
+          if (errText) message = errText;
+        }
+        throw new Error(message);
       }
-      throw new Error(message);
-    }
 
-    return response.blob();
+      return response.blob();
+    } finally {
+      this.endLoading();
+    }
   }
 
   async sendQuotationByEmail(id: string) {
@@ -695,26 +723,30 @@ class ApiClient {
     const token = localStorage.getItem('amp_token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    this.beginLoading();
+    try {
+      const response = await fetch(`${this.baseURL}/purchase-orders/${id}/pdf`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
 
-    const response = await fetch(`${this.baseURL}/purchase-orders/${id}/pdf`, {
-      method: 'GET',
-      headers,
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      let message = `HTTP ${response.status}`;
-      try {
-        const j = JSON.parse(errText);
-        if (j.message) message = j.message;
-      } catch {
-        if (errText) message = errText;
+      if (!response.ok) {
+        const errText = await response.text();
+        let message = `HTTP ${response.status}`;
+        try {
+          const j = JSON.parse(errText);
+          if (j.message) message = j.message;
+        } catch {
+          if (errText) message = errText;
+        }
+        throw new Error(message);
       }
-      throw new Error(message);
-    }
 
-    return response.blob();
+      return response.blob();
+    } finally {
+      this.endLoading();
+    }
   }
 
   // Invoice Management endpoints
@@ -848,52 +880,60 @@ class ApiClient {
     const token = localStorage.getItem('amp_token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    this.beginLoading();
+    try {
+      const response = await fetch(`${this.baseURL}/invoices/${id}/pdf`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
 
-    const response = await fetch(`${this.baseURL}/invoices/${id}/pdf`, {
-      method: 'GET',
-      headers,
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      let message = `HTTP ${response.status}`;
-      try {
-        const j = JSON.parse(errText);
-        if (j.message) message = j.message;
-      } catch {
-        if (errText) message = errText;
+      if (!response.ok) {
+        const errText = await response.text();
+        let message = `HTTP ${response.status}`;
+        try {
+          const j = JSON.parse(errText);
+          if (j.message) message = j.message;
+        } catch {
+          if (errText) message = errText;
+        }
+        throw new Error(message);
       }
-      throw new Error(message);
-    }
 
-    return response.blob();
+      return response.blob();
+    } finally {
+      this.endLoading();
+    }
   }
 
   async getPackingSlipPdfBlob(id: string): Promise<Blob> {
     const token = localStorage.getItem('amp_token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    this.beginLoading();
+    try {
+      const response = await fetch(`${this.baseURL}/invoices/${id}/packing-slip`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
 
-    const response = await fetch(`${this.baseURL}/invoices/${id}/packing-slip`, {
-      method: 'GET',
-      headers,
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      let message = `HTTP ${response.status}`;
-      try {
-        const j = JSON.parse(errText);
-        if (j.message) message = j.message;
-      } catch {
-        if (errText) message = errText;
+      if (!response.ok) {
+        const errText = await response.text();
+        let message = `HTTP ${response.status}`;
+        try {
+          const j = JSON.parse(errText);
+          if (j.message) message = j.message;
+        } catch {
+          if (errText) message = errText;
+        }
+        throw new Error(message);
       }
-      throw new Error(message);
-    }
 
-    return response.blob();
+      return response.blob();
+    } finally {
+      this.endLoading();
+    }
   }
 
   async getInvoiceStats() {
