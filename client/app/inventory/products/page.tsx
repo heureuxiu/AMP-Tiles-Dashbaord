@@ -442,10 +442,6 @@ export default function ProductsPage() {
       toast.error("Box coverage / packing details is required");
       return;
     }
-    if (formData.tilesPerBox <= 0) {
-      toast.error("Tiles per box is required and must be greater than 0");
-      return;
-    }
     if (formData.retailPrice <= 0) {
       toast.error("Retail price is required and must be greater than 0");
       return;
@@ -1176,8 +1172,8 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Tiles per Box <span className="text-red-500">*</span></label>
-                  <Input type="number" min={1} step={1} value={formData.tilesPerBox || ""} onChange={(e) => setFormData({ ...formData, tilesPerBox: parseInt(e.target.value) || 0 })} required />
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Tiles per Box (Optional)</label>
+                  <Input type="number" min={0} step={1} value={formData.tilesPerBox || ""} onChange={(e) => setFormData({ ...formData, tilesPerBox: parseInt(e.target.value) || 0 })} placeholder="Optional" />
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Coverage per Box (Optional)</label>
@@ -1205,7 +1201,7 @@ export default function ProductsPage() {
                   >
                     <option value="sqm">sqm</option>
                     <option value="LM">LM</option>
-                    <option value="pieces">quantity</option>
+                    <option value="pieces">pieces</option>
                   </select>
                 </div>
                 <div className="grid gap-2">
@@ -1236,7 +1232,7 @@ export default function ProductsPage() {
                   >
                     <option value="sqm">sqm</option>
                     <option value="LM">LM</option>
-                    <option value="pieces">quantity</option>
+                    <option value="pieces">pieces</option>
                   </select>
                 </div>
                 <div className="grid gap-2 mt-2">
@@ -1326,7 +1322,7 @@ export default function ProductsPage() {
                   >
                     <option value="sqm">sqm</option>
                     <option value="LM">LM</option>
-                    <option value="pieces">Quantity</option>
+                    <option value="pieces">Pieces</option>
                   </select>
                 </div>
               </div>
