@@ -78,6 +78,12 @@ const getItemSize = (item: InvoiceItem) => {
   return value && String(value).trim().length > 0 ? String(value) : "-";
 };
 
+const getDisplayUnit = (unitType?: string) => {
+  const normalized = String(unitType || "").trim().toLowerCase();
+  if (normalized === "sq meter" || normalized === "sqm" || normalized === "sqmetre") return "sqm";
+  return unitType ?? "-";
+};
+
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
 
 const formatPaymentStatus = (status?: string) => {
@@ -492,7 +498,7 @@ export default function InvoiceDetailPage() {
                         {getItemSize(item)}
                       </td>
                       <td className="py-4 text-neutral-600 dark:text-neutral-400">
-                        {item.unitType ?? "-"}
+                        {getDisplayUnit(item.unitType)}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                         {getDisplayQuantity(item)}
