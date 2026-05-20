@@ -209,8 +209,6 @@ export default function PurchaseOrderDetailPage() {
   };
 
   const getDisplayUnit = (unitType?: string) => {
-    const normalized = String(unitType || "").trim().toLowerCase();
-    if (normalized === "piece" || normalized === "pieces" || normalized === "pcs") return "Quantity";
     return unitType ?? "Box";
   };
 
