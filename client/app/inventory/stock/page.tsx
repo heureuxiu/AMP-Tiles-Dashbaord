@@ -29,6 +29,8 @@ type Supplier = {
   supplierNumber?: string;
 };
 
+const OWN_PRODUCTS_KEY = "__own_products__";
+
 type StockStats = {
   totalProducts: number;
   totalStock: number;
@@ -211,7 +213,10 @@ export default function StockUpdatePage() {
     }
     try {
       setIsLoadingProducts(true);
-      const response = await api.getProducts({ supplier: supplierId, status: "active" });
+      const response =
+        supplierId === OWN_PRODUCTS_KEY
+          ? await api.getProducts({ supplierType: "own", status: "active" })
+          : await api.getProducts({ supplier: supplierId, status: "active" });
       if (response.success && response.products) {
         setProducts(response.products as Product[]);
       } else {
@@ -220,7 +225,7 @@ export default function StockUpdatePage() {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to fetch products";
-      toast.error("Failed to load supplier products", {
+      toast.error("Failed to load products", {
         description: errorMessage,
       });
       setProducts([]);
@@ -352,7 +357,7 @@ export default function StockUpdatePage() {
                   htmlFor="supplier"
                   className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
-                  Select Supplier <span className="text-red-500">*</span>
+                  Select Category <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="supplier"
@@ -367,7 +372,8 @@ export default function StockUpdatePage() {
                   required
                   disabled={isLoading || isSubmitting}
                 >
-                  <option value="">Choose a supplier</option>
+                  <option value="">Choose supplier / own products</option>
+                  <option value={OWN_PRODUCTS_KEY}>Own Products</option>
                   {suppliers.map((supplier) => (
                     <option key={supplier._id} value={supplier._id}>
                       {supplier.name}
@@ -395,7 +401,7 @@ export default function StockUpdatePage() {
                 >
                   <option value="">
                     {!selectedSupplierId
-                      ? "Select supplier first"
+                      ? "Select supplier / own products first"
                       : isLoadingProducts
                         ? "Loading products..."
                         : products.length === 0
