@@ -486,6 +486,13 @@ export default function QuotationsPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+                              onClick={() => handleStatusChange(quotation._id, "accepted")}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                              Accepted
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs"
                               onClick={() => handleStatusChange(quotation._id, "rejected")}
                             >
                               <span className="h-2 w-2 rounded-full bg-red-500" />
