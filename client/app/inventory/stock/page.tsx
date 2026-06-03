@@ -372,8 +372,8 @@ export default function StockUpdatePage() {
                   required
                   disabled={isLoading || isSubmitting}
                 >
-                  <option value="">Choose supplier / own products</option>
-                  <option value={OWN_PRODUCTS_KEY}>Own Products</option>
+                  <option value="">Choose supplier / AMP products</option>
+                  <option value={OWN_PRODUCTS_KEY}>AMP Products</option>
                   {suppliers.map((supplier) => (
                     <option key={supplier._id} value={supplier._id}>
                       {supplier.name}
@@ -401,7 +401,7 @@ export default function StockUpdatePage() {
                 >
                   <option value="">
                     {!selectedSupplierId
-                      ? "Select supplier / own products first"
+                      ? "Select supplier / AMP products first"
                       : isLoadingProducts
                         ? "Loading products..."
                         : products.length === 0
