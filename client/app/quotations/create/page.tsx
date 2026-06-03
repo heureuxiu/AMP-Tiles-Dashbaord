@@ -179,9 +179,11 @@ function getBillableQuantity(item: QuotationItem): number {
 function calcLineTotal(item: QuotationItem): number {
   const billableQty = getBillableQuantity(item);
   const base = billableQty * item.rate;
+  const discountAmount = base * ((Number(item.discountPercent) || 0) / 100);
+  const discountedBase = Math.max(0, base - discountAmount);
   const taxPercent = Number(item.taxPercent ?? 10);
-  const taxAmount = base * (taxPercent / 100);
-  return Math.round((base + taxAmount) * 100) / 100;
+  const taxAmount = discountedBase * (taxPercent / 100);
+  return Math.round((discountedBase + taxAmount) * 100) / 100;
 }
 
 function getBoxesFromSqm(sqmValue: number, product?: Product): number | null {
@@ -330,6 +332,8 @@ const createEmptyItem = (id?: string): QuotationItem => ({
   coverageInput: "",
 });
 
+const OWN_PRODUCTS_KEY = "__own_products__";
+
 export default function CreateQuotationPage() {
   const router = useRouter();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -401,7 +405,10 @@ export default function CreateQuotationPage() {
     try {
       setIsLoadingProducts(true);
       setIsLoadingProductsBySupplier((prev) => ({ ...prev, [supplierId]: true }));
-      const response = await api.getProducts({ supplier: supplierId });
+      const response =
+        supplierId === OWN_PRODUCTS_KEY
+          ? await api.getProducts({ supplierType: "own" })
+          : await api.getProducts({ supplier: supplierId });
       const supplierProducts =
         response.success && response.products
           ? (response.products as Product[])
@@ -743,7 +750,7 @@ const getProduct = (id: string) => {
           unitType: item.unitType || "Sq Meter",
           quantity: item.quantity,
           rate: item.rate,
-          discountPercent: 0,
+          discountPercent: item.discountPercent || 0,
           taxPercent: item.taxPercent ?? 10,
           coverageSqm: getCoverageSqmForPayload(item, getProduct(item.product)),
         })),
@@ -1171,6 +1178,7 @@ const getProduct = (id: string) => {
                             <option value="">
                               {isLoadingSuppliers ? "Loading…" : "Select supplier"}
                             </option>
+                            <option value={OWN_PRODUCTS_KEY}>Own Products</option>
                             {suppliers.map((sup) => (
                               <option key={sup._id} value={sup._id}>
                                 {sup.name}
@@ -1193,7 +1201,7 @@ const getProduct = (id: string) => {
                           >
                             <option value="">
                               {!item.supplierId
-                                ? "Select supplier first"
+                                ? "Select supplier / own products first"
                                 : isCurrentSupplierLoading
                                 ? "Loading…"
                                 : rowProducts.length === 0
@@ -1285,9 +1293,10 @@ const getProduct = (id: string) => {
                             max="100"
                             step="0.5"
                             placeholder="10"
-                            value={0}
-                            readOnly
-                            disabled
+                            value={item.discountPercent || ""}
+                            onChange={(e) =>
+                              handleItemChange(item.id, "discountPercent", parseFloat(e.target.value) || 0)
+                            }
                             className={fieldCls}
                             style={{ MozAppearance: "textfield" } as React.CSSProperties}
                           />
@@ -1338,7 +1347,7 @@ const getProduct = (id: string) => {
                             <span>Available to quote: <strong className="text-neutral-700 dark:text-neutral-300">{formatStockQty(maxQuantityForItem)}</strong> sqm</span>
                           )}
                           {!isStockRestricted && item.product && (
-                            <span>Stock check: <strong className="text-neutral-700 dark:text-neutral-300">Skipped (third-party)</strong></span>
+                            <span>Stock check: <strong className="text-neutral-700 dark:text-neutral-300">{product?.supplierType === "own" ? "Enabled" : "Skipped (third-party)"}</strong></span>
                           )}
                         </div>
                       )}
