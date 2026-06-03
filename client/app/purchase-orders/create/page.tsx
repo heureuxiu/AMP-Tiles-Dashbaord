@@ -227,7 +227,7 @@ export default function CreatePurchaseOrderPage() {
 
   const validateForm = () => {
     if (!supplier) {
-      toast.error("Please select a supplier or Own Products");
+      toast.error("Please select a supplier or AMP Products");
       return false;
     }
     const validItems = items.filter((item) => item.product && item.quantityOrdered > 0);
@@ -377,8 +377,8 @@ export default function CreatePurchaseOrderPage() {
                   disabled={isSaving}
                   className="w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900"
                 >
-                  <option value="">Select Supplier / Own Products</option>
-                  <option value={OWN_PRODUCTS_KEY}>Own Products</option>
+                  <option value="">Select Supplier / AMP Products</option>
+                  <option value={OWN_PRODUCTS_KEY}>AMP Products</option>
                   {suppliers.map((sup) => (
                     <option key={sup._id} value={sup._id}>
                       {sup.name} {sup.supplierNumber ? `(${sup.supplierNumber})` : ""}
