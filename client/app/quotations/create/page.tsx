@@ -435,6 +435,23 @@
       return productsBySupplier[supplierId] || [];
     };
 
+    const mergeProductIntoSupplierCache = (supplierId: string, product: Product) => {
+      if (!supplierId || !product?._id) return;
+      setProductsBySupplier((prev) => {
+        const currentProducts = prev[supplierId] || [];
+        const productIndex = currentProducts.findIndex((p) => p._id === product._id);
+        const nextProducts =
+          productIndex >= 0
+            ? currentProducts.map((p) => (p._id === product._id ? product : p))
+            : [...currentProducts, product];
+
+        return {
+          ...prev,
+          [supplierId]: nextProducts,
+        };
+      });
+    };
+
     const handleItemSupplierChange = (itemId: string, supplierId: string) => {
       setItems((prev) =>
         prev.map((item) =>
@@ -574,7 +591,7 @@
       setItems(items.filter((item) => item.id !== id));
     };
 
-    const handleProductChange = (itemId: string, productId: string) => {
+    const handleProductChange = async (itemId: string, productId: string) => {
       if (!productId) {
         setItems((prev) =>
           prev.map((item) =>
@@ -597,7 +614,20 @@
 
       const currentItem = items.find((item) => item.id === itemId);
       const supplierProducts = getProductsForSupplier(currentItem?.supplierId || "");
-      const product = supplierProducts.find((p) => p._id === productId) || getProduct(productId);
+      const cachedProduct = supplierProducts.find((p) => p._id === productId) || getProduct(productId);
+      let product = cachedProduct;
+      try {
+        const response = await api.getProduct(productId);
+        if (response.success && response.product) {
+          product = response.product as Product;
+          mergeProductIntoSupplierCache(currentItem?.supplierId || "", product);
+        }
+      } catch {
+        if (!cachedProduct) {
+          toast.error("Failed to load selected product");
+          return;
+        }
+      }
       if (!product) return;
       const rate = getRatePerSqm(product);
       const taxPercent = 10;
@@ -1130,7 +1160,7 @@
                       product &&
                       ((product.tilesPerBox ?? 0) > 0 ||
                         (product.coveragePerBox ?? 0) > 0 ||
-                        (product.stock ?? 0) > 0);
+                        product.stock != null);
                     const estimatedBoxes = getBoxesFromSqm(item.quantity, product);
                     const rowProducts = getProductsForSupplier(item.supplierId);
                     const isCurrentSupplierLoading = Boolean(
@@ -1178,7 +1208,7 @@
                               <option value="">
                                 {isLoadingSuppliers ? "Loading…" : "Select supplier"}
                               </option>
-                              <option value={OWN_PRODUCTS_KEY}>Own Products</option>
+                            <option value={OWN_PRODUCTS_KEY}>AMP Products</option>
                               {suppliers.map((sup) => (
                                 <option key={sup._id} value={sup._id}>
                                   {sup.name}
@@ -1201,7 +1231,7 @@
                             >
                               <option value="">
                                 {!item.supplierId
-                                  ? "Select supplier / own products first"
+                                  ? "Select supplier / AMP products first"
                                   : isCurrentSupplierLoading
                                   ? "Loading…"
                                   : rowProducts.length === 0
