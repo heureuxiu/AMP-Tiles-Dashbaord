@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 const UNIT_TYPES = ["Sqm", "LM", "Piece"] as const;
 const PAYMENT_TERMS = ["", "COD", "Net 7", "Net 15", "Net 30", "Net 60"];
 const CURRENCIES = ["AUD", "USD", "EUR", "GBP"];
+const OWN_PRODUCTS_KEY = "__own_products__";
 
 type POItem = {
   id: string;
@@ -44,6 +45,7 @@ type Product = {
   coveragePerBoxUnit?: string;
   tilesPerBox?: number;
   unit?: string;
+  supplierType?: "third-party" | "own";
 };
 
 const normalizeUnitLabel = (unit?: string) => {
@@ -102,7 +104,10 @@ export default function CreatePurchaseOrderPage() {
       }
       try {
         setIsLoadingProducts(true);
-        const productsResponse = await api.getProducts({ supplier });
+        const productsResponse =
+          supplier === OWN_PRODUCTS_KEY
+            ? await api.getProducts({ supplierType: "own" })
+            : await api.getProducts({ supplier });
         if (productsResponse.success && productsResponse.products) {
           setProducts(productsResponse.products);
         } else {
@@ -222,7 +227,7 @@ export default function CreatePurchaseOrderPage() {
 
   const validateForm = () => {
     if (!supplier) {
-      toast.error("Please select a supplier");
+      toast.error("Please select a supplier or Own Products");
       return false;
     }
     const validItems = items.filter((item) => item.product && item.quantityOrdered > 0);
@@ -241,6 +246,7 @@ export default function CreatePurchaseOrderPage() {
       const validItems = items.filter((item) => item.product && item.quantityOrdered > 0);
       const poData = {
         supplier,
+        supplierType: supplier === OWN_PRODUCTS_KEY ? "own" as const : "third-party" as const,
         poDate,
         expectedDeliveryDate: expectedDeliveryDate || undefined,
         warehouseLocation: warehouseLocation || undefined,
@@ -371,7 +377,8 @@ export default function CreatePurchaseOrderPage() {
                   disabled={isSaving}
                   className="w-full rounded-md border border-gray-200 bg-slate-100 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-amp-primary focus:bg-transparent focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900"
                 >
-                  <option value="">Select Supplier</option>
+                  <option value="">Select Supplier / Own Products</option>
+                  <option value={OWN_PRODUCTS_KEY}>Own Products</option>
                   {suppliers.map((sup) => (
                     <option key={sup._id} value={sup._id}>
                       {sup.name} {sup.supplierNumber ? `(${sup.supplierNumber})` : ""}
