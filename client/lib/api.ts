@@ -207,6 +207,7 @@ class ApiClient {
     status?: string;
     supplier?: string;
     supplierName?: string;
+    supplierType?: 'third-party' | 'own';
   }) {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
@@ -215,6 +216,7 @@ class ApiClient {
     if (params?.status) queryParams.append('status', params.status);
     if (params?.supplier) queryParams.append('supplier', params.supplier);
     if (params?.supplierName) queryParams.append('supplierName', params.supplierName);
+    if (params?.supplierType) queryParams.append('supplierType', params.supplierType);
 
     const query = queryParams.toString();
     return this.request(`/products${query ? `?${query}` : ''}`, {
@@ -630,6 +632,7 @@ class ApiClient {
 
   async createPurchaseOrder(data: {
     supplier: string;
+    supplierType?: 'third-party' | 'own';
     poDate?: string;
     expectedDeliveryDate?: string;
     warehouseLocation?: string;
@@ -655,6 +658,7 @@ class ApiClient {
 
   async updatePurchaseOrder(id: string, data: {
     supplier?: string;
+    supplierType?: 'third-party' | 'own';
     poDate?: string;
     expectedDeliveryDate?: string;
     warehouseLocation?: string;
