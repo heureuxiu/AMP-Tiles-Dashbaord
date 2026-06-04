@@ -2,7 +2,8 @@
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === 'production'
-    ? 'https://amp-tiles-backend.onrender.com/api'
+    // ? 'https://amp-tiles-backend.onrender.com/api',
+    ? 'https://nextlogiclab.design/api'
     : 'http://localhost:5000/api');
 
 interface User {
