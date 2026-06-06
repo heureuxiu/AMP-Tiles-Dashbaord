@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import type { ChangeEvent } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
 import {
@@ -14,6 +15,7 @@ import {
   ChevronDown,
   Filter,
   Upload,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -151,6 +153,7 @@ const unitToPricingUnit = (unit?: string): "per_sqm" | "per_piece" => {
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isImporting, setIsImporting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -163,6 +166,7 @@ export default function ProductsPage() {
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
   const [selectedSupplierTypes, setSelectedSupplierTypes] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<{ _id: string; name: string }[]>([]);
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     sku: "",
@@ -344,6 +348,101 @@ export default function ProductsPage() {
     setIsDialogOpen(true);
   };
 
+  const handleDownloadCsvTemplate = () => {
+    const headers = [
+      "sku",
+      "name",
+      "category",
+      "finish",
+      "size",
+      "supplierType",
+      "supplierName",
+      "boxCoveragePackingDetails",
+      "retailPrice",
+      "costPrice",
+      "stock",
+      "unit",
+      "pricingUnit",
+      "tilesPerBox",
+      "coveragePerBox",
+      "coveragePerBoxUnit",
+      "weightPerBox",
+      "taxPercent",
+      "description",
+    ];
+    const example = [
+      "TILE-001",
+      "White Marble Tile",
+      "Floor Tiles",
+      "Glossy",
+      "600x600",
+      "own",
+      "",
+      "4 tiles per box / 1.44 sqm",
+      "35",
+      "22",
+      "100",
+      "sqm",
+      "per_sqm",
+      "4",
+      "1.44",
+      "sqm",
+      "28",
+      "10",
+      "Imported from CSV",
+    ];
+    const csv = `${headers.join(",")}\n${example.map((value) => `"${value}"`).join(",")}\n`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "products-import-template.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCsvImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      toast.error("Please select a CSV file");
+      return;
+    }
+
+    try {
+      setIsImporting(true);
+      const response = await api.importProductsCsv(file);
+      const importResult = response.importResult;
+
+      if (response.success && importResult) {
+        toast.success("CSV import completed", {
+          description: `Created: ${importResult.created}, Updated: ${importResult.updated}, Failed: ${importResult.failed}`,
+        });
+
+        if (importResult.failed > 0) {
+          const firstErrors = importResult.errors
+            .slice(0, 3)
+            .map((error) => `Row ${error.row}: ${error.errors.join(", ")}`)
+            .join("\n");
+          toast.error("Some rows failed", {
+            description: firstErrors,
+          });
+        }
+
+        await fetchProducts();
+      }
+    } catch (error) {
+      toast.error("Failed to import CSV", {
+        description: error instanceof Error ? error.message : "Please check the CSV and try again",
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleEditProduct = (product: Product) => {
     const supplierIdFromProduct =
       typeof product.supplier === "string"
@@ -502,10 +601,38 @@ export default function ProductsPage() {
             Manage your product inventory
           </p>
         </div>
-        <Button onClick={handleAddProduct} className="w-full shrink-0 gap-2 sm:w-auto">
-          <Plus className="h-4 w-4" />
-          <span className="text-sm">Add Product</span>
-        </Button>
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={handleCsvImport}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleDownloadCsvTemplate}
+            className="w-full shrink-0 gap-2 sm:w-auto"
+          >
+            <Download className="h-4 w-4" />
+            <span className="text-sm">CSV Template</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isImporting}
+            onClick={() => csvInputRef.current?.click()}
+            className="w-full shrink-0 gap-2 sm:w-auto"
+          >
+            <Upload className="h-4 w-4" />
+            <span className="text-sm">{isImporting ? "Importing..." : "Import CSV"}</span>
+          </Button>
+          <Button onClick={handleAddProduct} className="w-full shrink-0 gap-2 sm:w-auto">
+            <Plus className="h-4 w-4" />
+            <span className="text-sm">Add Product</span>
+          </Button>
+        </div>
       </div>
 
       {/* Main Card */}

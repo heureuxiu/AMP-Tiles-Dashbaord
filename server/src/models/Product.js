@@ -40,6 +40,11 @@ const productSchema = new mongoose.Schema(
       enum: { values: ['third-party', 'own'], message: 'Supplier type must be Third-Party or Own' },
       trim: true,
     },
+    supplier: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Supplier',
+      default: null,
+    },
     supplierVendor: {
       type: String,
       trim: true,
@@ -57,8 +62,8 @@ const productSchema = new mongoose.Schema(
     },
     tilesPerBox: {
       type: Number,
-      required: [true, 'Please provide tiles per box'],
       min: 0,
+      default: null,
     },
     coveragePerBox: {
       type: Number,
@@ -69,7 +74,7 @@ const productSchema = new mongoose.Schema(
       type: String,
       enum: { values: ['sqft', 'sqm'], message: 'Must be sq ft or sq meter' },
       trim: true,
-      default: 'sqft',
+      default: 'sqm',
     },
     weightPerBox: {
       type: Number,
@@ -93,11 +98,16 @@ const productSchema = new mongoose.Schema(
       min: 0,
       default: null,
     },
+    builderPrice: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
     taxPercent: {
       type: Number,
       min: 0,
       max: 100,
-      default: null,
+      default: 10,
     },
     // --- Cost (admin only) ---
     costPrice: {
@@ -121,7 +131,7 @@ const productSchema = new mongoose.Schema(
     },
     unit: {
       type: String,
-      default: 'boxes',
+      default: 'sqm',
       trim: true,
     },
     image: {
@@ -154,5 +164,6 @@ productSchema.pre('save', function (next) {
 
 // Index for better search performance
 productSchema.index({ name: 'text', sku: 'text', category: 'text' });
+productSchema.index({ supplier: 1 });
 
 module.exports = mongoose.model('Product', productSchema);

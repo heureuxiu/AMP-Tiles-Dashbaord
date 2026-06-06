@@ -1,6 +1,369 @@
 const PurchaseOrder = require('../models/PurchaseOrder');
 const Product = require('../models/Product');
 const Supplier = require('../models/Supplier');
+const StockTransaction = require('../models/StockTransaction');
+const { generatePurchaseOrderPdf } = require('../utils/purchaseOrderPdf');
+
+const AUTO_STOCK_ON_PO_RECEIVE_DEFAULT =
+  String(process.env.AUTO_STOCK_ON_PO_RECEIVE ?? 'true').toLowerCase() !== 'false';
+
+let sendEmail = async () => {
+  throw new Error('Email service is not available');
+};
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fallbackFormatDate(value) {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString('en-AU', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function fallbackFormatCurrency(amount, currency = 'AUD') {
+  const num = Number(amount) || 0;
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: currency || 'AUD',
+  }).format(num);
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function getPurchaseOrderAmountSnapshot(purchaseOrder) {
+  const subtotal =
+    Number(purchaseOrder?.subtotal) ||
+    (purchaseOrder?.items || []).reduce((sum, item) => sum + (Number(item?.lineTotal) || 0), 0);
+  const tax = Number(purchaseOrder?.tax) || 0;
+  const parsedDelivery = Number(purchaseOrder?.deliveryCost);
+  const fallbackDelivery = Math.max(
+    0,
+    roundMoney(Number(purchaseOrder?.grandTotal) - subtotal - tax)
+  );
+  const deliveryCost = Number.isFinite(parsedDelivery)
+    ? Math.max(0, parsedDelivery)
+    : Number.isFinite(fallbackDelivery)
+      ? fallbackDelivery
+      : 0;
+  const grandTotal = Number.isFinite(Number(purchaseOrder?.grandTotal))
+    ? Number(purchaseOrder.grandTotal)
+    : subtotal + tax + deliveryCost;
+
+  return {
+    subtotal: roundMoney(subtotal),
+    tax: roundMoney(tax),
+    deliveryCost: roundMoney(deliveryCost),
+    grandTotal: roundMoney(grandTotal),
+  };
+}
+
+function getPurchaseOrderItemDetails(item) {
+  const product =
+    item && item.product && typeof item.product === 'object' ? item.product : null;
+  const productName = item?.productName || product?.name || 'Product';
+  const skuRaw = item?.sku ?? product?.sku;
+  const descriptionRaw = item?.description ?? product?.description;
+  const sizeRaw = product?.size ?? item?.size;
+
+  return {
+    productName,
+    sku: skuRaw ? String(skuRaw) : 'N/A',
+    description: descriptionRaw ? String(descriptionRaw) : 'N/A',
+    size: sizeRaw ? String(sizeRaw) : 'N/A',
+    unit: item?.unitType || 'N/A',
+    quantity: Number(item?.quantityOrdered) || 0,
+    rate: Number(item?.rate) || 0,
+    amount: Number(item?.lineTotal) || 0,
+  };
+}
+
+function buildFallbackPurchaseOrderEmail(purchaseOrder) {
+  const supplierName = purchaseOrder.supplierName || purchaseOrder.supplier?.name || 'Supplier';
+  const text = [
+    `Dear ${supplierName},`,
+    '',
+    'Please find attached our Purchase Order for your review and processing.',
+    '',
+    'Could you kindly confirm stock availability for the items listed, along with the estimated delivery date? Your prompt confirmation will help us plan accordingly.',
+    '',
+    'Please let us know if there are any discrepancies or if further information is required.',
+    '',
+    'Thank you for your support.',
+    '',
+    'Kind regards,',
+    'Prabin',
+    'AMP Tiles',
+  ].join('\n');
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.4;">
+      <p>Dear ${escapeHtml(supplierName)},</p>
+      <p>Please find attached our Purchase Order for your review and processing.</p>
+      <p>Could you kindly confirm stock availability for the items listed, along with the estimated delivery date? Your prompt confirmation will help us plan accordingly.</p>
+      <p>Please let us know if there are any discrepancies or if further information is required.</p>
+      <p>Thank you for your support.</p>
+      <p>Kind regards,<br/>Prabin<br/>AMP Tiles</p>
+    </div>
+  `;
+
+  return {
+    subject: 'Purchase Order Attached - Stock Confirmation Required',
+    text,
+    html,
+  };
+}
+
+let buildPurchaseOrderEmail = buildFallbackPurchaseOrderEmail;
+
+function loadOptionalModule(candidates) {
+  for (const mod of candidates) {
+    try {
+      return require(mod);
+    } catch (error) {
+      if (error && error.code !== 'MODULE_NOT_FOUND') {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(`Failed loading optional module "${mod}"`, error.message);
+        }
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+const mailerModule = loadOptionalModule(['../utils/mailer']);
+if (mailerModule && typeof mailerModule.sendEmail === 'function') {
+  ({ sendEmail } = mailerModule);
+} else if (process.env.NODE_ENV !== 'production') {
+  console.warn('Mailer utility not found. Purchase order email sending will be disabled.');
+}
+
+const purchaseOrderEmailModule = loadOptionalModule([
+  '../utils/purchaseOrderEmail',
+  '../utils/purchase-order-email',
+  '../utils/PurchaseOrderEmail',
+]);
+if (
+  purchaseOrderEmailModule &&
+  typeof purchaseOrderEmailModule.buildPurchaseOrderEmail === 'function'
+) {
+  ({ buildPurchaseOrderEmail } = purchaseOrderEmailModule);
+} else if (process.env.NODE_ENV !== 'production') {
+  console.warn('Purchase order email template utility not found. Using fallback template.');
+}
+
+function normalizeEmail(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase();
+}
+
+function summarizeEmailError(error, fallbackMessage = 'Failed to send purchase order email') {
+  return [
+    error?.message || fallbackMessage,
+    error?.code ? `code=${error.code}` : '',
+    error?.command ? `command=${error.command}` : '',
+    error?.responseCode ? `responseCode=${error.responseCode}` : '',
+  ]
+    .filter(Boolean)
+    .join(' | ');
+}
+
+async function sendPurchaseOrderEmailWithAttachment(purchaseOrderDoc) {
+  const purchaseOrder = purchaseOrderDoc?.toObject
+    ? purchaseOrderDoc.toObject()
+    : purchaseOrderDoc;
+  if (!purchaseOrder) {
+    const error = new Error('Purchase order not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const supplierEmail = normalizeEmail(purchaseOrder?.supplier?.email);
+  if (!supplierEmail) {
+    const error = new Error(
+      'Supplier email is missing. Please add supplier email before sending purchase order.'
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const pdfBuffer = await generatePurchaseOrderPdf(purchaseOrder);
+  const emailPayload = buildPurchaseOrderEmail(purchaseOrder);
+  const poRef = String(purchaseOrder.poNumber || purchaseOrder._id || 'purchase-order').replace(
+    /\s/g,
+    '-'
+  );
+
+  await sendEmail({
+    to: supplierEmail,
+    subject: emailPayload.subject,
+    text: emailPayload.text,
+    html: emailPayload.html,
+    attachments: [
+      {
+        filename: `purchase-order-${poRef}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
+
+  return {
+    supplierEmail,
+    emailPayload,
+  };
+}
+
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isProductLinkedToSupplier(product, supplierDoc) {
+  if (!product || !supplierDoc) return false;
+
+  // Preferred relation: ObjectId reference
+  if (product.supplier) {
+    return product.supplier.toString() === supplierDoc._id.toString();
+  }
+
+  // Backward compatibility for old products that only stored supplierName
+  return normalizeText(product.supplierName) === normalizeText(supplierDoc.name);
+}
+
+function isOwnProductsSelection(value, supplierType) {
+  return (
+    String(value || '').trim() === '__own_products__' ||
+    String(value || '').trim().toLowerCase() === 'own' ||
+    String(supplierType || '').trim().toLowerCase() === 'own'
+  );
+}
+
+function resolveProductCostRate(product) {
+  const raw = Number(product?.costPrice);
+  if (!Number.isFinite(raw) || raw < 0) return null;
+  return Math.round(raw * 100) / 100;
+}
+
+function parseBooleanLike(value, fallback) {
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
+const SQM_PER_SQFT = 0.092903;
+
+function roundQty(value) {
+  return Math.round((Number(value) || 0) * 1000) / 1000;
+}
+
+function normalizePoUnitType(value) {
+  const normalized = String(value || 'box')
+    .toLowerCase()
+    .replace(/[\s._-]+/g, '');
+
+  if (normalized.includes('sqm') || normalized.includes('sqmeter') || normalized.includes('sqmetre')) {
+    return 'sqm';
+  }
+  if (normalized.includes('sqft') || normalized.includes('sqfeet') || normalized.includes('ft2')) {
+    return 'sqft';
+  }
+  if (normalized.includes('piece')) return 'piece';
+  if (normalized === 'lm' || normalized.includes('linearmeter') || normalized.includes('linearmetre')) return 'lm';
+  if (normalized.includes('pallet')) return 'pallet';
+  return 'box';
+}
+
+function getSqmPerBox(product) {
+  const coveragePerBox = Number(product?.coveragePerBox) || 0;
+  if (coveragePerBox <= 0) return 0;
+  return product?.coveragePerBoxUnit === 'sqm'
+    ? coveragePerBox
+    : coveragePerBox * SQM_PER_SQFT;
+}
+
+function createStockUnitValidationError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
+function convertQuantityToSqm({ quantity, unitType, product }) {
+  const qty = Number(quantity) || 0;
+  if (qty <= 0) return 0;
+
+  const normalizedUnit = normalizePoUnitType(unitType);
+  const sqmPerBox = getSqmPerBox(product);
+
+  if (normalizedUnit === 'sqm') return roundQty(qty);
+  if (normalizedUnit === 'lm') return roundQty(qty);
+  if (normalizedUnit === 'sqft') return roundQty(qty * SQM_PER_SQFT);
+
+  if (normalizedUnit === 'box') {
+    if (sqmPerBox <= 0) {
+      return roundQty(qty);
+    }
+    return roundQty(qty * sqmPerBox);
+  }
+
+  if (normalizedUnit === 'piece') {
+    const tilesPerBox = Number(product?.tilesPerBox) || 0;
+    if (sqmPerBox <= 0 || tilesPerBox <= 0) {
+      return roundQty(qty);
+    }
+    const sqmPerPiece = sqmPerBox / tilesPerBox;
+    return roundQty(qty * sqmPerPiece);
+  }
+
+  throw createStockUnitValidationError(
+    `Unsupported unit "${unitType}" for sqm-only inventory updates.`
+  );
+}
+
+function getBoxesEquivalentFromSqm(receivedSqm, product) {
+  const sqmPerBox = getSqmPerBox(product);
+  if (sqmPerBox <= 0) {
+    return {
+      exactBoxes: null,
+      wholeBoxes: null,
+      sqmPerBox: null,
+    };
+  }
+
+  const exactBoxes = receivedSqm / sqmPerBox;
+  const roundedExactBoxes = roundQty(exactBoxes);
+  const wholeBoxes = Math.ceil(exactBoxes - 1e-9);
+
+  return {
+    exactBoxes: roundedExactBoxes,
+    wholeBoxes,
+    sqmPerBox: roundQty(sqmPerBox),
+  };
+}
+
+function isDuplicatePoNumberError(error) {
+  return (
+    error &&
+    error.code === 11000 &&
+    typeof error.message === 'string' &&
+    error.message.includes('poNumber')
+  );
+}
 
 // @desc    Get all purchase orders with optional filtering
 // @route   GET /api/purchase-orders
@@ -38,7 +401,7 @@ exports.getPurchaseOrders = async (req, res) => {
     const purchaseOrders = await PurchaseOrder.find(query)
       .populate('supplier', 'name supplierNumber')
       .populate('createdBy', 'name email')
-      .populate('items.product', 'name sku unit tilesPerBox coveragePerBox coveragePerBoxUnit')
+      .populate('items.product', 'name sku description size unit tilesPerBox coveragePerBox coveragePerBoxUnit')
       .sort(sortObj);
 
     const statuses = [
@@ -84,7 +447,7 @@ exports.getPurchaseOrder = async (req, res) => {
     const purchaseOrder = await PurchaseOrder.findById(req.params.id)
       .populate('supplier')
       .populate('createdBy', 'name email')
-      .populate('items.product', 'name sku unit tilesPerBox coveragePerBox coveragePerBoxUnit');
+      .populate('items.product', 'name sku description size unit tilesPerBox coveragePerBox coveragePerBoxUnit');
 
     if (!purchaseOrder) {
       return res.status(404).json({
@@ -108,24 +471,31 @@ exports.getPurchaseOrder = async (req, res) => {
 };
 
 // Helper: compute line total and optionally coverage from product
-function buildItem(product, item) {
+function buildItem(product, item, forcedRate) {
   const qty = Number(item.quantityOrdered) || 0;
-  const rate = Number(item.rate) || 0;
+  const chosenRate =
+    forcedRate != null && Number.isFinite(Number(forcedRate))
+      ? Number(forcedRate)
+      : Number(item.rate) || 0;
+  const rate = Math.round(chosenRate * 100) / 100;
   const discount = Number(item.discountPercent) || 0;
-  const tax = Number(item.taxPercent) || 0;
+  const parsedTax = Number(item.taxPercent);
+  const tax = Number.isFinite(parsedTax) ? parsedTax : 10;
   const afterDiscount = qty * rate * (1 - discount / 100);
   const lineTotal = Math.round(afterDiscount * (1 + tax / 100) * 100) / 100;
   let coverageSqm = null;
   if (product && (product.coveragePerBox || product.tilesPerBox)) {
     const coveragePerBox = Number(product.coveragePerBox) || 0;
-    const perBox = product.coveragePerBoxUnit === 'sqm' ? coveragePerBox : (coveragePerBox * 0.092903) || 0;
+    const perBox = product.coveragePerBoxUnit === 'sqm' ? coveragePerBox : (coveragePerBox * SQM_PER_SQFT) || 0;
     if (item.unitType === 'Box' && perBox) coverageSqm = qty * perBox;
-    else if (item.unitType === 'Sq Ft' && qty) coverageSqm = Math.round((qty * 0.092903) * 100) / 100;
+    else if ((item.unitType === 'Sqm' || item.unitType === 'Sq Meter') && qty) coverageSqm = qty;
+    else if (item.unitType === 'Sq Ft' && qty) coverageSqm = Math.round((qty * SQM_PER_SQFT) * 100) / 100;
   }
   return {
     product: product._id,
     productName: product.name,
     sku: product.sku || '',
+    size: String(product.size ?? item.size ?? ''),
     unitType: item.unitType || 'Box',
     quantityOrdered: qty,
     rate,
@@ -147,6 +517,7 @@ exports.createPurchaseOrder = async (req, res) => {
   try {
     const {
       supplier,
+      supplierType,
       poDate,
       expectedDeliveryDate,
       warehouseLocation,
@@ -158,10 +529,12 @@ exports.createPurchaseOrder = async (req, res) => {
       terms,
     } = req.body;
 
-    if (!supplier) {
+    const isOwnProductsPo = isOwnProductsSelection(supplier, supplierType);
+
+    if (!supplier && !isOwnProductsPo) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide a supplier',
+        message: 'Please provide a supplier or select AMP Products',
       });
     }
 
@@ -172,8 +545,8 @@ exports.createPurchaseOrder = async (req, res) => {
       });
     }
 
-    const supplierDoc = await Supplier.findById(supplier);
-    if (!supplierDoc) {
+    const supplierDoc = isOwnProductsPo ? null : await Supplier.findById(supplier);
+    if (!isOwnProductsPo && !supplierDoc) {
       return res.status(404).json({
         success: false,
         message: 'Supplier not found',
@@ -182,25 +555,50 @@ exports.createPurchaseOrder = async (req, res) => {
 
     const validatedItems = [];
     for (const item of items) {
-      if (!item.product || item.quantityOrdered == null || item.rate == null) {
+      if (!item.product || item.quantityOrdered == null) {
         return res.status(400).json({
           success: false,
-          message: 'Each item must have product, quantityOrdered, and rate',
+          message: 'Each item must have product and quantityOrdered',
         });
       }
-      const product = await Product.findById(item.product);
+      const product = await Product.findById(item.product).select('name sku size supplier supplierType supplierName coveragePerBox coveragePerBoxUnit tilesPerBox costPrice');
       if (!product) {
         return res.status(404).json({
           success: false,
           message: `Product with ID ${item.product} not found`,
         });
       }
-      validatedItems.push(buildItem(product, item));
+      if (isOwnProductsPo && String(product.supplierType || 'own') !== 'own') {
+        return res.status(400).json({
+          success: false,
+          message: `Product "${product.name}" is not an AMP product`,
+        });
+      }
+      if (!isOwnProductsPo && !isProductLinkedToSupplier(product, supplierDoc)) {
+        return res.status(400).json({
+          success: false,
+          message: `Product "${product.name}" is not linked to selected supplier "${supplierDoc.name}"`,
+        });
+      }
+      const productCostRate = resolveProductCostRate(product);
+      const parsedItemRate = Number(item.rate);
+      const costRate = isOwnProductsPo && productCostRate == null
+        ? Number.isFinite(parsedItemRate) && parsedItemRate >= 0
+          ? parsedItemRate
+          : null
+        : productCostRate;
+      if (costRate == null) {
+        return res.status(400).json({
+          success: false,
+          message: `Product "${product.name}" has no valid cost price configured`,
+        });
+      }
+      validatedItems.push(buildItem(product, item, costRate));
     }
 
-    const purchaseOrder = await PurchaseOrder.create({
-      supplier,
-      supplierName: supplierDoc.name,
+    const createPayload = {
+      supplier: isOwnProductsPo ? null : supplier,
+      supplierName: isOwnProductsPo ? 'AMP Products' : supplierDoc.name,
       poDate: poDate || Date.now(),
       expectedDeliveryDate: expectedDeliveryDate || null,
       warehouseLocation: warehouseLocation || '',
@@ -211,10 +609,35 @@ exports.createPurchaseOrder = async (req, res) => {
       notes: notes || '',
       terms: terms || '',
       createdBy: req.user.id,
-    });
+    };
+
+    const maxCreateRetries = 3;
+    let purchaseOrder = null;
+    let createError = null;
+
+    for (let attempt = 1; attempt <= maxCreateRetries; attempt += 1) {
+      try {
+        purchaseOrder = await PurchaseOrder.create(createPayload);
+        createError = null;
+        break;
+      } catch (error) {
+        if (isDuplicatePoNumberError(error) && attempt < maxCreateRetries) {
+          createError = error;
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (!purchaseOrder) {
+      throw createError || new Error('Failed to create purchase order');
+    }
 
     await purchaseOrder.populate('supplier');
-    await purchaseOrder.populate('items.product', 'name sku tilesPerBox coveragePerBox coveragePerBoxUnit');
+    await purchaseOrder.populate(
+      'items.product',
+      'name sku description size tilesPerBox coveragePerBox coveragePerBoxUnit'
+    );
 
     res.status(201).json({
       success: true,
@@ -254,6 +677,7 @@ exports.updatePurchaseOrder = async (req, res) => {
 
     const {
       supplier,
+      supplierType,
       poDate,
       expectedDeliveryDate,
       warehouseLocation,
@@ -266,7 +690,18 @@ exports.updatePurchaseOrder = async (req, res) => {
       status,
     } = req.body;
 
-    if (supplier && supplier !== purchaseOrder.supplier.toString()) {
+    const isCurrentOwnProductsPo =
+      !purchaseOrder.supplier &&
+      ['own products', 'amp products'].includes(normalizeText(purchaseOrder.supplierName));
+    const isOwnProductsPo =
+      isOwnProductsSelection(supplier, supplierType) ||
+      (!supplier && isCurrentOwnProductsPo);
+
+    let effectiveSupplierDoc = null;
+    if (isOwnProductsSelection(supplier, supplierType)) {
+      purchaseOrder.supplier = null;
+      purchaseOrder.supplierName = 'AMP Products';
+    } else if (supplier && supplier !== String(purchaseOrder.supplier || '')) {
       const supplierDoc = await Supplier.findById(supplier);
       if (!supplierDoc) {
         return res.status(404).json({
@@ -276,6 +711,15 @@ exports.updatePurchaseOrder = async (req, res) => {
       }
       purchaseOrder.supplier = supplier;
       purchaseOrder.supplierName = supplierDoc.name;
+      effectiveSupplierDoc = supplierDoc;
+    } else if (!isOwnProductsPo && (items && items.length > 0)) {
+      effectiveSupplierDoc = await Supplier.findById(purchaseOrder.supplier).select('_id name');
+      if (!effectiveSupplierDoc) {
+        return res.status(404).json({
+          success: false,
+          message: 'Supplier not found for this purchase order',
+        });
+      }
     }
 
     if (poDate) purchaseOrder.poDate = poDate;
@@ -286,25 +730,59 @@ exports.updatePurchaseOrder = async (req, res) => {
     if (deliveryAddress !== undefined) purchaseOrder.deliveryAddress = deliveryAddress;
     if (notes !== undefined) purchaseOrder.notes = notes;
     if (terms !== undefined) purchaseOrder.terms = terms;
-    if (status) purchaseOrder.status = status;
+    if (status) {
+      if (['received', 'partially_received'].includes(String(status))) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Use the receive endpoint to mark a purchase order as partially received or received so stock updates stay consistent.',
+        });
+      }
+      purchaseOrder.status = status;
+    }
 
     if (items && items.length > 0) {
       const validatedItems = [];
       for (const item of items) {
-        if (!item.product || item.quantityOrdered == null || item.rate == null) {
+        if (!item.product || item.quantityOrdered == null) {
           return res.status(400).json({
             success: false,
-            message: 'Each item must have product, quantityOrdered, and rate',
+            message: 'Each item must have product and quantityOrdered',
           });
         }
-        const product = await Product.findById(item.product);
+        const product = await Product.findById(item.product).select('name sku size supplier supplierType supplierName coveragePerBox coveragePerBoxUnit tilesPerBox costPrice');
         if (!product) {
           return res.status(404).json({
             success: false,
             message: `Product with ID ${item.product} not found`,
           });
         }
-        const built = buildItem(product, item);
+        if (isOwnProductsPo && String(product.supplierType || 'own') !== 'own') {
+          return res.status(400).json({
+            success: false,
+            message: `Product "${product.name}" is not an AMP product`,
+          });
+        }
+        if (!isOwnProductsPo && !isProductLinkedToSupplier(product, effectiveSupplierDoc)) {
+          return res.status(400).json({
+            success: false,
+            message: `Product "${product.name}" is not linked to selected supplier "${effectiveSupplierDoc.name}"`,
+          });
+        }
+        const productCostRate = resolveProductCostRate(product);
+        const parsedItemRate = Number(item.rate);
+        const costRate = isOwnProductsPo && productCostRate == null
+          ? Number.isFinite(parsedItemRate) && parsedItemRate >= 0
+            ? parsedItemRate
+            : null
+          : productCostRate;
+        if (costRate == null) {
+          return res.status(400).json({
+            success: false,
+            message: `Product "${product.name}" has no valid cost price configured`,
+          });
+        }
+        const built = buildItem(product, item, costRate);
         if (item._id) built._id = item._id;
         if (item.quantityReceived != null) built.quantityReceived = Number(item.quantityReceived);
         if (item.damagedQuantity != null) built.damagedQuantity = Number(item.damagedQuantity);
@@ -317,7 +795,10 @@ exports.updatePurchaseOrder = async (req, res) => {
 
     await purchaseOrder.save();
     await purchaseOrder.populate('supplier');
-    await purchaseOrder.populate('items.product', 'name sku tilesPerBox coveragePerBox coveragePerBoxUnit');
+    await purchaseOrder.populate(
+      'items.product',
+      'name sku description size tilesPerBox coveragePerBox coveragePerBoxUnit'
+    );
 
     res.status(200).json({
       success: true,
@@ -334,12 +815,132 @@ exports.updatePurchaseOrder = async (req, res) => {
   }
 };
 
-// @desc    Receive goods (per-line quantities). Updates stock only for quantityReceived.
+// @desc    Get purchase order as PDF
+// @route   GET /api/purchase-orders/:id/pdf
+// @access  Private
+exports.getPurchaseOrderPdf = async (req, res) => {
+  try {
+    const purchaseOrder = await PurchaseOrder.findById(req.params.id)
+      .populate('supplier', 'name email phone contactPerson supplierNumber')
+      .populate(
+        'items.product',
+        'name sku description size unit tilesPerBox coveragePerBox coveragePerBoxUnit'
+      )
+      .lean();
+
+    if (!purchaseOrder) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase order not found',
+      });
+    }
+
+    const pdfBuffer = await generatePurchaseOrderPdf(purchaseOrder);
+    const filename = `purchase-order-${purchaseOrder.poNumber || purchaseOrder._id}.pdf`.replace(
+      /\s/g,
+      '-'
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Get purchase order PDF error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate purchase order PDF',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Send purchase order to supplier email and mark as sent_to_supplier
+// @route   POST /api/purchase-orders/:id/send-to-supplier
+// @access  Private
+exports.sendPurchaseOrderToSupplier = async (req, res) => {
+  try {
+    const purchaseOrder = await PurchaseOrder.findById(req.params.id)
+      .populate('supplier', 'name email contactPerson supplierNumber')
+      .populate('createdBy', 'name email')
+      .populate(
+        'items.product',
+        'name sku description size unit tilesPerBox coveragePerBox coveragePerBoxUnit'
+      );
+
+    if (!purchaseOrder) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase order not found',
+      });
+    }
+
+    if (purchaseOrder.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot send a cancelled purchase order',
+      });
+    }
+
+    if (!purchaseOrder.supplier) {
+      return res.status(404).json({
+        success: false,
+        message: 'Supplier not found for this purchase order',
+      });
+    }
+
+    const supplierEmail = normalizeEmail(purchaseOrder.supplier.email);
+    if (!supplierEmail) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Supplier email is missing. Please add supplier email before sending purchase order.',
+      });
+    }
+
+    await sendPurchaseOrderEmailWithAttachment(purchaseOrder);
+
+    if (purchaseOrder.status !== 'sent_to_supplier') {
+      purchaseOrder.status = 'sent_to_supplier';
+      await purchaseOrder.save();
+      await purchaseOrder.populate('supplier', 'name email contactPerson supplierNumber');
+      await purchaseOrder.populate('createdBy', 'name email');
+      await purchaseOrder.populate(
+        'items.product',
+        'name sku description size unit tilesPerBox coveragePerBox coveragePerBoxUnit'
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      emailSent: true,
+      message: `Purchase order sent to supplier at ${supplierEmail}`,
+      purchaseOrder,
+    });
+  } catch (error) {
+    const details = summarizeEmailError(error);
+    console.error('Error sending purchase order email:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: details || 'Failed to send purchase order email',
+    });
+  }
+};
+
+// @desc    Receive goods (per-line quantities). Updates inventory in sqm only.
 // @route   POST /api/purchase-orders/:id/receive
 // @access  Private
 exports.receivePurchaseOrder = async (req, res) => {
   try {
     const purchaseOrder = await PurchaseOrder.findById(req.params.id).populate('items.product');
+    const applyStockUpdate = parseBooleanLike(
+      req.body?.applyStockUpdate,
+      AUTO_STOCK_ON_PO_RECEIVE_DEFAULT
+    );
+    let stockUpdateCount = 0;
+    let receivedQuantityTotal = 0;
+    let receivedSqmTotal = 0;
+    let boxesEquivalentTotal = 0;
+    let boxesRoundedUpTotal = 0;
 
     if (!purchaseOrder) {
       return res.status(404).json({
@@ -382,18 +983,61 @@ exports.receivePurchaseOrder = async (req, res) => {
         const item = purchaseOrder.items[itemIndex];
         const qtyReceived = Number(r.quantityReceived) || 0;
         const damaged = Number(r.damagedQuantity) || 0;
+        receivedQuantityTotal += Math.max(0, qtyReceived);
 
         item.quantityReceived = (item.quantityReceived || 0) + qtyReceived;
         item.damagedQuantity = (item.damagedQuantity || 0) + damaged;
         if (r.batchNumber) item.batchNumber = r.batchNumber;
         item.receivedDate = item.receivedDate || receivedDate;
 
-        // Increase product stock by quantityReceived only
-        if (qtyReceived > 0 && item.product) {
+        // Increase product stock in the product's own stock unit (when automatic mode is enabled)
+        if (qtyReceived > 0 && item.product && applyStockUpdate) {
           const product = await Product.findById(item.product._id || item.product);
           if (product) {
-            product.stock = (product.stock || 0) + qtyReceived;
+            const receivedSqm = convertQuantityToSqm({
+              quantity: qtyReceived,
+              unitType: item.unitType,
+              product,
+            });
+            const previousStock = roundQty(Number(product.stock || 0));
+            product.stock = roundQty(previousStock + receivedSqm);
             await product.save();
+            stockUpdateCount += 1;
+            receivedSqmTotal = roundQty(receivedSqmTotal + receivedSqm);
+
+            const boxes = getBoxesEquivalentFromSqm(receivedSqm, product);
+            if (boxes.exactBoxes != null) {
+              boxesEquivalentTotal = roundQty(boxesEquivalentTotal + boxes.exactBoxes);
+            }
+            if (boxes.wholeBoxes != null) {
+              boxesRoundedUpTotal += boxes.wholeBoxes;
+            }
+
+            const poRef = purchaseOrder.poNumber || purchaseOrder._id.toString();
+
+            const stockUnitLabel = String(product.unit || item.unitType || 'unit');
+            await StockTransaction.create({
+              product: product._id,
+              type: 'stock-in',
+              quantity: receivedSqm,
+              previousStock,
+              newStock: product.stock,
+              remarks: `PO ${poRef} received ${roundQty(receivedSqm)} ${stockUnitLabel} from ${qtyReceived} ${item.unitType || 'unit'}${r.batchNumber ? ` (Batch: ${r.batchNumber})` : ''}`.trim(),
+              sourceType: 'purchase_order',
+              sourceId: String(purchaseOrder._id),
+              sourceRef: poRef,
+              metadata: {
+                batchNumber: r.batchNumber || '',
+                damagedQuantity: damaged,
+                sourceQuantityReceived: qtyReceived,
+                sourceUnitType: item.unitType || '',
+                receivedSqm,
+                boxesEquivalent: boxes.exactBoxes,
+                boxesRoundedUp: boxes.wholeBoxes,
+                sqmPerBox: boxes.sqmPerBox,
+              },
+              createdBy: req.user.id,
+            });
           }
         }
       }
@@ -408,22 +1052,37 @@ exports.receivePurchaseOrder = async (req, res) => {
 
     if (allReceived) {
       purchaseOrder.status = 'received';
+      purchaseOrder.receivedDate = purchaseOrder.receivedDate || new Date();
     } else if (anyReceived) {
       purchaseOrder.status = 'partially_received';
+      purchaseOrder.receivedDate = purchaseOrder.receivedDate || new Date();
     }
 
     await purchaseOrder.save();
     await purchaseOrder.populate('supplier');
-    await purchaseOrder.populate('items.product', 'name sku tilesPerBox coveragePerBox coveragePerBoxUnit');
+    await purchaseOrder.populate(
+      'items.product',
+      'name sku description size tilesPerBox coveragePerBox coveragePerBoxUnit'
+    );
+
+    const message = applyStockUpdate
+      ? 'Goods receiving updated and stock increased in sqm only'
+      : 'Goods receiving updated. Automatic stock update is disabled; use manual stock update if you need to adjust inventory.';
 
     res.status(200).json({
       success: true,
-      message: 'Goods receiving updated and stock increased for received quantities',
+      message,
+      stockUpdateMode: applyStockUpdate ? 'automatic' : 'manual',
+      stockUpdateCount,
+      receivedQuantityTotal,
+      receivedSqmTotal,
+      boxesEquivalentTotal,
+      boxesRoundedUpTotal,
       purchaseOrder,
     });
   } catch (error) {
     console.error('Error receiving purchase order:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: 'Failed to receive purchase order',
       error: error.message,
@@ -505,3 +1164,5 @@ exports.getPurchaseOrderStats = async (req, res) => {
     });
   }
 };
+
+

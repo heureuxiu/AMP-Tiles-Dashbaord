@@ -11,9 +11,14 @@ const invoiceItemSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  size: {
+    type: String,
+    trim: true,
+    default: '',
+  },
   unitType: {
     type: String,
-    enum: ['Box', 'Sq Ft', 'Sq Meter', 'Piece'],
+    enum: ['Box', 'Sq Ft', 'Sq Meter', 'Piece', 'LM'],
     default: 'Box',
   },
   quantity: {
@@ -34,7 +39,7 @@ const invoiceItemSchema = new mongoose.Schema({
   },
   taxPercent: {
     type: Number,
-    default: 0,
+    default: 10,
     min: 0,
     max: 100,
   },
@@ -53,10 +58,20 @@ const invoiceItemSchema = new mongoose.Schema({
 function calcLineTotal(item) {
   const base = (item.quantity || 0) * (item.rate || 0);
   const afterDiscount = base * (1 - (item.discountPercent || 0) / 100);
-  return Math.round(afterDiscount * (1 + (item.taxPercent || 0) / 100) * 100) / 100;
+  return Math.round(afterDiscount * (1 + ((item.taxPercent ?? 10) / 100)) * 100) / 100;
+}
+
+function toCents(value) {
+  const amount = Number(value) || 0;
+  return Math.round(amount * 100);
 }
 
 invoiceItemSchema.pre('save', function (next) {
+  const providedLineTotal = Number(this.lineTotal);
+  if (Number.isFinite(providedLineTotal) && providedLineTotal >= 0) {
+    this.lineTotal = Math.round(providedLineTotal * 100) / 100;
+    return next();
+  }
   this.lineTotal = calcLineTotal(this);
   next();
 });
@@ -73,6 +88,10 @@ const invoiceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Quotation',
     },
+    reference: {
+      type: String,
+      trim: true,
+    },
     customerName: {
       type: String,
       required: [true, 'Please provide customer name'],
@@ -80,7 +99,9 @@ const invoiceSchema = new mongoose.Schema(
     },
     customerPhone: { type: String, trim: true },
     customerEmail: { type: String, trim: true, lowercase: true },
+    customerCcEmails: { type: [String], default: [] },
     customerAddress: { type: String, trim: true },
+    deliveryAddress: { type: String, trim: true },
     invoiceDate: { type: Date, default: Date.now },
     dueDate: { type: Date },
     items: {
@@ -98,6 +119,7 @@ const invoiceSchema = new mongoose.Schema(
     discountAmount: { type: Number, default: 0, min: 0 },
     tax: { type: Number, default: 0, min: 0 },
     taxRate: { type: Number, default: 10, min: 0 },
+    deliveryCost: { type: Number, default: 0, min: 0 },
     grandTotal: { type: Number, default: 0, min: 0 },
 
     // Invoice lifecycle: stock reduces only when confirmed or delivered
@@ -130,6 +152,9 @@ const invoiceSchema = new mongoose.Schema(
     },
     paidDate: { type: Date },
 
+    emailSent: { type: Boolean, default: false },
+    lastEmailedAt: { type: Date },
+
     notes: { type: String, trim: true },
     terms: { type: String, trim: true },
     createdBy: {
@@ -157,25 +182,45 @@ invoiceSchema.pre('save', async function () {
 
 // Calculate subtotal/grandTotal and payment fields before saving
 invoiceSchema.pre('save', function () {
+  const parsedDeliveryCost = Number(this.deliveryCost);
+  const normalizedDeliveryCost = Number.isFinite(parsedDeliveryCost)
+    ? Math.max(0, parsedDeliveryCost)
+    : 0;
+  this.deliveryCost = Math.round(normalizedDeliveryCost * 100) / 100;
+
   if (this.items && this.items.length > 0) {
-    this.subtotal = this.items.reduce((sum, item) => sum + (item.lineTotal || 0), 0);
+    const txRate = this.taxRate ?? 10;
+    // subtotal = sum of pre-tax bases (lineTotal already includes per-item GST)
+    this.subtotal = Math.round(this.items.reduce((sum, item) => {
+      const taxP = Number(item.taxPercent ?? txRate);
+      return sum + (Number(item.lineTotal || 0) / (1 + taxP / 100));
+    }, 0) * 100) / 100;
     if (this.discount > 0) {
       this.discountAmount =
         this.discountType === 'percentage'
-          ? (this.subtotal * this.discount) / 100
+          ? Math.round((this.subtotal * this.discount) / 100 * 100) / 100
           : this.discount;
     } else {
       this.discountAmount = 0;
     }
-    const taxableAmount = this.subtotal - this.discountAmount;
-    this.tax = (taxableAmount * (this.taxRate || 0)) / 100;
-    this.grandTotal = Math.round((taxableAmount + this.tax) * 100) / 100;
+    // tax = sum of per-item GST amounts embedded in lineTotals
+    this.tax = Math.round(this.items.reduce((sum, item) => {
+      const taxP = Number(item.taxPercent ?? txRate);
+      const lt = Number(item.lineTotal || 0);
+      return sum + (lt - lt / (1 + taxP / 100));
+    }, 0) * 100) / 100;
+    const deliveryGst = Math.round(this.deliveryCost * txRate / 100 * 100) / 100;
+    this.grandTotal = Math.round(
+      (this.subtotal - this.discountAmount + this.tax + this.deliveryCost + deliveryGst) * 100
+    ) / 100;
   }
   // Remaining balance and payment status
-  const paid = Number(this.amountPaid) || 0;
-  this.remainingBalance = Math.max(0, (this.grandTotal || 0) - paid);
-  if (paid <= 0) this.paymentStatus = 'unpaid';
-  else if (paid >= (this.grandTotal || 0)) this.paymentStatus = 'paid';
+  const grandTotalCents = toCents(this.grandTotal || 0);
+  const paidCents = toCents(this.amountPaid || 0);
+  this.amountPaid = paidCents / 100;
+  this.remainingBalance = Math.max(0, grandTotalCents - paidCents) / 100;
+  if (paidCents <= 0) this.paymentStatus = 'unpaid';
+  else if (paidCents >= grandTotalCents) this.paymentStatus = 'paid';
   else this.paymentStatus = 'partially_paid';
 });
 

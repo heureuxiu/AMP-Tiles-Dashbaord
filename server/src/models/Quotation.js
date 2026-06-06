@@ -10,15 +10,20 @@ const quotationItemSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  size: {
+    type: String,
+    trim: true,
+    default: '',
+  },
   unitType: {
     type: String,
-    enum: ['Box', 'Sq Ft', 'Sq Meter', 'Piece'],
+    enum: ['Box', 'Sq Ft', 'Sq Meter', 'Piece', 'LM'],
     default: 'Box',
   },
   quantity: {
     type: Number,
     required: [true, 'Please provide quantity'],
-    min: [1, 'Quantity must be at least 1'],
+    min: [0.001, 'Quantity must be greater than 0'],
   },
   rate: {
     type: Number,
@@ -33,7 +38,7 @@ const quotationItemSchema = new mongoose.Schema({
   },
   taxPercent: {
     type: Number,
-    default: 0,
+    default: 10,
     min: 0,
     max: 100,
   },
@@ -52,8 +57,10 @@ const quotationSchema = new mongoose.Schema(
   {
     quotationNumber: {
       type: String,
-      unique: true,
-      sparse: true, // Allow null values until generated
+    },
+    reference: {
+      type: String,
+      trim: true,
     },
     customerName: {
       type: String,
@@ -69,7 +76,15 @@ const quotationSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
+    customerCcEmails: {
+      type: [String],
+      default: [],
+    },
     customerAddress: {
+      type: String,
+      trim: true,
+    },
+    deliveryAddress: {
       type: String,
       trim: true,
     },
@@ -107,6 +122,11 @@ const quotationSchema = new mongoose.Schema(
       default: 10, // GST in Australia
       min: 0,
     },
+    deliveryCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     grandTotal: {
       type: Number,
       required: true,
@@ -125,6 +145,23 @@ const quotationSchema = new mongoose.Schema(
       // Accepted / Rejected / Converted to Invoice (converted) – keep cancelled for backward compatibility
       enum: ['draft', 'sent', 'accepted', 'rejected', 'expired', 'converted', 'cancelled'],
       default: 'draft',
+    },
+    responseToken: {
+      type: String,
+      trim: true,
+    },
+    clientResponseRemarks: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    clientRespondedAt: {
+      type: Date,
+    },
+    clientResponseEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
     },
     convertedToInvoice: {
       type: Boolean,
@@ -178,9 +215,10 @@ quotationSchema.pre('save', async function () {
 });
 
 // Index for better query performance
-quotationSchema.index({ quotationNumber: 1 });
+quotationSchema.index({ quotationNumber: 1 }, { unique: true, sparse: true });
 quotationSchema.index({ customerName: 'text' });
 quotationSchema.index({ status: 1, createdAt: -1 });
 quotationSchema.index({ createdBy: 1, createdAt: -1 });
+quotationSchema.index({ responseToken: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('Quotation', quotationSchema);

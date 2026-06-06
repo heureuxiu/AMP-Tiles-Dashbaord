@@ -398,6 +398,7 @@ export default function EditQuotationPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [heldStockByProduct, setHeldStockByProduct] = useState<Record<string, number>>({});
 
   const [quotationNumber, setQuotationNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -430,6 +431,18 @@ export default function EditQuotationPage() {
 
         if (productsResponse.success && productsResponse.products) {
           setProducts(productsResponse.products as Product[]);
+
+          // Fetch held stock for all products, excluding current quotation
+          const allProductIds = (productsResponse.products as Product[])
+            .map((p) => p._id)
+            .filter(Boolean);
+          if (allProductIds.length > 0) {
+            api.getHeldStock(allProductIds, quotationId).then((res) => {
+              if (res.success && res.heldStock) {
+                setHeldStockByProduct(res.heldStock);
+              }
+            }).catch(() => {/* silently ignore */});
+          }
         }
 
         if (quotationResponse.success && quotationResponse.quotation) {
@@ -524,12 +537,13 @@ export default function EditQuotationPage() {
     if (!product) return 0;
     if (!isStockRestrictedProduct(product)) return Number.POSITIVE_INFINITY;
 
-    const available = Number(product.stock ?? 0);
+    const onHand = Number(product.stock ?? 0);
+    const heldInOtherQuotations = roundQty(heldStockByProduct[productId] ?? 0);
     const usedInOtherRows = currentItems.reduce((sum, item) => {
       if (item.id === itemId || item.product !== productId) return sum;
       return sum + getItemStockDemand(product, item);
     }, 0);
-    const availableForCurrentRow = roundQty(Math.max(0, available - usedInOtherRows));
+    const availableForCurrentRow = roundQty(Math.max(0, onHand - heldInOtherQuotations - usedInOtherRows));
     return roundQty(getMaxQuantityFromAvailableStock(product, availableForCurrentRow));
   };
 
@@ -1150,6 +1164,8 @@ export default function EditQuotationPage() {
                         const maxQuantityForItem = item.product
                           ? getMaxQuantityForItem(items, item.id, item.product)
                           : 0;
+                        const heldStockQty = item.product ? roundQty(heldStockByProduct[item.product] ?? 0) : 0;
+                        const heldSqm = product && heldStockQty > 0 ? roundQty(getMaxQuantityFromAvailableStock(product, heldStockQty)) : 0;
                         const maxQuantityLimit =
                           item.product && Number.isFinite(maxQuantityForItem)
                             ? maxQuantityForItem
@@ -1319,6 +1335,11 @@ export default function EditQuotationPage() {
                                     <span className="mr-4">
                                       Stock available:{" "}
                                       <strong>{product.stock}</strong> {stockUnitLabel}
+                                    </span>
+                                  )}
+                                  {product?.stock != null && item.product && isStockRestricted && heldSqm > 0 && (
+                                    <span className="mr-4 text-amber-600 dark:text-amber-400">
+                                      Held in quotes: <strong>{formatStockQty(heldSqm)}</strong> sqm
                                     </span>
                                   )}
                                   {product?.stock != null && item.product && isStockRestricted && (

@@ -3,9 +3,11 @@ const {
   getInvoices,
   getInvoice,
   getInvoicePdf,
+  getPackingSlipPdf,
   createInvoice,
   updateInvoice,
   markInvoiceAsPaid,
+  sendInvoiceEmail,
   deleteInvoice,
   getInvoiceStats,
 } = require('../controllers/invoiceController');
@@ -24,11 +26,13 @@ router.route('/').get(getInvoices).post(createInvoice);
 
 // PDF route (must be before /:id so /:id/pdf is matched)
 router.get('/:id/pdf', getInvoicePdf);
+router.get('/:id/packing-slip', getPackingSlipPdf);
 
 // Individual invoice routes
 router.route('/:id').get(getInvoice).put(updateInvoice).delete(deleteInvoice);
 
 // Mark as paid route
 router.post('/:id/pay', markInvoiceAsPaid);
+router.post('/:id/send', sendInvoiceEmail);
 
 module.exports = router;

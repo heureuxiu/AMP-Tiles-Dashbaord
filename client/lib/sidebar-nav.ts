@@ -45,6 +45,13 @@ export const sidebarNav: SidebarNavSection[] = [
     ],
   },
   {
+    label: "Customers",
+    items: [
+      { label: "All Customers", href: "/customers" },
+      { label: "Add Customer", href: "/customers/create" },
+    ],
+  },
+  {
     label: "Suppliers",
     items: [
       { label: "All Suppliers", href: "/suppliers" },

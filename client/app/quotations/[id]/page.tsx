@@ -74,6 +74,8 @@ type QuotationData = {
   deliveryCost?: number;
   grandTotal: number;
   convertedToInvoice?: boolean;
+  clientResponseRemarks?: string;
+  clientRespondedAt?: string;
 };
 
 const isAlreadyConverted = (quotation: QuotationData) =>
@@ -479,6 +481,21 @@ export default function ViewQuotationPage() {
                 </div>
 
               </div>
+              {(quotation.clientResponseRemarks || quotation.clientRespondedAt) && (
+                <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900/40">
+                  <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                    Client Response
+                  </label>
+                  <p className="mt-2 whitespace-pre-wrap text-sm font-medium text-neutral-900 dark:text-white">
+                    {quotation.clientResponseRemarks || "No remarks provided."}
+                  </p>
+                  {quotation.clientRespondedAt && (
+                    <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                      Responded on {formatDate(quotation.clientRespondedAt)}
+                    </p>
+                  )}
+                </div>
+              )}
               {quotation.notes && (
                 <div>
                   <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">

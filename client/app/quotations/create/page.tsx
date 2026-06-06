@@ -345,6 +345,7 @@
     >({});
     const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
     const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+    const [heldStockByProduct, setHeldStockByProduct] = useState<Record<string, number>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [saveMode, setSaveMode] = useState<SaveMode | null>(null);
     const [customerName, setCustomerName] = useState("");
@@ -377,6 +378,18 @@
       d.setDate(d.getDate() + 7);
       setValidUntil(d.toISOString().split("T")[0]);
     }, [quotationDate]);
+
+    // Fetch held stock whenever loaded products change
+    useEffect(() => {
+      const allProducts = Object.values(productsBySupplier).flat();
+      const allProductIds = allProducts.map((p) => p._id).filter(Boolean);
+      if (allProductIds.length === 0) return;
+      api.getHeldStock(allProductIds).then((res) => {
+        if (res.success && res.heldStock) {
+          setHeldStockByProduct(res.heldStock);
+        }
+      }).catch(() => {/* silently ignore */});
+    }, [productsBySupplier]);
 
     const fetchSuppliers = async () => {
       try {
@@ -501,12 +514,13 @@
       if (!product) return 0;
       if (!isStockRestrictedProduct(product)) return Number.POSITIVE_INFINITY;
 
-      const available = Number(product.stock ?? 0);
+      const onHand = Number(product.stock ?? 0);
+      const heldInOtherQuotations = roundQty(heldStockByProduct[productId] ?? 0);
       const usedInOtherRows = currentItems.reduce((sum, item) => {
         if (item.id === itemId || item.product !== productId) return sum;
         return sum + getItemStockDemand(product, item);
       }, 0);
-      const availableForCurrentRow = roundQty(Math.max(0, available - usedInOtherRows));
+      const availableForCurrentRow = roundQty(Math.max(0, onHand - heldInOtherQuotations - usedInOtherRows));
       return roundQty(getMaxQuantityFromAvailableStock(product, availableForCurrentRow));
     };
 
@@ -1152,6 +1166,8 @@
                     const maxQuantityForItem = item.product
                       ? getMaxQuantityForItem(items, item.id, item.product)
                       : 0;
+                    const heldStockQty = item.product ? roundQty(heldStockByProduct[item.product] ?? 0) : 0;
+                    const heldSqm = product && heldStockQty > 0 ? roundQty(getMaxQuantityFromAvailableStock(product, heldStockQty)) : 0;
                     const maxQuantityLimit =
                       item.product && Number.isFinite(maxQuantityForItem)
                         ? maxQuantityForItem
@@ -1372,6 +1388,9 @@
                             )}
                             {product?.stock != null && (
                               <span>Stock: <strong className="text-neutral-700 dark:text-neutral-300">{product.stock}</strong> {stockUnitLabel}</span>
+                            )}
+                            {product?.stock != null && item.product && isStockRestricted && heldSqm > 0 && (
+                              <span className="text-amber-600 dark:text-amber-400">Held in quotes: <strong>{formatStockQty(heldSqm)}</strong> sqm</span>
                             )}
                             {product?.stock != null && item.product && isStockRestricted && (
                               <span>Available to quote: <strong className="text-neutral-700 dark:text-neutral-300">{formatStockQty(maxQuantityForItem)}</strong> sqm</span>

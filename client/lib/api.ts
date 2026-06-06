@@ -2,8 +2,8 @@
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === 'production'
-    // ? 'https://amp-tiles-backend.onrender.com/api',
-    ? 'https://nextlogiclab.design/api'
+     ? 'https://amp-tiles-backend.onrender.com/api'
+    
     : 'http://localhost:5000/api');
 
 interface User {
@@ -50,6 +50,12 @@ interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
+  importResult?: {
+    created: number;
+    updated: number;
+    failed: number;
+    errors: Array<{ row: number; errors: string[] }>;
+  };
   emailSent?: boolean;
   emailError?: string | null;
   token?: string;
@@ -72,10 +78,15 @@ interface ApiResponse<T = unknown> {
   // Supplier payloads (list + single)
   suppliers?: unknown[];
   supplier?: unknown;
+  // Customer payloads (list + single)
+  customers?: unknown[];
+  customer?: unknown;
   // Stock payloads (list + single + product history)
   transactions?: unknown[];
   transaction?: unknown;
   history?: unknown[];
+  // Held stock payload (product id -> held qty in stock unit)
+  heldStock?: Record<string, number>;
 }
 
 class ApiClient {
@@ -311,6 +322,45 @@ class ApiClient {
     });
   }
 
+  async importProductsCsv(file: File) {
+    const token = localStorage.getItem('amp_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'text/csv',
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    this.beginLoading();
+    try {
+      const response = await fetch(`${this.baseURL}/products/import-csv`, {
+        method: 'POST',
+        headers,
+        body: await file.text(),
+        credentials: 'include',
+      });
+
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        throw new Error('Invalid JSON response from server');
+      }
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return data as ApiResponse;
+    } finally {
+      this.endLoading();
+    }
+  }
+
   // Stock Management endpoints
   async getStockTransactions(params?: {
     productId?: string;
@@ -393,6 +443,15 @@ class ApiClient {
     });
   }
 
+  async getHeldStock(productIds: string[], excludeQuotationId?: string) {
+    const queryParams = new URLSearchParams();
+    queryParams.append('productIds', productIds.join(','));
+    if (excludeQuotationId) queryParams.append('excludeQuotationId', excludeQuotationId);
+    return this.request(`/quotations/held-stock?${queryParams.toString()}`, {
+      method: 'GET',
+    });
+  }
+
   async getQuotationPdfBlob(id: string): Promise<Blob> {
     const token = localStorage.getItem('amp_token');
     const headers: Record<string, string> = {};
@@ -426,6 +485,19 @@ class ApiClient {
   async sendQuotationByEmail(id: string) {
     return this.request(`/quotations/${id}/send`, {
       method: 'POST',
+    });
+  }
+
+  async getQuotationForResponse(token: string) {
+    return this.request(`/quotations/respond/${encodeURIComponent(token)}`, {
+      method: 'GET',
+    });
+  }
+
+  async respondToQuotation(token: string, data: { decision: 'accepted' | 'rejected'; remarks: string }) {
+    return this.request(`/quotations/respond/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 
@@ -596,6 +668,84 @@ class ApiClient {
 
   async getSupplierStats() {
     return this.request('/suppliers/stats/summary', {
+      method: 'GET',
+    });
+  }
+
+  // Customer Management endpoints
+  async getCustomers(params?: {
+    search?: string;
+    status?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    limit?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    const query = queryParams.toString();
+    return this.request(`/customers${query ? `?${query}` : ''}`, {
+      method: 'GET',
+    });
+  }
+
+  async getCustomer(id: string) {
+    return this.request(`/customers/${id}`, {
+      method: 'GET',
+    });
+  }
+
+  async createCustomer(data: {
+    name: string;
+    phone: string;
+    email?: string;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      postcode?: string;
+      country?: string;
+    };
+    notes?: string;
+  }) {
+    return this.request('/customers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCustomer(id: string, data: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      postcode?: string;
+      country?: string;
+    };
+    notes?: string;
+    status?: string;
+  }) {
+    return this.request(`/customers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCustomer(id: string) {
+    return this.request(`/customers/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getCustomerStats() {
+    return this.request('/customers/stats/summary', {
       method: 'GET',
     });
   }

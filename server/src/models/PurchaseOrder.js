@@ -9,10 +9,11 @@ const purchaseOrderItemSchema = new mongoose.Schema(
     },
     productName: { type: String, required: true },
     sku: { type: String, default: '' },
+    size: { type: String, trim: true, default: '' },
     unitType: {
       type: String,
       required: true,
-      enum: ['Box', 'Sq Ft', 'Piece', 'Pallet'],
+      enum: ['Box', 'Sq Ft', 'Sqm', 'Piece', 'Pallet', 'LM'],
       default: 'Box',
     },
     quantityOrdered: {
@@ -26,7 +27,7 @@ const purchaseOrderItemSchema = new mongoose.Schema(
       min: [0, 'Rate must be a positive number'],
     },
     discountPercent: { type: Number, default: 0, min: 0, max: 100 },
-    taxPercent: { type: Number, default: 0, min: 0, max: 100 },
+    taxPercent: { type: Number, default: 10, min: 0, max: 100 },
     lineTotal: {
       type: Number,
       required: true,
@@ -49,13 +50,11 @@ const purchaseOrderSchema = new mongoose.Schema(
   {
     poNumber: {
       type: String,
-      unique: true,
-      sparse: true,
     },
     supplier: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Supplier',
-      required: [true, 'Please provide a supplier'],
+      default: null,
     },
     supplierName: { type: String, required: true },
     poDate: {
@@ -93,6 +92,7 @@ const purchaseOrderSchema = new mongoose.Schema(
       ],
       default: 'draft',
     },
+    receivedDate: { type: Date, default: null },
     notes: { type: String, trim: true, default: '' },
     terms: { type: String, trim: true, default: '' },
     createdBy: {
@@ -108,13 +108,20 @@ const purchaseOrderSchema = new mongoose.Schema(
 purchaseOrderSchema.pre('save', async function () {
   if (this.isNew && !this.poNumber) {
     const year = new Date().getFullYear();
-    const count = await this.constructor.countDocuments({
-      createdAt: {
-        $gte: new Date(`${year}-01-01`),
-        $lt: new Date(`${year + 1}-01-01`),
-      },
-    });
-    this.poNumber = `PO-${year}-${String(count + 1).padStart(4, '0')}`;
+    const prefix = `PO-${year}-`;
+    const latestForYear = await this.constructor
+      .findOne({
+        poNumber: { $regex: `^${prefix}\\d+$` },
+      })
+      .select('poNumber')
+      .sort({ poNumber: -1 })
+      .lean();
+
+    const latestSeq = latestForYear?.poNumber
+      ? Number.parseInt(String(latestForYear.poNumber).split('-').pop(), 10)
+      : 0;
+    const nextSeq = Number.isFinite(latestSeq) ? latestSeq + 1 : 1;
+    this.poNumber = `${prefix}${String(nextSeq).padStart(4, '0')}`;
   }
 });
 
@@ -125,7 +132,7 @@ purchaseOrderSchema.pre('save', function () {
       const afterDiscount =
         item.quantityOrdered * item.rate * (1 - (item.discountPercent || 0) / 100);
       item.lineTotal = Math.round(
-        afterDiscount * (1 + (item.taxPercent || 0) / 100) * 100
+        afterDiscount * (1 + ((item.taxPercent ?? 10) / 100)) * 100
       ) / 100;
     });
     this.subtotal = this.items.reduce((sum, i) => sum + i.lineTotal, 0);
@@ -134,7 +141,7 @@ purchaseOrderSchema.pre('save', function () {
   }
 });
 
-purchaseOrderSchema.index({ poNumber: 1 });
+purchaseOrderSchema.index({ poNumber: 1 }, { unique: true, sparse: true });
 purchaseOrderSchema.index({ supplier: 1 });
 purchaseOrderSchema.index({ status: 1 });
 purchaseOrderSchema.index({ poDate: -1 });

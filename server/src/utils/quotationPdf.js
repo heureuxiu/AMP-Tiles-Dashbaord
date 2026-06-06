@@ -1,0 +1,509 @@
+const fs = require('fs');
+const { readLogoBase64 } = require('./logoResolver');
+const { getPuppeteer, launchPuppeteerBrowser } = require('./puppeteerLauncher');
+
+function escapeHtml(text) {
+  if (text == null) return '';
+  const s = String(text);
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatNumber(amount) {
+  return new Intl.NumberFormat('en-AU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount) || 0);
+}
+
+function formatDate(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  const day = d.getDate();
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function formatQuantity(value) {
+  const numeric = Number(value) || 0;
+  const rounded = Math.round(numeric * 1000) / 1000;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(3).replace(/\.?0+$/, '');
+}
+
+const SQFT_PER_SQM = 10.764;
+const DELIVERY_GST_RATE = 10;
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function normalizeDeliveryCost(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return 0;
+  return roundMoney(numeric);
+}
+
+function calculateDeliveryGst(deliveryCost) {
+  const normalizedDeliveryCost = normalizeDeliveryCost(deliveryCost);
+  return roundMoney((normalizedDeliveryCost * DELIVERY_GST_RATE) / 100);
+}
+
+function getDisplayQuantity(item) {
+  const unitType = String(item?.unitType || '').toLowerCase();
+  const coverageSqm = Number(item?.coverageSqm);
+  if (Number.isFinite(coverageSqm) && coverageSqm > 0) {
+    if (
+      unitType.includes('sqft') ||
+      unitType.includes('sq ft') ||
+      unitType.includes('sqfeet')
+    ) {
+      return formatQuantity(coverageSqm * SQFT_PER_SQM);
+    }
+    if (
+      unitType.includes('sqm') ||
+      unitType.includes('sq meter') ||
+      unitType.includes('sqmetre')
+    ) {
+      return formatQuantity(coverageSqm);
+    }
+  }
+  return formatQuantity(item?.quantity ?? 0);
+}
+
+function getDisplayUnit(item) {
+  const unitType = String(item?.unitType || '').trim().toLowerCase();
+  if (unitType === 'sqm' || unitType === 'sq meter') return 'sqm';
+  if (unitType === 'sqft' || unitType === 'sq ft') return 'sq ft';
+  if (unitType === 'piece' || unitType === 'pieces' || unitType === 'pcs' || unitType === 'quantity') return 'pieces';
+  if (unitType === 'lm') return 'lm';
+  if (unitType === 'box') return 'box';
+  return item?.unitType || '';
+}
+
+function getItemSize(item) {
+  const rawSize = item?.product?.size ?? item?.size;
+  return rawSize ? String(rawSize) : '';
+}
+
+function getItemSku(item) {
+  const rawSku = item?.sku ?? item?.product?.sku;
+  return rawSku ? String(rawSku) : '';
+}
+
+function getDeliveryAddress(source) {
+  return String(source?.deliveryAddress || source?.customerAddress || '').trim();
+}
+
+function getLogoBase64() {
+  return readLogoBase64();
+}
+
+function buildQuotationHtml(quotation, companyInfo = {}) {
+  const company = {
+    name: companyInfo.name || 'AMP TILES PTY LTD',
+    addressLine1: companyInfo.addressLine1 || 'Unit 15/55 Anderson Road',
+    addressLine2: companyInfo.addressLine2 || 'SMEATON GRANGE',
+    addressLine3: companyInfo.addressLine3 || 'NSW 2567',
+    country: companyInfo.country || 'AUSTRALIA',
+    abn: companyInfo.abn || '14 690 181 858',
+    bank: companyInfo.bank || 'NAB',
+    accountName: companyInfo.accountName || 'AMP TILES PTY LTD',
+    bsb: companyInfo.bsb || '082-356',
+    accountNumber: companyInfo.accountNumber || '26-722-1347',
+  };
+
+  const logoSrc = getLogoBase64();
+  const quote = quotation;
+  const deliveryAddress = getDeliveryAddress(quote);
+
+  const rowsHtml = (quote.items || [])
+    .map(
+      (item) => `
+    <tr>
+      <td>${escapeHtml(getItemSku(item))}</td>
+      <td>${escapeHtml(item.productName || item.product?.name || '')}</td>
+      <td>${escapeHtml(getItemSize(item))}</td>
+      <td>${escapeHtml(getDisplayUnit(item))}</td>
+      <td class="center">${escapeHtml(getDisplayQuantity(item))}</td>
+      <td class="right">${formatNumber(item.rate)}</td>
+      <td class="center">${item.discountPercent != null && item.discountPercent > 0 ? item.discountPercent + '%' : '-'}</td>
+      <td class="center">${item.taxPercent != null ? item.taxPercent + '%' : (quote.taxRate != null ? quote.taxRate + '%' : '10%')}</td>
+      <td class="right">${formatNumber(item.lineTotal)}</td>
+    </tr>`
+    )
+    .join('');
+
+  const items = quote.items || [];
+  const taxRate = quote.taxRate || 10;
+  const itemsPreTax = Math.round(items.reduce((sum, item) => {
+    const taxPercent = Number(item.taxPercent ?? taxRate);
+    const lineTotal = Number(item.lineTotal || 0);
+    return sum + (lineTotal / (1 + taxPercent / 100));
+  }, 0) * 100) / 100;
+  const itemsGst = Math.round(items.reduce((sum, item) => {
+    const taxPercent = Number(item.taxPercent ?? taxRate);
+    const lineTotal = Number(item.lineTotal || 0);
+    return sum + (lineTotal - lineTotal / (1 + taxPercent / 100));
+  }, 0) * 100) / 100;
+  const storedSubtotal = Number(quote.subtotal) || 0;
+  const storedDiscount = Number(quote.discount) || 0;
+  const storedTax = Number(quote.tax) || 0;
+  const fallbackItemsPreTax = Math.max(0, Math.round((storedSubtotal - storedDiscount) * 100) / 100);
+  const effectiveItemsPreTax = items.length > 0 ? itemsPreTax : fallbackItemsPreTax;
+  const effectiveItemsGst = items.length > 0 ? itemsGst : storedTax;
+  const baseTotal = fallbackItemsPreTax + storedTax;
+  const parsedDeliveryCost = Number(quote.deliveryCost);
+  const fallbackDeliveryCost = Math.max(
+    0,
+    Math.round((Number(quote.grandTotal) - baseTotal) * 100) / 100
+  );
+  const deliveryCost = Number.isFinite(parsedDeliveryCost)
+    ? normalizeDeliveryCost(parsedDeliveryCost)
+    : Number.isFinite(fallbackDeliveryCost)
+      ? normalizeDeliveryCost(fallbackDeliveryCost)
+      : 0;
+  const deliveryGst = calculateDeliveryGst(deliveryCost);
+  const subtotal = Math.round((effectiveItemsPreTax + deliveryCost) * 100) / 100;
+  const totalGst = Math.round((effectiveItemsGst + deliveryGst) * 100) / 100;
+  const grandTotal = Number.isFinite(Number(quote.grandTotal))
+    ? Number(quote.grandTotal)
+    : Math.round((subtotal + totalGst) * 100) / 100;
+
+  const validUntil = quote.validUntil ? formatDate(quote.validUntil) : 'N/A';
+  const statusLabel = String(quote.status || 'draft').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const referenceLabel = String(quote.reference || '').trim();
+
+  // Delivery row for the table
+  const deliveryRowHtml = deliveryCost > 0 ? `
+    <tr>
+      <td></td>
+      <td>Delivery Cost</td>
+      <td></td>
+      <td></td>
+      <td class="center">1</td>
+      <td class="right">${formatNumber(deliveryCost)}</td>
+      <td class="center">-</td>
+      <td class="center">${DELIVERY_GST_RATE}%</td>
+      <td class="right">${formatNumber(deliveryCost + deliveryGst)}</td>
+    </tr>` : '';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      color: #1a1a2e;
+      padding: 40px 45px;
+      line-height: 1.5;
+    }
+
+    .top-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .doc-title {
+      font-size: 28px;
+      font-weight: 800;
+      color: #1a1a2e;
+      letter-spacing: 1px;
+    }
+    .logo-company {
+      text-align: right;
+    }
+    .logo-company img {
+      height: 54px;
+      margin-bottom: 4px;
+    }
+    .top-reference {
+      font-size: 11.5px;
+      color: #333;
+      margin-top: 2px;
+    }
+    .top-reference strong {
+      color: #1a1a2e;
+    }
+
+    .header-grid {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 30px;
+      margin-bottom: 28px;
+    }
+    .customer-block {
+      flex: 1;
+      padding-top: 4px;
+    }
+    .customer-block .cust-name {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+    .customer-block p {
+      margin: 1px 0;
+      font-size: 12.5px;
+      color: #333;
+    }
+    .meta-company-table {
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    .meta-company-table td {
+      border: 1px solid #bbb;
+      padding: 5px 10px;
+      vertical-align: top;
+    }
+    .meta-company-table .label-col {
+      font-weight: 600;
+      color: #444;
+      white-space: nowrap;
+      background: #fafafa;
+    }
+    .meta-company-table .value-col {
+      min-width: 100px;
+    }
+    .meta-company-table .company-col {
+      font-weight: 600;
+      color: #1a1a2e;
+      min-width: 140px;
+    }
+
+    table.items {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14px;
+      font-size: 12.5px;
+    }
+    table.items thead {
+      background: #f0f0f4;
+    }
+    table.items th {
+      padding: 9px 10px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 11.5px;
+      color: #333;
+      border: 1px solid #bbb;
+    }
+    table.items th.center, table.items td.center { text-align: center; }
+    table.items th.right, table.items td.right { text-align: right; }
+    table.items td {
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      color: #1a1a2e;
+    }
+    table.items tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    .totals-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 22px;
+    }
+    .totals-table {
+      border-collapse: collapse;
+      font-size: 13px;
+      min-width: 300px;
+    }
+    .totals-table td {
+      padding: 6px 12px;
+      border: 1px solid #bbb;
+    }
+    .totals-table .t-label {
+      text-align: right;
+      font-weight: 600;
+      color: #444;
+      background: #fafafa;
+    }
+    .totals-table .t-value {
+      text-align: right;
+      font-weight: 700;
+      min-width: 110px;
+    }
+    .totals-table .grand-row td {
+      background: #f0f0f4;
+      font-size: 14.5px;
+      font-weight: 800;
+      color: #1a1a2e;
+    }
+
+    .footer-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 2px solid #1a1a2e;
+    }
+    .footer-block p {
+      margin: 2px 0;
+      font-size: 12.5px;
+      color: #333;
+    }
+    .footer-block .valid-until {
+      font-weight: 700;
+      font-size: 13.5px;
+      margin-bottom: 6px;
+      color: #1a1a2e;
+    }
+    .footer-note {
+      margin-top: 22px;
+      text-align: center;
+      font-size: 11.5px;
+      color: #888;
+    }
+    .notes-section {
+      margin-top: 14px;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 12.5px;
+      color: #444;
+      background: #fafafa;
+    }
+    .notes-section strong {
+      color: #222;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Logo + Title -->
+  <div class="top-section">
+    <div class="doc-title">QUOTATION</div>
+    <div class="logo-company">
+      ${logoSrc ? `<img src="${logoSrc}" alt="Logo" />` : ''}
+    </div>
+  </div>
+
+  <!-- Customer + Meta + Company -->
+  <div class="header-grid">
+    <div class="customer-block">
+      <p class="cust-name">${escapeHtml(quote.customerName || '')}</p>
+      ${deliveryAddress ? `<p><strong>Delivery Address:</strong> ${escapeHtml(deliveryAddress)}</p>` : ''}
+      ${quote.customerPhone ? `<p>${escapeHtml(quote.customerPhone)}</p>` : ''}
+      ${quote.customerEmail ? `<p>${escapeHtml(quote.customerEmail)}</p>` : ''}
+    </div>
+    <table class="meta-company-table">
+      <tr>
+        <td class="label-col">Quote Date</td>
+        <td class="value-col">${escapeHtml(formatDate(quote.quotationDate))}</td>
+        <td class="company-col" rowspan="6" style="vertical-align: top; line-height: 1.6;">
+          ${escapeHtml(company.name)}<br>
+          ${escapeHtml(company.addressLine1)}<br>
+          ${escapeHtml(company.addressLine2)}<br>
+          ${escapeHtml(company.addressLine3)}<br>
+          ${escapeHtml(company.country)}
+        </td>
+      </tr>
+      <tr>
+        <td class="label-col">Quote Number</td>
+        <td class="value-col">${escapeHtml(quote.quotationNumber || '')}</td>
+      </tr>
+      <tr>
+        <td class="label-col">Valid Until</td>
+        <td class="value-col">${escapeHtml(validUntil)}</td>
+      </tr>
+      <tr>
+        <td class="label-col">Status</td>
+        <td class="value-col">${escapeHtml(statusLabel)}</td>
+      </tr>
+      <tr>
+        <td class="label-col">Reference</td>
+        <td class="value-col">${escapeHtml(referenceLabel)}</td>
+      </tr>
+      <tr>
+        <td class="label-col">ABN</td>
+        <td class="value-col">${escapeHtml(company.abn)}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Items Table -->
+  <table class="items">
+    <thead>
+      <tr>
+        <th>SKU</th>
+        <th>Product</th>
+        <th>Size</th>
+        <th>Unit</th>
+        <th class="center">Quantity</th>
+        <th class="right">Unit Price</th>
+        <th class="center">Disc%</th>
+        <th class="center">Tax%</th>
+        <th class="right">Amount AUD</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+      ${deliveryRowHtml}
+    </tbody>
+  </table>
+
+  <!-- Totals -->
+  <div class="totals-wrapper">
+    <table class="totals-table">
+      <tr>
+        <td class="t-label">Subtotal (ex. GST)</td>
+        <td class="t-value">${formatNumber(subtotal)}</td>
+      </tr>
+      <tr>
+        <td class="t-label">Total GST</td>
+        <td class="t-value">${formatNumber(totalGst)}</td>
+      </tr>
+      <tr class="grand-row">
+        <td class="t-label">TOTAL AUD</td>
+        <td class="t-value">${formatNumber(grandTotal)}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Notes / Terms -->
+  ${quote.notes ? `<div class="notes-section"><strong>Notes:</strong> ${escapeHtml(quote.notes)}</div>` : ''}
+  ${quote.terms ? `<div class="notes-section" style="margin-top:8px;"><strong>Terms:</strong> ${escapeHtml(quote.terms)}</div>` : ''}
+
+  <!-- Bank Details -->
+  <div class="footer-block">
+    <p class="valid-until">Valid Until: ${escapeHtml(validUntil)}</p>
+    <p><strong>Account Name:</strong> ${escapeHtml(company.accountName)}</p>
+    <p><strong>BSB Number:</strong> ${escapeHtml(company.bsb)}</p>
+    <p><strong>Account Number:</strong> ${escapeHtml(company.accountNumber)}</p>
+  </div>
+
+  <p class="footer-note">This is a computer-generated quotation and does not require a signature.</p>
+
+</body>
+</html>`;
+}
+
+async function generateQuotationPdf(quotation) {
+  const puppeteer = getPuppeteer();
+  const html = buildQuotationHtml(quotation);
+  let browser;
+  try {
+    browser = await launchPuppeteerBrowser(puppeteer);
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
+module.exports = { generateQuotationPdf, buildQuotationHtml };
