@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Save, UserRound, X } from "lucide-react";
+import { FileText, Save, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -264,6 +264,16 @@ export default function EditCustomerPage() {
               <Button type="submit" disabled={isSaving} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700">
                 <Save className="h-4 w-4" />
                 {isSaving ? "Saving..." : "Save Customer"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.push(`/records/monthly-statements/${customerId}`)}
+                disabled={isSaving}
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                View Monthly Records
               </Button>
               <Button type="button" variant="outline" onClick={() => router.push("/customers")} disabled={isSaving} className="flex items-center gap-2">
                 <X className="h-4 w-4" />

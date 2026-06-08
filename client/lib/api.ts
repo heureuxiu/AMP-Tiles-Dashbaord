@@ -81,6 +81,7 @@ interface ApiResponse<T = unknown> {
   // Customer payloads (list + single)
   customers?: unknown[];
   customer?: unknown;
+  monthlyStatement?: unknown;
   // Stock payloads (list + single + product history)
   transactions?: unknown[];
   transaction?: unknown;
@@ -750,6 +751,45 @@ class ApiClient {
     return this.request('/customers/stats/summary', {
       method: 'GET',
     });
+  }
+
+  async getCustomerMonthlyStatement(id: string, month: string) {
+    const query = new URLSearchParams({ month }).toString();
+    return this.request(`/customers/${id}/monthly-statement?${query}`, {
+      method: 'GET',
+    });
+  }
+
+  async getCustomerMonthlyStatementPdfBlob(id: string, month: string): Promise<Blob> {
+    const token = localStorage.getItem('amp_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const query = new URLSearchParams({ month }).toString();
+
+    this.beginLoading();
+    try {
+      const response = await fetch(`${this.baseURL}/customers/${id}/monthly-statement/pdf?${query}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        let message = `HTTP ${response.status}`;
+        try {
+          const parsed = JSON.parse(errText);
+          if (parsed.message) message = parsed.message;
+        } catch {
+          if (errText) message = errText;
+        }
+        throw new Error(message);
+      }
+
+      return response.blob();
+    } finally {
+      this.endLoading();
+    }
   }
 
   // Purchase Order Management endpoints

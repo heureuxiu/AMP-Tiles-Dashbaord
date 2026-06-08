@@ -100,12 +100,17 @@ function getInvoiceAmountSnapshot(invoice) {
   const grandTotal = Number.isFinite(Number(invoice?.grandTotal))
     ? Number(invoice.grandTotal)
     : baseTotal + deliveryCost;
+  const inferredDeliveryGst = Math.max(
+    0,
+    Math.round((grandTotal - (baseTotal + deliveryCost)) * 100) / 100
+  );
 
   return {
     subtotal,
     discountAmount,
     taxAmount,
     deliveryCost: Math.round(deliveryCost * 100) / 100,
+    gstTotal: Math.round((taxAmount + inferredDeliveryGst) * 100) / 100,
     grandTotal: Math.round(grandTotal * 100) / 100,
   };
 }
@@ -171,12 +176,12 @@ function buildFallbackInvoiceEmail(invoice) {
         </tr>`
       : '',
     `<tr>
-      <td colspan="7" style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:600;">Tax (GST)</td>
-      <td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:600;">${fallbackFormatCurrency(amounts.taxAmount)}</td>
-    </tr>`,
-    `<tr>
       <td colspan="7" style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:600;">Delivery Cost</td>
       <td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:600;">${fallbackFormatCurrency(amounts.deliveryCost)}</td>
+    </tr>`,
+    `<tr>
+      <td colspan="7" style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:600;">GST</td>
+      <td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:600;">${fallbackFormatCurrency(amounts.gstTotal)}</td>
     </tr>`,
     `<tr>
       <td colspan="7" style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:700;">Grand Total</td>
@@ -199,8 +204,8 @@ function buildFallbackInvoiceEmail(invoice) {
     deliveryAddress ? `Delivery Address: ${deliveryAddress}` : '',
     `Subtotal: ${fallbackFormatCurrency(amounts.subtotal)}`,
     amounts.discountAmount > 0 ? `Discount: -${fallbackFormatCurrency(amounts.discountAmount)}` : '',
-    amounts.taxAmount > 0 ? `Tax (GST): ${fallbackFormatCurrency(amounts.taxAmount)}` : '',
     `Delivery Cost: ${fallbackFormatCurrency(amounts.deliveryCost)}`,
+    `GST: ${fallbackFormatCurrency(amounts.gstTotal)}`,
     `Grand Total: ${fallbackFormatCurrency(amounts.grandTotal)}`,
     `Amount Received: ${fallbackFormatCurrency(paidCents / 100)}`,
     `Outstanding: ${fallbackFormatCurrency(remainingCents / 100)}`,
@@ -244,12 +249,8 @@ function buildFallbackInvoiceEmail(invoice) {
             ? `<strong>Discount:</strong> -${fallbackFormatCurrency(amounts.discountAmount)}<br/>`
             : ''
         }
-        ${
-          amounts.taxAmount > 0
-            ? `<strong>Tax (GST):</strong> ${fallbackFormatCurrency(amounts.taxAmount)}<br/>`
-            : ''
-        }
         <strong>Delivery Cost:</strong> ${fallbackFormatCurrency(amounts.deliveryCost)}<br/>
+        <strong>GST:</strong> ${fallbackFormatCurrency(amounts.gstTotal)}<br/>
         <strong>Grand Total:</strong> ${fallbackFormatCurrency(amounts.grandTotal)}<br/>
         <strong>Amount Received:</strong> ${fallbackFormatCurrency(paidCents / 100)}<br/>
         <strong>Outstanding:</strong> ${fallbackFormatCurrency(remainingCents / 100)}

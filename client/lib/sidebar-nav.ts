@@ -52,6 +52,12 @@ export const sidebarNav: SidebarNavSection[] = [
     ],
   },
   {
+    label: "Records",
+    items: [
+      { label: "Monthly Statements", href: "/records/monthly-statements" },
+    ],
+  },
+  {
     label: "Suppliers",
     items: [
       { label: "All Suppliers", href: "/suppliers" },

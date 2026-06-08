@@ -240,6 +240,7 @@ if (mailerModule && typeof mailerModule.sendEmail === 'function') {
 const quotationEmailModule = loadOptionalModule([
   '../utils/quotationEmail',
   '../utils/quotation-email',
+  '../utils/qoutationEmail',
   '../utils/QuotationEmail',
 ]);
 if (quotationEmailModule && typeof quotationEmailModule.buildQuotationEmail === 'function') {
@@ -1795,5 +1796,4 @@ exports.getQuotationStats = async (req, res) => {
     });
   }
 };
-
 
