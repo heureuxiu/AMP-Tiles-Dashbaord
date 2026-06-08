@@ -63,7 +63,7 @@ type InvoiceItem = {
 function calcLineTotal(item: InvoiceItem): number {
   const base = item.quantity * item.rate;
   const afterDisc = base * (1 - (item.discountPercent || 0) / 100);
-  return Math.round(afterDisc * (1 + ((item.taxPercent ?? 10) / 100)) * 100) / 100;
+  return Math.round(afterDisc * 100) / 100;
 }
 
 function getBoxesFromCoverage(
@@ -250,13 +250,14 @@ export default function CreateInvoicePage() {
     );
   };
 
-  const itemsPreTax = Math.round(items.reduce((sum, i) => sum + (i.lineTotal / (1 + i.taxPercent / 100)), 0) * 100) / 100;
+  const itemsPreTax = Math.round(items.reduce((sum, i) => sum + i.lineTotal, 0) * 100) / 100;
   const itemsGst = Math.round(items.reduce((sum, i) => {
-    return sum + (i.lineTotal - i.lineTotal / (1 + i.taxPercent / 100));
+    return sum + (i.lineTotal * ((i.taxPercent ?? 10) / 100));
   }, 0) * 100) / 100;
   const deliveryGst = Math.round(deliveryCost * 0.1 * 100) / 100;
+  const totalGst = Math.round((itemsGst + deliveryGst) * 100) / 100;
   const subtotal = itemsPreTax;
-  const grandTotal = Math.round((itemsPreTax + itemsGst + deliveryCost + deliveryGst) * 100) / 100;
+  const grandTotal = Math.round((itemsPreTax + deliveryCost + totalGst) * 100) / 100;
   const paidCents = toCents(amountPaid || 0);
   const grandTotalCents = toCents(grandTotal);
   const remaining = Math.max(0, grandTotalCents - paidCents) / 100;
@@ -495,7 +496,7 @@ export default function CreateInvoicePage() {
                     Invoice Items
                   </h3>
                   <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                    Product, Unit Type, Qty, Rate, Disc %, Tax %, Line Total.
+                    Product, Unit Type, Qty, Rate, Disc %, GST, Total ex GST.
                     Enter coverage (sqm/sq ft) to auto-calc boxes.
                   </p>
                 </div>
@@ -581,7 +582,7 @@ export default function CreateInvoicePage() {
                             </div>
                           </div>
 
-                          {/* Row 2: Qty / Unit Price / Disc% / Tax% / Line Total */}
+                          {/* Row 2: Qty / Unit Price / Disc% / GST / Total ex GST */}
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                             <div className="space-y-1">
                               <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
@@ -656,7 +657,7 @@ export default function CreateInvoicePage() {
                             </div>
                             <div className="space-y-1">
                               <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                                Tax %
+                                GST
                               </label>
                               <input
                                 type="number"
@@ -673,7 +674,7 @@ export default function CreateInvoicePage() {
                             </div>
                             <div className="space-y-1">
                               <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                                Line Total
+                                Total ex GST
                               </label>
                               <div className="flex h-9.5 items-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-900 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white">
                                 {formatCurrency(item.lineTotal)}
@@ -746,10 +747,10 @@ export default function CreateInvoicePage() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-600 dark:text-neutral-400">
-                      Items GST (10%)
+                      Total GST
                     </span>
                     <span className="font-semibold">
-                      {formatCurrency(itemsGst)}
+                      {formatCurrency(totalGst)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -768,16 +769,6 @@ export default function CreateInvoicePage() {
                       className="h-8 w-28 text-right"
                     />
                   </div>
-                  {deliveryGst > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-neutral-600 dark:text-neutral-400">
-                        Delivery GST (10%)
-                      </span>
-                      <span className="font-semibold">
-                        {formatCurrency(deliveryGst)}
-                      </span>
-                    </div>
-                  )}
                   <div className="border-t border-neutral-200 dark:border-neutral-700 pt-2">
                     <div className="flex justify-between text-base font-semibold">
                       <span>Grand Total</span>

@@ -27,7 +27,7 @@ type Invoice = {
 export function RecentActivity() {
   const [recentQuotations, setRecentQuotations] = useState<Quotation[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchRecentData();
@@ -35,7 +35,6 @@ export function RecentActivity() {
 
   const fetchRecentData = async () => {
     try {
-      setIsLoading(true);
       const [quotationsResponse, invoicesResponse] = await Promise.all([
         api.getQuotations({ sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getInvoices({ sortBy: 'createdAt', sortOrder: 'desc' }),
@@ -114,11 +113,7 @@ export function RecentActivity() {
 
         {/* List */}
         <div className="p-4 sm:p-5 lg:p-6">
-          {isLoading ? (
-            <div className="flex h-48 items-center justify-center">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
-            </div>
-          ) : recentQuotations.length === 0 ? (
+          {recentQuotations.length === 0 ? (
             <div className="flex h-48 items-center justify-center">
               <p className="text-sm text-neutral-500 dark:text-neutral-400">No quotations yet</p>
             </div>
@@ -186,11 +181,7 @@ export function RecentActivity() {
 
         {/* List */}
         <div className="p-4 sm:p-5 lg:p-6">
-          {isLoading ? (
-            <div className="flex h-48 items-center justify-center">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
-            </div>
-          ) : recentInvoices.length === 0 ? (
+          {recentInvoices.length === 0 ? (
             <div className="flex h-48 items-center justify-center">
               <p className="text-sm text-neutral-500 dark:text-neutral-400">No invoices yet</p>
             </div>

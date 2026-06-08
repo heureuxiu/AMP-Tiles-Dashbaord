@@ -16,6 +16,7 @@ type Customer = {
   name: string;
   phone: string;
   email?: string;
+  abn?: string;
   status?: string;
   address?: {
     street?: string;
@@ -37,6 +38,7 @@ export default function EditCustomerPage() {
     name: "",
     phone: "",
     email: "",
+    abn: "",
     status: "active",
     street: "",
     city: "",
@@ -57,6 +59,7 @@ export default function EditCustomerPage() {
           name: customer.name || "",
           phone: customer.phone || "",
           email: customer.email || "",
+          abn: customer.abn || "",
           status: customer.status || "active",
           street: customer.address?.street || "",
           city: customer.address?.city || "",
@@ -104,6 +107,7 @@ export default function EditCustomerPage() {
         name: formData.name,
         phone: formData.phone,
         email: formData.email || undefined,
+        abn: formData.abn || undefined,
         status: formData.status,
         address: {
           street: formData.street || undefined,
@@ -201,6 +205,11 @@ export default function EditCustomerPage() {
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} disabled={isSaving} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="abn">ABN</Label>
+              <Input id="abn" name="abn" type="text" value={formData.abn} onChange={handleChange} disabled={isSaving} placeholder="Enter ABN" />
             </div>
 
             <div className="space-y-2">

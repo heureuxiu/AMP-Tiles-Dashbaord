@@ -69,7 +69,7 @@ const MotionTableRow = motion(MotionTableRowBase);
 
 export function StockOverview() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedFinishes, setSelectedFinishes] = useState<string[]>([]);
@@ -79,7 +79,6 @@ export function StockOverview() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      setIsLoading(true);
       const response = await api.getProducts();
 
       if (response?.success && Array.isArray(response?.products)) {
@@ -521,17 +520,7 @@ export function StockOverview() {
 
       {/* Table */}
       <div className="p-4 sm:p-5 lg:p-6">
-        {isLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="flex flex-col items-center gap-3">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                Loading products...
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
             <div className="inline-block min-w-full align-middle">
               <div className="overflow-hidden rounded-xl border border-neutral-200/60 dark:border-neutral-700/60">
                 <Table>
@@ -686,8 +675,7 @@ export function StockOverview() {
                 </Table>
               </div>
             </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Footer */}

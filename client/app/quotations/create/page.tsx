@@ -181,9 +181,7 @@
     const base = billableQty * item.rate;
     const discountAmount = base * ((Number(item.discountPercent) || 0) / 100);
     const discountedBase = Math.max(0, base - discountAmount);
-    const taxPercent = Number(item.taxPercent ?? 10);
-    const taxAmount = discountedBase * (taxPercent / 100);
-    return Math.round((discountedBase + taxAmount) * 100) / 100;
+    return Math.round(discountedBase * 100) / 100;
   }
 
   function getBoxesFromSqm(sqmValue: number, product?: Product): number | null {
@@ -868,8 +866,12 @@
     };
 
     const subtotal = calculateSubtotal();
+    const itemsGst = Math.round(items.reduce((sum, item) => {
+      return sum + (item.lineTotal * ((Number(item.taxPercent) || 0) / 100));
+    }, 0) * 100) / 100;
     const deliveryGst = Math.round((deliveryCost * (DELIVERY_GST_RATE / 100)) * 100) / 100;
-    const grandTotal = Math.round((subtotal + deliveryCost + deliveryGst) * 100) / 100;
+    const totalGst = Math.round((itemsGst + deliveryGst) * 100) / 100;
+    const grandTotal = Math.round((subtotal + deliveryCost + totalGst) * 100) / 100;
 
     return (
       <div className="space-y-6 p-6 lg:p-8">
@@ -1279,7 +1281,7 @@
                           </div>
                         </div>
 
-                        {/* Row 2: Qty / Rate / Disc% / Tax% / Line Total */}
+                        {/* Row 2: Qty / Rate / Disc% / GST / Total ex GST */}
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                           <div className="space-y-1">
                             <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
@@ -1350,7 +1352,7 @@
 
                           <div className="space-y-1">
                             <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                              Tax %
+                              GST
                             </label>
                             <input
                               type="number"
@@ -1369,7 +1371,7 @@
 
                           <div className="space-y-1">
                             <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                              Line Total
+                              Total ex GST
                             </label>
                             <div className="flex h-9.5 items-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-900 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white">
                               {formatCurrency(item.lineTotal)}
@@ -1426,7 +1428,7 @@
                     {/* Subtotal */}
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Subtotal
+                        Subtotal (ex GST)
                       </span>
                       <span className="font-semibold text-neutral-900 dark:text-white">
                         {formatCurrency(subtotal)}
@@ -1450,10 +1452,10 @@
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                        Delivery GST ({DELIVERY_GST_RATE}%)
+                        Total GST
                       </span>
                       <span className="font-semibold text-neutral-900 dark:text-white">
-                        {formatCurrency(deliveryGst)}
+                        {formatCurrency(totalGst)}
                       </span>
                     </div>
 

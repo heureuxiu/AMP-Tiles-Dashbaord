@@ -703,6 +703,7 @@ class ApiClient {
     name: string;
     phone: string;
     email?: string;
+    abn?: string;
     address?: {
       street?: string;
       city?: string;
@@ -722,6 +723,7 @@ class ApiClient {
     name?: string;
     phone?: string;
     email?: string;
+    abn?: string;
     address?: {
       street?: string;
       city?: string;

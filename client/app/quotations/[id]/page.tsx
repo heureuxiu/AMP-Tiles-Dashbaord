@@ -78,6 +78,13 @@ type QuotationData = {
   clientRespondedAt?: string;
 };
 
+function calcLineTotalExGst(item: QuotationItem): number {
+  const base = (Number(item.quantity) || 0) * (Number(item.rate) || 0);
+  const discountAmount = base * ((Number(item.discountPercent) || 0) / 100);
+  const discountedBase = Math.max(0, base - discountAmount);
+  return Math.round(discountedBase * 100) / 100;
+}
+
 const isAlreadyConverted = (quotation: QuotationData) =>
   quotation.status === "converted" && Boolean(quotation.convertedToInvoice);
 
@@ -298,9 +305,14 @@ export default function ViewQuotationPage() {
     );
   }
 
-  const subtotal = Number(quotation.subtotal) || 0;
-  const discount = Number(quotation.discount) || 0;
-  const tax = Number(quotation.tax) || 0;
+  const subtotal = Math.round((quotation.items || []).reduce((sum, item) => {
+    return sum + calcLineTotalExGst(item);
+  }, 0) * 100) / 100;
+  const discount = 0;
+  const tax = Math.round((quotation.items || []).reduce((sum, item) => {
+    const taxPercent = Number(item.taxPercent ?? quotation.taxRate ?? 10);
+    return sum + (calcLineTotalExGst(item) * (taxPercent / 100));
+  }, 0) * 100) / 100;
   const baseTotal = subtotal - discount + tax;
   const parsedDeliveryCost = Number(quotation.deliveryCost);
   const fallbackDeliveryCost = Math.max(
@@ -313,6 +325,7 @@ export default function ViewQuotationPage() {
       ? fallbackDeliveryCost
       : 0;
   const deliveryGst = Math.round((deliveryCost * (DELIVERY_GST_RATE / 100)) * 100) / 100;
+  const totalGst = Math.round((tax + deliveryGst) * 100) / 100;
   const grandTotal = Number.isFinite(Number(quotation.grandTotal))
     ? Number(quotation.grandTotal)
     : Math.round((baseTotal + deliveryCost + deliveryGst) * 100) / 100;
@@ -558,10 +571,10 @@ export default function ViewQuotationPage() {
                         Rate
                       </th>
                       <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                        Tax
+                        GST
                       </th>
                       <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                        Amount
+                        Total ex GST
                       </th>
                     </tr>
                   </thead>
@@ -596,7 +609,7 @@ export default function ViewQuotationPage() {
                           {`${Number.isFinite(Number(item.taxPercent)) ? Number(item.taxPercent) : (quotation.taxRate || 10)}%`}
                         </td>
                         <td className="py-4 text-right font-semibold text-neutral-900 dark:text-white">
-                          {formatCurrency(item.lineTotal)}
+                          {formatCurrency(calcLineTotalExGst(item))}
                         </td>
                       </tr>
                     ))}
@@ -623,7 +636,7 @@ export default function ViewQuotationPage() {
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                  Subtotal
+                  Subtotal (ex GST)
                 </span>
                 <span className="font-semibold text-neutral-900 dark:text-white">
                   {formatCurrency(subtotal)}
@@ -643,10 +656,10 @@ export default function ViewQuotationPage() {
 
               <div className="flex items-center justify-between">
                 <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                  Tax (GST {quotation.taxRate || 10}%)
+                  Total GST
                 </span>
                 <span className="font-semibold text-neutral-900 dark:text-white">
-                  {formatCurrency(tax)}
+                  {formatCurrency(totalGst)}
                 </span>
               </div>
 
@@ -656,14 +669,6 @@ export default function ViewQuotationPage() {
                 </span>
                 <span className="font-semibold text-neutral-900 dark:text-white">
                   {formatCurrency(deliveryCost)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                  Delivery GST ({DELIVERY_GST_RATE}%)
-                </span>
-                <span className="font-semibold text-neutral-900 dark:text-white">
-                  {formatCurrency(deliveryGst)}
                 </span>
               </div>
 

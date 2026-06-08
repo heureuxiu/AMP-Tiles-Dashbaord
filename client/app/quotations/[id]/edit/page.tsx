@@ -266,9 +266,9 @@ function getBillableQuantity(item: QuotationItem): number {
 function calcLineTotal(item: QuotationItem): number {
   const billableQty = getBillableQuantity(item);
   const base = billableQty * item.rate;
-  const taxPercent = Number(item.taxPercent ?? 10);
-  const taxAmount = base * (taxPercent / 100);
-  return Math.round((base + taxAmount) * 100) / 100;
+  const discountAmount = base * ((Number(item.discountPercent) || 0) / 100);
+  const discountedBase = Math.max(0, base - discountAmount);
+  return Math.round(discountedBase * 100) / 100;
 }
 
 function getBoxesFromSqm(sqmValue: number, product?: Product): number | null {
@@ -475,7 +475,7 @@ export default function EditQuotationPage() {
               unitType: "Sq Meter",
               quantity: quantitySqm,
               rate,
-              discountPercent: 0,
+              discountPercent: item.discountPercent ?? 0,
               taxPercent: item.taxPercent ?? 10,
               lineTotal: 0,
               coverageInput: "",
@@ -833,8 +833,12 @@ export default function EditQuotationPage() {
   };
 
   const subtotal = calculateSubtotal();
+  const itemsGst = Math.round(items.reduce((sum, item) => {
+    return sum + (item.lineTotal * ((Number(item.taxPercent) || 0) / 100));
+  }, 0) * 100) / 100;
   const deliveryGst = Math.round((deliveryCost * (DELIVERY_GST_RATE / 100)) * 100) / 100;
-  const grandTotal = Math.round((subtotal + deliveryCost + deliveryGst) * 100) / 100;
+  const totalGst = Math.round((itemsGst + deliveryGst) * 100) / 100;
+  const grandTotal = Math.round((subtotal + deliveryCost + totalGst) * 100) / 100;
 
   return (
     <div className="space-y-6 p-6 lg:p-8">
@@ -1150,7 +1154,7 @@ export default function EditQuotationPage() {
                           Unit Price ($)
                         </th>
                         <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Line Total
+                          Total ex GST
                         </th>
                         {!isReadOnly && <th className="pb-3 w-10"></th>}
                       </tr>
@@ -1385,7 +1389,7 @@ export default function EditQuotationPage() {
                   {/* Subtotal */}
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                      Subtotal
+                      Subtotal (ex GST)
                     </span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
                       {formatCurrency(subtotal)}
@@ -1409,10 +1413,10 @@ export default function EditQuotationPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                      Delivery GST ({DELIVERY_GST_RATE}%)
+                      Total GST
                     </span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
-                      {formatCurrency(deliveryGst)}
+                      {formatCurrency(totalGst)}
                     </span>
                   </div>
 

@@ -502,7 +502,7 @@ function buildInvoiceItem(product, item) {
 
   const billableQuantity = getBillableQuantity(product, item);
   const base = billableQuantity * rate;
-  const lineTotal = Math.round(base * (1 - discountPercent / 100) * (1 + taxPercent / 100) * 100) / 100;
+  const lineTotal = roundMoney(base * (1 - discountPercent / 100));
 
   const coverageSqm = getItemCoverageSqm(product, {
     quantity,
@@ -861,13 +861,12 @@ exports.getInvoices = async (req, res) => {
         ? (Number(items[0].taxPercent) > 0 ? Number(items[0].taxPercent) : 10)
         : (Number(obj.taxRate) > 0 ? Number(obj.taxRate) : 10);
       const itemsPreTax = Math.round(items.reduce((sum, item) => {
-        const p = Number(item.taxPercent ?? txRate);
-        return sum + (Number(item.lineTotal || 0) / (1 + p / 100));
+        return sum + Number(item.lineTotal || 0);
       }, 0) * 100) / 100;
       const itemsGst = Math.round(items.reduce((sum, item) => {
         const p = Number(item.taxPercent ?? txRate);
         const lt = Number(item.lineTotal || 0);
-        return sum + (lt - lt / (1 + p / 100));
+        return sum + (lt * (p / 100));
       }, 0) * 100) / 100;
       const discountAmount = Number(obj.discountAmount) || 0;
       const deliveryCost = Math.max(0, Number(obj.deliveryCost) || 0);

@@ -24,6 +24,7 @@ type Customer = {
   name: string;
   phone: string;
   email?: string;
+  abn?: string;
   status: string;
 };
 
@@ -69,7 +70,8 @@ export default function CustomersPage() {
       customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.customerNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.phone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase()))
+      (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (customer.abn && customer.abn.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const handleConfirmDeleteCustomer = async () => {
@@ -149,7 +151,7 @@ export default function CustomersPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
             <Input
               type="text"
-              placeholder="Search by customer name, phone, or email..."
+              placeholder="Search by customer name, phone, email, or ABN..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -188,6 +190,7 @@ export default function CustomersPage() {
                       <TableHead>Customer Name</TableHead>
                       <TableHead>Phone</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead>ABN</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="w-0">Actions</TableHead>
                     </TableRow>
@@ -195,7 +198,7 @@ export default function CustomersPage() {
                   <TableBody>
                     {filteredCustomers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-32 text-center">
+                        <TableCell colSpan={7} className="h-32 text-center">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <UserRound className="h-12 w-12 text-neutral-300 dark:text-neutral-600" strokeWidth={1.5} />
                             <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
@@ -236,6 +239,9 @@ export default function CustomersPage() {
                           </TableCell>
                           <TableCell className="text-neutral-600 dark:text-neutral-400">
                             {customer.email || "N/A"}
+                          </TableCell>
+                          <TableCell className="text-neutral-600 dark:text-neutral-400">
+                            {customer.abn || "N/A"}
                           </TableCell>
                           <TableCell>
                             <span

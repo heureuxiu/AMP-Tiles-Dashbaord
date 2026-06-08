@@ -18,6 +18,7 @@ exports.getCustomers = async (req, res) => {
         { customerNumber: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
         { phone: { $regex: search, $options: 'i' } },
+        { abn: { $regex: search, $options: 'i' } },
       ];
     }
 
@@ -90,7 +91,7 @@ exports.getCustomer = async (req, res) => {
 
 exports.createCustomer = async (req, res) => {
   try {
-    const { name, phone, email, address, notes } = req.body;
+    const { name, phone, email, abn, address, notes } = req.body;
 
     if (!name || !phone) {
       return res.status(400).json({
@@ -113,6 +114,7 @@ exports.createCustomer = async (req, res) => {
       name,
       phone,
       email,
+      abn,
       address,
       notes,
       createdBy: req.user.id,
@@ -155,7 +157,7 @@ exports.createCustomer = async (req, res) => {
 
 exports.updateCustomer = async (req, res) => {
   try {
-    const { name, phone, email, address, notes, status } = req.body;
+    const { name, phone, email, abn, address, notes, status } = req.body;
 
     const customer = await Customer.findById(req.params.id);
 
@@ -179,6 +181,7 @@ exports.updateCustomer = async (req, res) => {
     customer.name = name || customer.name;
     customer.phone = phone || customer.phone;
     customer.email = email !== undefined ? email : customer.email;
+    customer.abn = abn !== undefined ? abn : customer.abn;
     customer.address = address || customer.address;
     customer.notes = notes !== undefined ? notes : customer.notes;
     customer.status = status || customer.status;

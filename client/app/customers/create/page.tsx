@@ -17,6 +17,7 @@ export default function CreateCustomerPage() {
     name: "",
     phone: "",
     email: "",
+    abn: "",
     street: "",
     city: "",
     state: "",
@@ -50,6 +51,7 @@ export default function CreateCustomerPage() {
         name: formData.name,
         phone: formData.phone,
         email: formData.email || undefined,
+        abn: formData.abn || undefined,
         address: {
           street: formData.street || undefined,
           city: formData.city || undefined,
@@ -169,6 +171,19 @@ export default function CreateCustomerPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="Enter email address"
+                disabled={isSaving}
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="abn">ABN</Label>
+              <Input
+                id="abn"
+                name="abn"
+                type="text"
+                value={formData.abn}
+                onChange={handleChange}
+                placeholder="Enter ABN"
                 disabled={isSaving}
               />
             </div>

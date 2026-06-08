@@ -84,7 +84,7 @@ const sanitizeName = (name: string) => {
 
 export function SummaryCards() {
   const [summary, setSummary] = useState<SummaryItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -92,7 +92,6 @@ export function SummaryCards() {
 
   const fetchDashboardData = async () => {
     try {
-      setIsLoading(true);
       const [stockStatsResponse, quotationStatsResponse, invoiceStatsResponse, supplierStatsResponse, purchaseOrderStatsResponse] = await Promise.all([
         api.getStockStats(),
         api.getQuotationStats(),

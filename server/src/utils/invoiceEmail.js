@@ -129,7 +129,6 @@ function buildInvoiceEmail(invoice) {
     '',
     'Thank you,',
     COMPANY_DETAILS.name,
-    `Email: ${COMPANY_DETAILS.email}`,
   ]
     .filter(Boolean)
     .join('\n');
@@ -160,8 +159,7 @@ function buildInvoiceEmail(invoice) {
       <p>Thank you for your business and continued support.</p>
       <p style="margin-top:24px;">
         Thank you,<br/>
-        ${escapeHtml(COMPANY_DETAILS.name)}<br/>
-        Email: ${escapeHtml(COMPANY_DETAILS.email)}
+        ${escapeHtml(COMPANY_DETAILS.name)}
       </p>
     </div>
   `;

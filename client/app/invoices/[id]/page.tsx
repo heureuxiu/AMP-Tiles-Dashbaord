@@ -50,6 +50,12 @@ type InvoiceData = {
   paymentStatus?: string;
 };
 
+function calcLineTotalExGst(item: InvoiceItem): number {
+  const base = (Number(item.quantity) || 0) * (Number(item.rate) || 0);
+  const afterDiscount = base * (1 - ((Number(item.discountPercent) || 0) / 100));
+  return Math.round(afterDiscount * 100) / 100;
+}
+
 const companyInfo = {
   name: "AMP TILES PTY LTD",
   addressLine1: "Unit 15/55 Anderson Road",
@@ -292,18 +298,18 @@ export default function InvoiceDetailPage() {
   const taxRate = effectiveTaxRate > 0 ? effectiveTaxRate : 10;
   // Always recompute from line items so old DB values don't cause wrong display
   const subtotal = Math.round(invoice.items.reduce((sum, i) => {
-    const taxP = Number(i.taxPercent ?? taxRate);
-    return sum + (i.lineTotal / (1 + taxP / 100));
+    return sum + calcLineTotalExGst(i);
   }, 0) * 100) / 100;
   const discountAmount = invoice.discountAmount ?? 0;
   const taxAmount = Math.round(invoice.items.reduce((sum, i) => {
     const taxP = Number(i.taxPercent ?? taxRate);
-    const lt = i.lineTotal;
-    return sum + (lt - lt / (1 + taxP / 100));
+    const lt = calcLineTotalExGst(i);
+    return sum + (lt * (taxP / 100));
   }, 0) * 100) / 100;
   const deliveryCost = Math.max(0, Number(invoice.deliveryCost) || 0);
   const deliveryGst = Math.round(deliveryCost * (taxRate / 100) * 100) / 100;
-  const grandTotal = Math.round((subtotal - discountAmount + taxAmount + deliveryCost + deliveryGst) * 100) / 100;
+  const totalGst = Math.round((taxAmount + deliveryGst) * 100) / 100;
+  const grandTotal = Math.round((subtotal - discountAmount + deliveryCost + totalGst) * 100) / 100;
   const remainingBalance = Math.max(0, Math.round((grandTotal - (invoice.amountPaid ?? 0)) * 100) / 100);
 
   return (
@@ -478,10 +484,10 @@ export default function InvoiceDetailPage() {
                       DISC %
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                      TAX %
+                      GST
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                      AMOUNT
+                      TOTAL EX GST
                     </th>
                   </tr>
                 </thead>
@@ -513,7 +519,7 @@ export default function InvoiceDetailPage() {
                         {item.taxPercent != null ? `${item.taxPercent}%` : "-"}
                       </td>
                       <td className="py-4 text-right font-semibold text-neutral-900 dark:text-white">
-                        {formatCurrency(item.lineTotal)}
+                        {formatCurrency(calcLineTotalExGst(item))}
                       </td>
                     </tr>
                   ))}
@@ -540,11 +546,11 @@ export default function InvoiceDetailPage() {
                     </span>
                   </div>
                 )}
-                {taxAmount > 0 && (
+                {totalGst > 0 && (
                   <div className="flex items-center justify-between">
-                    <span className="text-neutral-700 dark:text-neutral-300">Items GST ({taxRate}%):</span>
+                    <span className="text-neutral-700 dark:text-neutral-300">Total GST:</span>
                     <span className="font-semibold text-neutral-900 dark:text-white">
-                      {formatCurrency(taxAmount)}
+                      {formatCurrency(totalGst)}
                     </span>
                   </div>
                 )}
@@ -556,16 +562,6 @@ export default function InvoiceDetailPage() {
                     {formatCurrency(deliveryCost)}
                   </span>
                 </div>
-                {deliveryGst > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-neutral-700 dark:text-neutral-300">
-                      Delivery GST ({taxRate}%):
-                    </span>
-                    <span className="font-semibold text-neutral-900 dark:text-white">
-                      {formatCurrency(deliveryGst)}
-                    </span>
-                  </div>
-                )}
                 <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-300">
                   <p className="mb-2 font-semibold text-neutral-800 dark:text-neutral-100">
                     Bank Details
