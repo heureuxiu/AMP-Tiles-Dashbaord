@@ -4,7 +4,7 @@ const API_URL =
   (process.env.NODE_ENV === 'production'
      ? 'https://amp-tiles-backend.onrender.com/api'
     
-    : 'http://localhost:5000/api');
+    : 'http://localhost:5002/api');
 
 interface User {
   id: string;
@@ -132,9 +132,16 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    // Ensure endpoint starts with /
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    
+    // Remove trailing slash from baseURL if present
+    const normalizedBaseURL = this.baseURL.endsWith('/') ? this.baseURL.slice(0, -1) : this.baseURL;
+
     this.beginLoading();
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const url = `${normalizedBaseURL}${normalizedEndpoint}`;
+      const response = await fetch(url, {
         ...options,
         headers: {
           ...headers,
