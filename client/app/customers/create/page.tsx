@@ -17,6 +17,7 @@ export default function CreateCustomerPage() {
     name: "",
     phone: "",
     email: "",
+    ccEmails: "",
     abn: "",
     street: "",
     city: "",
@@ -30,6 +31,19 @@ export default function CreateCustomerPage() {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const parseEmailList = (value: string) => {
+    const seen = new Set<string>();
+    return String(value || "")
+      .split(/[,\n;\s]+/g)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((email) => {
+        if (seen.has(email)) return false;
+        seen.add(email);
+        return true;
+      });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,6 +65,7 @@ export default function CreateCustomerPage() {
         name: formData.name,
         phone: formData.phone,
         email: formData.email || undefined,
+        ccEmails: parseEmailList(formData.ccEmails),
         abn: formData.abn || undefined,
         address: {
           street: formData.street || undefined,
@@ -171,6 +186,21 @@ export default function CreateCustomerPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="Enter email address"
+                disabled={isSaving}
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="ccEmails">
+                CC Emails <span className="text-neutral-400">(Optional)</span>
+              </Label>
+              <Input
+                id="ccEmails"
+                name="ccEmails"
+                type="text"
+                value={formData.ccEmails}
+                onChange={handleChange}
+                placeholder="cc1@example.com, cc2@example.com"
                 disabled={isSaving}
               />
             </div>

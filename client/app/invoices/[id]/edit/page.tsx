@@ -566,6 +566,7 @@ export default function EditInvoicePage() {
                       <th className="pb-2 text-left font-semibold">Product</th>
                       <th className="pb-2 text-left font-semibold">Unit</th>
                       <th className="pb-2 text-left font-semibold">Qty</th>
+                      <th className="pb-2 text-left font-semibold">Box</th>
                       <th className="pb-2 text-left font-semibold">Unit Price</th>
                       <th className="pb-2 text-left font-semibold">Disc %</th>
                       <th className="pb-2 text-left font-semibold">GST</th>
@@ -581,6 +582,8 @@ export default function EditInvoicePage() {
                         (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") &&
                         product &&
                         (product.coveragePerBox ?? 0) > 0;
+                      const boxCount =
+                        item.unitType === "Box" || showCoverage ? item.quantity : null;
                       return (
                         <tr key={item.id} className="border-b border-neutral-100 dark:border-neutral-800">
                           <td className="py-2 pr-2">
@@ -651,6 +654,9 @@ export default function EditInvoicePage() {
                             ) : (
                               item.quantity
                             )}
+                          </td>
+                          <td className="py-2 pr-2 text-neutral-600 dark:text-neutral-400">
+                            {boxCount != null ? boxCount : "—"}
                           </td>
                           <td className="py-2 pr-2">
                             {isDraft ? (

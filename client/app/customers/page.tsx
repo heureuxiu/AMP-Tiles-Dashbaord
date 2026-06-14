@@ -24,6 +24,7 @@ type Customer = {
   name: string;
   phone: string;
   email?: string;
+  ccEmails?: string[];
   abn?: string;
   status: string;
 };
@@ -71,6 +72,9 @@ export default function CustomersPage() {
       customer.customerNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.phone.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (customer.ccEmails || []).some((email) =>
+        email.toLowerCase().includes(searchQuery.toLowerCase())
+      ) ||
       (customer.abn && customer.abn.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
@@ -238,7 +242,14 @@ export default function CustomersPage() {
                             {customer.phone}
                           </TableCell>
                           <TableCell className="text-neutral-600 dark:text-neutral-400">
-                            {customer.email || "N/A"}
+                            <div className="space-y-1">
+                              <div>{customer.email || "N/A"}</div>
+                              {(customer.ccEmails || []).length > 0 && (
+                                <div className="max-w-xs truncate text-xs text-neutral-500 dark:text-neutral-500">
+                                  CC: {(customer.ccEmails || []).join(", ")}
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-neutral-600 dark:text-neutral-400">
                             {customer.abn || "N/A"}

@@ -13,6 +13,8 @@ type InvoiceItem = {
   productName: string;
   product?: {
     size?: string;
+    coveragePerBox?: number | null;
+    coveragePerBoxUnit?: string;
   };
   size?: string;
   unitType?: string;
@@ -108,6 +110,19 @@ const getDisplayQuantity = (item: InvoiceItem) => {
     return formatQty(coverageSqm * SQFT_PER_SQM);
   }
   return formatQty(item.quantity);
+};
+
+const getDisplayBoxes = (item: InvoiceItem) => {
+  const normalizedUnit = String(item.unitType || "").trim().toLowerCase();
+  if (normalizedUnit.includes("box")) return formatQty(item.quantity);
+
+  const coverageSqm = Number(item.coverageSqm);
+  const coveragePerBox = Number(item.product?.coveragePerBox) || 0;
+  if (!Number.isFinite(coverageSqm) || coverageSqm <= 0 || coveragePerBox <= 0) return "-";
+
+  const coverageUnit = String(item.product?.coveragePerBoxUnit || "").toLowerCase();
+  const perBoxSqm = coverageUnit === "sqm" ? coveragePerBox : coveragePerBox / SQFT_PER_SQM;
+  return perBoxSqm > 0 ? formatQty(Math.ceil(coverageSqm / perBoxSqm)) : "-";
 };
 
 export default function InvoiceDetailPage() {
@@ -478,6 +493,9 @@ export default function InvoiceDetailPage() {
                       QTY
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                      BOX
+                    </th>
+                    <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                       UNIT PRICE
                     </th>
                     <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
@@ -508,6 +526,9 @@ export default function InvoiceDetailPage() {
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                         {getDisplayQuantity(item)}
+                      </td>
+                      <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
+                        {getDisplayBoxes(item)}
                       </td>
                       <td className="py-4 text-right text-neutral-600 dark:text-neutral-400">
                         {formatCurrency(item.rate)}

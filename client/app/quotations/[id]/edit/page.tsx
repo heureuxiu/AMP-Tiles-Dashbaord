@@ -1151,6 +1151,9 @@ export default function EditQuotationPage() {
                           Quantity
                         </th>
                         <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                          Box
+                        </th>
+                        <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                           Unit Price ($)
                         </th>
                         <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
@@ -1200,6 +1203,13 @@ export default function EditQuotationPage() {
                                     </option>
                                   ))}
                                 </select>
+                              </td>
+                              <td className="py-3 pr-2 align-top text-neutral-600 dark:text-neutral-400">
+                                {estimatedBoxes != null
+                                  ? formatQty(estimatedBoxes)
+                                  : item.unitType === "Box"
+                                    ? formatQty(item.quantity)
+                                    : "—"}
                               </td>
                               <td className="py-3 pr-2 align-top">
                                 <select
@@ -1315,7 +1325,7 @@ export default function EditQuotationPage() {
                             </tr>
                             {hasTileInfo && (
                               <tr className="border-b border-neutral-100 text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
-                                <td colSpan={8} className="pb-3 pl-4 pr-2 pt-0">
+                                <td colSpan={9} className="pb-3 pl-4 pr-2 pt-0">
                                   {product?.tilesPerBox != null &&
                                     product.tilesPerBox > 0 && (
                                       <span className="mr-4">

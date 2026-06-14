@@ -197,6 +197,13 @@ export default function PurchaseOrderDetailPage() {
     }).format(amount);
   };
 
+  const formatQty = (value: number) => {
+    const numeric = Number(value) || 0;
+    const rounded = Math.round(numeric * 1000) / 1000;
+    if (Number.isInteger(rounded)) return String(rounded);
+    return rounded.toFixed(3).replace(/\.?0+$/, "");
+  };
+
   const getProductDisplay = (item: POItem) => {
     const name = item.productName || item.product?.name;
     const sku = item.product?.sku;
@@ -210,6 +217,19 @@ export default function PurchaseOrderDetailPage() {
 
   const getDisplayUnit = (unitType?: string) => {
     return unitType ?? "Box";
+  };
+
+  const getDisplayBoxes = (item: POItem, qtyOrdered: number) => {
+    const normalizedUnit = String(item.unitType || "").trim().toLowerCase();
+    if (normalizedUnit.includes("box")) return formatQty(qtyOrdered);
+
+    const coverageSqm = Number(item.coverageSqm);
+    const coveragePerBox = Number(item.product?.coveragePerBox) || 0;
+    if (!Number.isFinite(coverageSqm) || coverageSqm <= 0 || coveragePerBox <= 0) return "-";
+
+    const coverageUnit = String(item.product?.coveragePerBoxUnit || "").toLowerCase();
+    const perBoxSqm = coverageUnit === "sqm" ? coveragePerBox : coveragePerBox * 0.092903;
+    return perBoxSqm > 0 ? formatQty(Math.ceil(coverageSqm / perBoxSqm)) : "-";
   };
 
   if (isLoading) {
@@ -396,6 +416,7 @@ export default function PurchaseOrderDetailPage() {
                   <TableHead>Size</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Quantity Ordered</TableHead>
+                  <TableHead>Box</TableHead>
                   <TableHead>Unit Price</TableHead>
                   <TableHead>Disc %</TableHead>
                   <TableHead>Tax %</TableHead>
@@ -420,6 +441,7 @@ export default function PurchaseOrderDetailPage() {
                       <TableCell>{getItemSize(item)}</TableCell>
                       <TableCell>{getDisplayUnit(item.unitType)}</TableCell>
                       <TableCell className="font-semibold">{qtyOrdered}</TableCell>
+                      <TableCell>{getDisplayBoxes(item, qtyOrdered)}</TableCell>
                       <TableCell>{formatCurrency(item.rate)}</TableCell>
                       <TableCell>{item.discountPercent ?? 0}%</TableCell>
                       <TableCell>{item.taxPercent ?? 0}%</TableCell>

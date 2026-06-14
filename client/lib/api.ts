@@ -711,6 +711,7 @@ class ApiClient {
     name: string;
     phone: string;
     email?: string;
+    ccEmails?: string[];
     abn?: string;
     address?: {
       street?: string;
@@ -731,6 +732,7 @@ class ApiClient {
     name?: string;
     phone?: string;
     email?: string;
+    ccEmails?: string[];
     abn?: string;
     address?: {
       street?: string;

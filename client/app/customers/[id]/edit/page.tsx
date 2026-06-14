@@ -16,6 +16,7 @@ type Customer = {
   name: string;
   phone: string;
   email?: string;
+  ccEmails?: string[];
   abn?: string;
   status?: string;
   address?: {
@@ -38,6 +39,7 @@ export default function EditCustomerPage() {
     name: "",
     phone: "",
     email: "",
+    ccEmails: "",
     abn: "",
     status: "active",
     street: "",
@@ -59,6 +61,7 @@ export default function EditCustomerPage() {
           name: customer.name || "",
           phone: customer.phone || "",
           email: customer.email || "",
+          ccEmails: (customer.ccEmails || []).join(", "),
           abn: customer.abn || "",
           status: customer.status || "active",
           street: customer.address?.street || "",
@@ -88,6 +91,19 @@ export default function EditCustomerPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const parseEmailList = (value: string) => {
+    const seen = new Set<string>();
+    return String(value || "")
+      .split(/[,\n;\s]+/g)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((email) => {
+        if (seen.has(email)) return false;
+        seen.add(email);
+        return true;
+      });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -107,6 +123,7 @@ export default function EditCustomerPage() {
         name: formData.name,
         phone: formData.phone,
         email: formData.email || undefined,
+        ccEmails: parseEmailList(formData.ccEmails),
         abn: formData.abn || undefined,
         status: formData.status,
         address: {
@@ -210,6 +227,21 @@ export default function EditCustomerPage() {
             <div className="space-y-2">
               <Label htmlFor="abn">ABN</Label>
               <Input id="abn" name="abn" type="text" value={formData.abn} onChange={handleChange} disabled={isSaving} placeholder="Enter ABN" />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="ccEmails">
+                CC Emails <span className="text-neutral-400">(Optional)</span>
+              </Label>
+              <Input
+                id="ccEmails"
+                name="ccEmails"
+                type="text"
+                value={formData.ccEmails}
+                onChange={handleChange}
+                disabled={isSaving}
+                placeholder="cc1@example.com, cc2@example.com"
+              />
             </div>
 
             <div className="space-y-2">
