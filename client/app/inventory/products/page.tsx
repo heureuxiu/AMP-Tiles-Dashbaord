@@ -478,7 +478,7 @@ export default function ProductsPage() {
       pricingUnit: unitToPricingUnit(product.unit),
       discountSalePrice: product.discountSalePrice ?? null,
       builderPrice: product.builderPrice ?? null,
-      taxPercent: product.taxPercent ?? null,
+      taxPercent: product.taxPercent ?? 10,
       costPrice: product.costPrice ?? 0,
     });
     setIsDialogOpen(true);
@@ -549,6 +549,10 @@ export default function ProductsPage() {
       toast.error("Cost price is required and must be greater than 0");
       return;
     }
+    if (formData.taxPercent == null || formData.taxPercent < 0 || formData.taxPercent > 100) {
+      toast.error("GST must be between 0 and 100");
+      return;
+    }
 
     try {
       const selectedSupplier = suppliers.find((s) => s._id === formData.supplier);
@@ -557,6 +561,7 @@ export default function ProductsPage() {
         supplier: formData.supplierType === "third-party" ? formData.supplier : "",
         supplierName: formData.supplierType === "third-party" ? selectedSupplier?.name || "" : "",
         price: formData.retailPrice,
+        taxPercent: formData.taxPercent,
       };
       if (editingProduct) {
         const response = await api.updateProduct(editingProduct._id, payload);
@@ -1387,8 +1392,27 @@ export default function ProductsPage() {
                   <Input type="number" min={0} step={0.01} placeholder="Optional" value={formData.discountSalePrice ?? ""} onChange={(e) => setFormData({ ...formData, discountSalePrice: e.target.value === "" ? null : parseFloat(e.target.value) || 0 })} />
                 </div>
                 <div className="grid gap-2 mt-2">
-                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Tax % / VAT (Optional)</label>
-                  <Input type="number" min={0} max={100} step={0.01} placeholder="e.g., 10" value={formData.taxPercent ?? ""} onChange={(e) => setFormData({ ...formData, taxPercent: e.target.value === "" ? null : parseFloat(e.target.value) || 0 })} />
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    GST % <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    placeholder="e.g., 10"
+                    value={formData.taxPercent ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        taxPercent: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                    required
+                  />
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Defaults to 10%, but you can change it for this product.
+                  </p>
                 </div>
               </div>
 

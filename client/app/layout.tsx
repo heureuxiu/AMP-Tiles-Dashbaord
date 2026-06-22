@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "sonner";
+import { AuthGate } from "@/components/auth/auth-gate";
 import { AuthProvider } from "@/contexts/auth-context";
 import "./globals.css";
 
@@ -39,7 +40,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <AuthProvider>
-          {children}
+          <AuthGate>{children}</AuthGate>
           <Toaster position="top-center" closeButton />
         </AuthProvider>
       </body>

@@ -6,6 +6,73 @@ const API_URL =
     
     : 'http://localhost:5002/api');
 
+const TOKEN_STORAGE_KEY = 'amp_token';
+export const AUTH_EXPIRED_EVENT = 'amp:auth-expired';
+
+type AuthExpiredReason = 'missing' | 'expired' | 'unauthorized';
+
+function getWindow() {
+  return typeof window === 'undefined' ? null : window;
+}
+
+function decodeJwtPayload(token: string): { exp?: number } | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    return JSON.parse(window.atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+export function isTokenExpired(token: string, skewSeconds = 30) {
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return true;
+
+  return payload.exp * 1000 <= Date.now() + skewSeconds * 1000;
+}
+
+export function getTokenExpiresAt(token: string) {
+  const payload = decodeJwtPayload(token);
+  return payload?.exp ? payload.exp * 1000 : null;
+}
+
+export function clearStoredAuth(reason: AuthExpiredReason = 'unauthorized', notify = true) {
+  const win = getWindow();
+  if (!win) return;
+
+  win.localStorage.removeItem(TOKEN_STORAGE_KEY);
+
+  if (notify) {
+    win.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT, { detail: { reason } }));
+  }
+}
+
+export function getStoredToken() {
+  const win = getWindow();
+  if (!win) return null;
+
+  const token = win.localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (!token) return null;
+
+  if (isTokenExpired(token)) {
+    clearStoredAuth('expired');
+    return null;
+  }
+
+  return token;
+}
+
+export function setStoredToken(token: string) {
+  const win = getWindow();
+  if (!win) return;
+
+  win.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+}
+
 interface User {
   id: string;
   name: string;
@@ -122,7 +189,7 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    const token = localStorage.getItem('amp_token');
+    const token = getStoredToken();
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -162,6 +229,9 @@ class ApiClient {
       }
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearStoredAuth('unauthorized');
+        }
         throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -199,6 +269,12 @@ class ApiClient {
     });
   }
 
+  async getDashboardSummary() {
+    return this.request('/dashboard/summary', {
+      method: 'GET',
+    });
+  }
+
   async updateDetails(name: string, email: string) {
     return this.request('/auth/updatedetails', {
       method: 'PUT',
@@ -228,6 +304,9 @@ class ApiClient {
     supplier?: string;
     supplierName?: string;
     supplierType?: 'third-party' | 'own';
+    sortBy?: string;
+    sortOrder?: string;
+    limit?: number;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
@@ -237,6 +316,9 @@ class ApiClient {
     if (params?.supplier) queryParams.append('supplier', params.supplier);
     if (params?.supplierName) queryParams.append('supplierName', params.supplierName);
     if (params?.supplierType) queryParams.append('supplierType', params.supplierType);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.limit) queryParams.append('limit', String(params.limit));
 
     const query = queryParams.toString();
     return this.request(`/products${query ? `?${query}` : ''}`, {
@@ -331,7 +413,7 @@ class ApiClient {
   }
 
   async importProductsCsv(file: File) {
-    const token = localStorage.getItem('amp_token');
+    const token = getStoredToken();
     const headers: Record<string, string> = {
       'Content-Type': 'text/csv',
     };
@@ -360,6 +442,9 @@ class ApiClient {
       }
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearStoredAuth('unauthorized');
+        }
         throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -430,6 +515,7 @@ class ApiClient {
     endDate?: string;
     sortBy?: string;
     sortOrder?: string;
+    limit?: number;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
@@ -438,6 +524,7 @@ class ApiClient {
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.limit) queryParams.append('limit', String(params.limit));
 
     const query = queryParams.toString();
     return this.request(`/quotations${query ? `?${query}` : ''}`, {
@@ -461,7 +548,7 @@ class ApiClient {
   }
 
   async getQuotationPdfBlob(id: string): Promise<Blob> {
-    const token = localStorage.getItem('amp_token');
+    const token = getStoredToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     this.beginLoading();
@@ -473,6 +560,9 @@ class ApiClient {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearStoredAuth('unauthorized');
+        }
         const errText = await response.text();
         let message = `HTTP ${response.status}`;
         try {
@@ -770,7 +860,7 @@ class ApiClient {
   }
 
   async getCustomerMonthlyStatementPdfBlob(id: string, month: string): Promise<Blob> {
-    const token = localStorage.getItem('amp_token');
+    const token = getStoredToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const query = new URLSearchParams({ month }).toString();
@@ -784,6 +874,9 @@ class ApiClient {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearStoredAuth('unauthorized');
+        }
         const errText = await response.text();
         let message = `HTTP ${response.status}`;
         try {
@@ -926,7 +1019,7 @@ class ApiClient {
    * Fetch purchase order PDF as blob (for download). Uses same auth as other requests.
    */
   async getPurchaseOrderPdfBlob(id: string): Promise<Blob> {
-    const token = localStorage.getItem('amp_token');
+    const token = getStoredToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     this.beginLoading();
@@ -938,6 +1031,9 @@ class ApiClient {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearStoredAuth('unauthorized');
+        }
         const errText = await response.text();
         let message = `HTTP ${response.status}`;
         try {
@@ -963,6 +1059,7 @@ class ApiClient {
     endDate?: string;
     sortBy?: string;
     sortOrder?: string;
+    limit?: number;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
@@ -971,6 +1068,7 @@ class ApiClient {
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.limit) queryParams.append('limit', String(params.limit));
 
     const query = queryParams.toString();
     return this.request(`/invoices${query ? `?${query}` : ''}`, {
@@ -1083,7 +1181,7 @@ class ApiClient {
    * Fetch invoice PDF as blob (for download). Uses same auth as other requests.
    */
   async getInvoicePdfBlob(id: string): Promise<Blob> {
-    const token = localStorage.getItem('amp_token');
+    const token = getStoredToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     this.beginLoading();
@@ -1095,6 +1193,9 @@ class ApiClient {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearStoredAuth('unauthorized');
+        }
         const errText = await response.text();
         let message = `HTTP ${response.status}`;
         try {
@@ -1113,7 +1214,7 @@ class ApiClient {
   }
 
   async getPackingSlipPdfBlob(id: string): Promise<Blob> {
-    const token = localStorage.getItem('amp_token');
+    const token = getStoredToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     this.beginLoading();
@@ -1125,6 +1226,9 @@ class ApiClient {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearStoredAuth('unauthorized');
+        }
         const errText = await response.text();
         let message = `HTTP ${response.status}`;
         try {

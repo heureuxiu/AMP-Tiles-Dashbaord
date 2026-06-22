@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { FileText, Receipt, ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -27,32 +27,31 @@ type Invoice = {
 export function RecentActivity() {
   const [recentQuotations, setRecentQuotations] = useState<Quotation[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    fetchRecentData();
-  }, []);
-
-  const fetchRecentData = async () => {
+  const fetchRecentData = useCallback(async () => {
     try {
       const [quotationsResponse, invoicesResponse] = await Promise.all([
-        api.getQuotations({ sortBy: 'createdAt', sortOrder: 'desc' }),
-        api.getInvoices({ sortBy: 'createdAt', sortOrder: 'desc' }),
+        api.getQuotations({ sortBy: 'createdAt', sortOrder: 'desc', limit: 5 }),
+        api.getInvoices({ sortBy: 'createdAt', sortOrder: 'desc', limit: 5 }),
       ]);
       
       if (quotationsResponse.success && quotationsResponse.quotations) {
-        setRecentQuotations(quotationsResponse.quotations.slice(0, 5) as Quotation[]);
+        setRecentQuotations(quotationsResponse.quotations as Quotation[]);
       }
       
       if (invoicesResponse.success && invoicesResponse.invoices) {
-        setRecentInvoices(invoicesResponse.invoices.slice(0, 5) as Invoice[]);
+        setRecentInvoices(invoicesResponse.invoices as Invoice[]);
       }
     } catch (error) {
       console.error("Failed to fetch recent data:", error);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      fetchRecentData();
+    });
+  }, [fetchRecentData]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-AU", {

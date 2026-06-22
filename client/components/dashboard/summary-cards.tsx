@@ -54,24 +54,11 @@ type SummaryItem = {
   data: Array<{ index: number; value: number }>;
 };
 
-type StockStats = {
+type DashboardSummaryStats = {
   totalProducts?: number;
-};
-
-type QuotationStats = {
-  total?: number;
-};
-
-type InvoiceStats = {
   totalInvoices?: number;
-  total?: number;
-};
-
-type SupplierStats = {
   totalSuppliers?: number;
-};
-
-type PurchaseOrderStats = {
+  totalQuotations?: number;
   totalPurchaseOrders?: number;
 };
 
@@ -84,43 +71,23 @@ const sanitizeName = (name: string) => {
 
 export function SummaryCards() {
   const [summary, setSummary] = useState<SummaryItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
+    setIsLoading(true);
     try {
-      const [stockStatsResponse, quotationStatsResponse, invoiceStatsResponse, supplierStatsResponse, purchaseOrderStatsResponse] = await Promise.all([
-        api.getStockStats(),
-        api.getQuotationStats(),
-        api.getInvoiceStats(),
-        api.getSupplierStats(),
-        api.getPurchaseOrderStats(),
-      ]);
+      const response = await api.getDashboardSummary();
+      const stats = (response.success ? response.stats : undefined) as DashboardSummaryStats | undefined;
 
-      const stockStats = (stockStatsResponse.success ? stockStatsResponse.stats : undefined) as StockStats | undefined;
-      const quotationStats = (quotationStatsResponse.success ? quotationStatsResponse.stats : undefined) as QuotationStats | undefined;
-      const invoiceStats = (invoiceStatsResponse.success ? invoiceStatsResponse.stats : undefined) as InvoiceStats | undefined;
-      const supplierStats = (supplierStatsResponse.success ? supplierStatsResponse.stats : undefined) as SupplierStats | undefined;
-      const purchaseOrderStats = (purchaseOrderStatsResponse.success ? purchaseOrderStatsResponse.stats : undefined) as PurchaseOrderStats | undefined;
-
-      const totalProducts = stockStats?.totalProducts ?? 0;
-      const totalSuppliers = supplierStats?.totalSuppliers ?? 0;
-
-      // Fix: Backend returns 'total' not 'totalQuotations'
-      const quotationsCount = quotationStats?.total ?? 0;
-      const invoicesCount = invoiceStats?.totalInvoices ?? invoiceStats?.total ?? 0;
-      const purchaseOrdersCount = purchaseOrderStats?.totalPurchaseOrders ?? 0;
-      
-      console.log('Dashboard Stats:', {
-        products: totalProducts,
-        suppliers: totalSuppliers,
-        quotations: quotationsCount,
-        invoices: invoicesCount,
-        purchaseOrders: purchaseOrdersCount,
-      });
+      const totalProducts = stats?.totalProducts ?? 0;
+      const totalSuppliers = stats?.totalSuppliers ?? 0;
+      const quotationsCount = stats?.totalQuotations ?? 0;
+      const invoicesCount = stats?.totalInvoices ?? 0;
+      const purchaseOrdersCount = stats?.totalPurchaseOrders ?? 0;
       
       setSummary([
         {

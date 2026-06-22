@@ -46,7 +46,10 @@ export function LoginForm() {
       toast.success("Logged in successfully", {
         description: "Welcome to AMP Tiles Admin.",
       });
-      router.push("/dashboard");
+      const nextPath = new URLSearchParams(window.location.search).get("next");
+      const safeNextPath =
+        nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/dashboard";
+      router.push(safeNextPath);
     } catch {
       toast.error("Login failed", {
         description: "Please check your credentials and try again.",

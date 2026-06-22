@@ -39,6 +39,35 @@ type Product = {
   unit?: string;
 };
 
+type Address = {
+  street?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+};
+
+type Customer = {
+  _id: string;
+  name: string;
+  customerNumber?: string;
+  phone?: string;
+  email?: string;
+  ccEmails?: string[];
+  address?: Address;
+};
+
+type Supplier = {
+  _id: string;
+  name: string;
+  supplierNumber?: string;
+  phone?: string;
+  email?: string;
+  address?: Address;
+};
+
+type RecipientType = "customer" | "supplier";
+
 const normalizeUnitTypeFromProduct = (unit?: string) => {
   const normalized = String(unit || "").trim().toLowerCase();
   if (normalized === "lm" || normalized.includes("linear")) return "LM";
@@ -82,13 +111,32 @@ function getBoxesFromCoverage(
 
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
 
+function formatAddress(address?: Address): string {
+  if (!address) return "";
+  return [
+    address.street,
+    address.city,
+    address.state,
+    address.postcode,
+    address.country,
+  ]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
 export default function CreateInvoicePage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMode, setSaveMode] = useState<SaveMode>("save");
 
+  const [recipientType, setRecipientType] = useState<RecipientType>("customer");
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -126,14 +174,52 @@ export default function CreateInvoicePage() {
   const fetchData = async () => {
     try {
       setIsLoadingData(true);
-      const res = await api.getProducts({ status: "active" });
-      if (res.success && res.products) setProducts(res.products as Product[]);
+      const [productsRes, customersRes, suppliersRes] = await Promise.all([
+        api.getProducts({ status: "active" }),
+        api.getCustomers({ status: "active", sortBy: "name", sortOrder: "asc" }),
+        api.getSuppliers({ status: "active", sortBy: "name", sortOrder: "asc" }),
+      ]);
+      if (productsRes.success && productsRes.products) setProducts(productsRes.products as Product[]);
+      if (customersRes.success && customersRes.customers) setCustomers(customersRes.customers as Customer[]);
+      if (suppliersRes.success && suppliersRes.suppliers) setSuppliers(suppliersRes.suppliers as Supplier[]);
     } catch (e) {
       console.error(e);
-      toast.error("Failed to load products");
+      toast.error("Failed to load form data");
     } finally {
       setIsLoadingData(false);
     }
+  };
+
+  const handleRecipientTypeChange = (type: RecipientType) => {
+    setRecipientType(type);
+    setSelectedCustomerId("");
+    setSelectedSupplierId("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerEmail("");
+    setCustomerAddress("");
+  };
+
+  const handleCustomerSelect = (customerId: string) => {
+    setSelectedCustomerId(customerId);
+    const customer = customers.find((item) => item._id === customerId);
+    if (!customer) return;
+
+    setCustomerName(customer.name || "");
+    setCustomerPhone(customer.phone || "");
+    setCustomerEmail(customer.email || "");
+    setCustomerAddress(formatAddress(customer.address));
+  };
+
+  const handleSupplierSelect = (supplierId: string) => {
+    setSelectedSupplierId(supplierId);
+    const supplier = suppliers.find((item) => item._id === supplierId);
+    if (!supplier) return;
+
+    setCustomerName(supplier.name || "");
+    setCustomerPhone(supplier.phone || "");
+    setCustomerEmail(supplier.email || "");
+    setCustomerAddress(formatAddress(supplier.address));
   };
 
   const getProduct = (id: string) => products.find((p) => p._id === id);
@@ -392,21 +478,81 @@ export default function CreateInvoicePage() {
                   </div>
                   <div>
                     <h3 className="font-bold text-neutral-900 dark:text-white">
-                      Customer &amp; dates
+                      Basic Information
                     </h3>
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                      Customer name required
+                      Select customer or supplier to auto-fill details
                     </p>
                   </div>
                 </div>
               </div>
               <div className="space-y-4 p-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                      Invoice For <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={recipientType}
+                      onChange={(e) => handleRecipientTypeChange(e.target.value as RecipientType)}
+                      disabled={isSaving}
+                      className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white"
+                    >
+                      <option value="customer">Customer</option>
+                      <option value="supplier">Supplier</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                      Select {recipientType === "customer" ? "Customer" : "Supplier"}{" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    {recipientType === "customer" ? (
+                      <select
+                        value={selectedCustomerId}
+                        onChange={(e) => handleCustomerSelect(e.target.value)}
+                        disabled={isSaving || isLoadingData}
+                        className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white"
+                      >
+                        <option value="">
+                          {isLoadingData ? "Loading customers..." : "Select customer"}
+                        </option>
+                        {customers.map((customer) => (
+                          <option key={customer._id} value={customer._id}>
+                            {customer.name}
+                            {customer.customerNumber ? ` (${customer.customerNumber})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        value={selectedSupplierId}
+                        onChange={(e) => handleSupplierSelect(e.target.value)}
+                        disabled={isSaving || isLoadingData}
+                        className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white"
+                      >
+                        <option value="">
+                          {isLoadingData ? "Loading suppliers..." : "Select supplier"}
+                        </option>
+                        {suppliers.map((supplier) => (
+                          <option key={supplier._id} value={supplier._id}>
+                            {supplier.name}
+                            {supplier.supplierNumber ? ` (${supplier.supplierNumber})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Customer Name <span className="text-red-500">*</span>
+                    {recipientType === "customer" ? "Customer" : "Supplier"} Name{" "}
+                    <span className="text-red-500">*</span>
                   </label>
                   <Input
-                    placeholder="Customer name"
+                    placeholder={recipientType === "customer" ? "Customer name" : "Supplier name"}
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     disabled={isSaving}
@@ -417,7 +563,7 @@ export default function CreateInvoicePage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      Phone
+                      {recipientType === "customer" ? "Customer" : "Supplier"} Phone
                     </label>
                     <Input
                       type="tel"
@@ -430,7 +576,7 @@ export default function CreateInvoicePage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      Email
+                      {recipientType === "customer" ? "Customer" : "Supplier"} Email
                     </label>
                     <Input
                       type="email"

@@ -36,7 +36,30 @@
     _id: string;
     name: string;
     supplierNumber?: string;
+    phone?: string;
+    email?: string;
+    address?: Address;
   };
+
+  type Address = {
+    street?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+  };
+
+  type Customer = {
+    _id: string;
+    name: string;
+    customerNumber?: string;
+    phone?: string;
+    email?: string;
+    ccEmails?: string[];
+    address?: Address;
+  };
+
+  type RecipientType = "customer" | "supplier";
 
   type QuotationItem = {
     id: string;
@@ -316,6 +339,20 @@
     return emails;
   }
 
+  function formatAddress(address?: Address): string {
+    if (!address) return "";
+    return [
+      address.street,
+      address.city,
+      address.state,
+      address.postcode,
+      address.country,
+    ]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+
   const createEmptyItem = (id?: string): QuotationItem => ({
     id: id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     supplierId: "",
@@ -334,6 +371,10 @@
 
   export default function CreateQuotationPage() {
     const router = useRouter();
+    const [recipientType, setRecipientType] = useState<RecipientType>("customer");
+    const [selectedCustomerId, setSelectedCustomerId] = useState("");
+    const [selectedRecipientSupplierId, setSelectedRecipientSupplierId] = useState("");
+    const [customers, setCustomers] = useState<Customer[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [productsBySupplier, setProductsBySupplier] = useState<
       Record<string, Product[]>
@@ -342,6 +383,7 @@
       Record<string, boolean>
     >({});
     const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
+    const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
     const [isLoadingProducts, setIsLoadingProducts] = useState(false);
     const [heldStockByProduct, setHeldStockByProduct] = useState<Record<string, number>>({});
     const [isSaving, setIsSaving] = useState(false);
@@ -367,6 +409,7 @@
 
     useEffect(() => {
       fetchSuppliers();
+      fetchCustomers();
     }, []);
 
     // Default: valid until = quotationDate + 7 days (can be overridden)
@@ -408,6 +451,62 @@
       } finally {
         setIsLoadingSuppliers(false);
       }
+    };
+
+    const fetchCustomers = async () => {
+      try {
+        setIsLoadingCustomers(true);
+        const response = await api.getCustomers({ status: "active", sortBy: "name", sortOrder: "asc" });
+        if (response.success && response.customers) {
+          setCustomers(response.customers as Customer[]);
+        } else {
+          setCustomers([]);
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to fetch customers";
+        toast.error("Failed to load customers", {
+          description: errorMessage,
+        });
+        setCustomers([]);
+      } finally {
+        setIsLoadingCustomers(false);
+      }
+    };
+
+    const handleRecipientTypeChange = (type: RecipientType) => {
+      setRecipientType(type);
+      setSelectedCustomerId("");
+      setSelectedRecipientSupplierId("");
+      setCustomerName("");
+      setCustomerPhone("");
+      setCustomerPrimaryEmail("");
+      setCustomerCcEmails("");
+      setCustomerAddress("");
+    };
+
+    const handleCustomerSelect = (customerId: string) => {
+      setSelectedCustomerId(customerId);
+      const customer = customers.find((item) => item._id === customerId);
+      if (!customer) return;
+
+      setCustomerName(customer.name || "");
+      setCustomerPhone(customer.phone || "");
+      setCustomerPrimaryEmail(customer.email || "");
+      setCustomerCcEmails((customer.ccEmails || []).join(", "));
+      setCustomerAddress(formatAddress(customer.address));
+    };
+
+    const handleRecipientSupplierSelect = (supplierId: string) => {
+      setSelectedRecipientSupplierId(supplierId);
+      const supplier = suppliers.find((item) => item._id === supplierId);
+      if (!supplier) return;
+
+      setCustomerName(supplier.name || "");
+      setCustomerPhone(supplier.phone || "");
+      setCustomerPrimaryEmail(supplier.email || "");
+      setCustomerCcEmails("");
+      setCustomerAddress(formatAddress(supplier.address));
     };
 
     const fetchProducts = async (supplierId: string) => {
@@ -922,17 +1021,85 @@
 
                 {/* Form Fields */}
                 <div className="p-6 space-y-4">
-                  {/* Customer Name */}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label
+                        htmlFor="recipientType"
+                        className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                      >
+                        Quotation For <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        id="recipientType"
+                        value={recipientType}
+                        onChange={(e) => handleRecipientTypeChange(e.target.value as RecipientType)}
+                        className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white"
+                      >
+                        <option value="customer">Customer</option>
+                        <option value="supplier">Supplier</option>
+                      </select>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <label
+                        htmlFor="recipientSelect"
+                        className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                      >
+                        Select {recipientType === "customer" ? "Customer" : "Supplier"}{" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      {recipientType === "customer" ? (
+                        <select
+                          id="recipientSelect"
+                          value={selectedCustomerId}
+                          onChange={(e) => handleCustomerSelect(e.target.value)}
+                          disabled={isLoadingCustomers}
+                          className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white"
+                        >
+                          <option value="">
+                            {isLoadingCustomers ? "Loading customers..." : "Select customer"}
+                          </option>
+                          {customers.map((customer) => (
+                            <option key={customer._id} value={customer._id}>
+                              {customer.name}
+                              {customer.customerNumber ? ` (${customer.customerNumber})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <select
+                          id="recipientSelect"
+                          value={selectedRecipientSupplierId}
+                          onChange={(e) => handleRecipientSupplierSelect(e.target.value)}
+                          disabled={isLoadingSuppliers}
+                          className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white"
+                        >
+                          <option value="">
+                            {isLoadingSuppliers ? "Loading suppliers..." : "Select supplier"}
+                          </option>
+                          {suppliers.map((supplier) => (
+                            <option key={supplier._id} value={supplier._id}>
+                              {supplier.name}
+                              {supplier.supplierNumber ? ` (${supplier.supplierNumber})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Recipient Name */}
                   <div className="grid gap-2">
                     <label
                       htmlFor="customerName"
                       className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                     >
-                      Customer Name <span className="text-red-500">*</span>
+                      {recipientType === "customer" ? "Customer" : "Supplier"} Name{" "}
+                      <span className="text-red-500">*</span>
                     </label>
                     <Input
                       id="customerName"
-                      placeholder="Enter customer name"
+                      placeholder={recipientType === "customer" ? "Customer name" : "Supplier name"}
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       required
@@ -940,7 +1107,7 @@
                   </div>
 
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                    Select supplier per item below to include products from multiple suppliers in one quotation.
+                    Select a {recipientType} above to auto-fill details. You can edit the fields after selection.
                   </p>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -950,7 +1117,7 @@
                         htmlFor="customerPhone"
                         className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                       >
-                        Customer Phone{" "}
+                        {recipientType === "customer" ? "Customer" : "Supplier"} Phone{" "}
                         <span className="text-neutral-400">(Optional)</span>
                       </label>
                       <Input
@@ -967,7 +1134,7 @@
                         htmlFor="customerPrimaryEmail"
                         className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                       >
-                        Primary Customer Email{" "}
+                      Primary {recipientType === "customer" ? "Customer" : "Supplier"} Email{" "}
                         <span className="text-neutral-400">(Required to send)</span>
                       </label>
                       <Input
