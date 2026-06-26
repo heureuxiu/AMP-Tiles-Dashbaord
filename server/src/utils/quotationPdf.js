@@ -488,7 +488,7 @@ function buildQuotationHtml(quotation, companyInfo = {}) {
         <td class="t-value">${formatNumber(subtotal)}</td>
       </tr>
       <tr>
-        <td class="t-label">Total GST</td>
+        <td class="t-label">Total GST ${taxRate}%</td>
         <td class="t-value">${formatNumber(totalGst)}</td>
       </tr>
       <tr class="grand-row">

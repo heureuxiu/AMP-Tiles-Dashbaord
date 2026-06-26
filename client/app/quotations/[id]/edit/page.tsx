@@ -794,7 +794,7 @@ export default function EditQuotationPage() {
           unitType: item.unitType || "Sq Meter",
           quantity: item.quantity,
           rate: item.rate,
-          discountPercent: 0,
+          discountPercent: item.discountPercent || 0,
           taxPercent: item.taxPercent ?? 10,
           coverageSqm: getCoverageSqmForPayload(item, getProduct(item.product)),
         }));
@@ -1148,13 +1148,19 @@ export default function EditQuotationPage() {
                           Product
                         </th>
                         <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                          Unit
+                        </th>
+                        <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                           Quantity
                         </th>
                         <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Box
+                          Unit Price ($)
                         </th>
                         <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Unit Price ($)
+                          Disc %
+                        </th>
+                        <th className="pb-3 text-left text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                          GST
                         </th>
                         <th className="pb-3 text-right text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                           Total ex GST
@@ -1166,7 +1172,6 @@ export default function EditQuotationPage() {
                       {items.map((item) => {
                         const product = getProduct(item.product);
                         const isStockRestricted = isStockRestrictedProduct(product);
-                        const isUnitLocked = true;
                         const stockUnitLabel = getStockUnitLabel(product);
                         const maxQuantityForItem = item.product
                           ? getMaxQuantityForItem(items, item.id, item.product)
@@ -1204,20 +1209,13 @@ export default function EditQuotationPage() {
                                   ))}
                                 </select>
                               </td>
-                              <td className="py-3 pr-2 align-top text-neutral-600 dark:text-neutral-400">
-                                {estimatedBoxes != null
-                                  ? formatQty(estimatedBoxes)
-                                  : item.unitType === "Box"
-                                    ? formatQty(item.quantity)
-                                    : "—"}
-                              </td>
                               <td className="py-3 pr-2 align-top">
                                 <select
                                   value={item.unitType}
                                   onChange={(e) =>
                                     handleItemChange(item.id, "unitType", e.target.value)
                                   }
-                                  disabled={isReadOnly || isSaving || isUnitLocked}
+                                  disabled={isReadOnly || isSaving || !item.product}
                                   className="h-9 min-w-[90px] rounded-lg border border-neutral-200 bg-white px-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
                                 >
                                   {UNIT_TYPES.map((u) => (
@@ -1246,7 +1244,7 @@ export default function EditQuotationPage() {
                                       );
                                     }}
                                     disabled={isReadOnly || isSaving || !item.product}
-                                    className="h-9 w-20 text-sm"
+                                    className="h-9 w-24 text-sm"
                                     required
                                   />
                                   {estimatedBoxes != null && (
@@ -1281,9 +1279,16 @@ export default function EditQuotationPage() {
                                   min="0"
                                   max="100"
                                   step="0.5"
-                                  value={0}
-                                  readOnly
-                                  disabled
+                                  placeholder="10"
+                                  value={item.discountPercent || ""}
+                                  onChange={(e) =>
+                                    handleItemChange(
+                                      item.id,
+                                      "discountPercent",
+                                      parseFloat(e.target.value) || 0
+                                    )
+                                  }
+                                  disabled={isReadOnly || isSaving}
                                   className="h-9 w-16 text-sm"
                                 />
                               </td>
