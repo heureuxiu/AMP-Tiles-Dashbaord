@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { RecordAttachmentsPanel } from "@/components/record-attachments-panel";
 
 const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece", "LM"] as const;
 const PAYMENT_METHODS = [
@@ -151,6 +152,7 @@ export default function CreateInvoicePage() {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [deliveryCost, setDeliveryCost] = useState<number>(0);
+  const [attachments, setAttachments] = useState<File[]>([]);
 
   const [items, setItems] = useState<InvoiceItem[]>([
     {
@@ -395,13 +397,27 @@ export default function CreateInvoicePage() {
         paymentMethod: paymentMethod || undefined,
         amountPaid: amountPaid || undefined,
         deliveryCost,
-        sendEmail: mode === "save_send",
+        sendEmail: mode === "save_send" && attachments.length === 0,
       };
-      const response = await api.createInvoice(payload);
+      const response = await api.createInvoice(
+        payload,
+        attachments.length > 0 ? attachments : undefined
+      );
       if (response.success && response.invoice) {
         const inv = response.invoice as { _id: string; invoiceNumber: string };
         if (mode === "save_send") {
-          if (response.emailSent) {
+          if (attachments.length > 0 && inv._id) {
+            const sendResponse = await api.sendInvoiceByEmail(inv._id);
+            if (sendResponse.success) {
+              toast.success("Invoice created and emailed", {
+                description: `${inv.invoiceNumber} sent to ${customerEmail.trim()}`,
+              });
+            } else {
+              toast.error("Invoice created but email not sent", {
+                description: sendResponse.message || "Please try again.",
+              });
+            }
+          } else if (response.emailSent) {
             toast.success("Invoice created and emailed", {
               description: `${inv.invoiceNumber} sent to ${customerEmail.trim()}`,
             });
@@ -1010,6 +1026,26 @@ export default function CreateInvoicePage() {
               </div>
 
               <div className="space-y-3">
+                <div className="rounded-xl border border-neutral-200/70 p-4 dark:border-neutral-700/70">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
+                      Email Attachments
+                    </h3>
+                    <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                      Optional. These files will be attached only when you use Save &amp; Send Email.
+                    </p>
+                  </div>
+                  <RecordAttachmentsPanel
+                    editable
+                    storedAttachments={[]}
+                    newAttachments={attachments}
+                    onNewAttachmentsChange={setAttachments}
+                    disabled={isLoadingData || isSaving}
+                    title="Attachments"
+                    description="Optional. Saved with the invoice and included automatically when the invoice is emailed."
+                  />
+                </div>
+
                 <Button
                   type="submit"
                   className="w-full gap-2"

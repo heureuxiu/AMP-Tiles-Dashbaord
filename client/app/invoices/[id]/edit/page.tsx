@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { RecordAttachmentsPanel, type StoredAttachment } from "@/components/record-attachments-panel";
 
 const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
 const PAYMENT_METHODS = [
@@ -99,6 +100,7 @@ type FetchedInvoice = {
   amountPaid?: number;
   deliveryCost?: number;
   grandTotal?: number;
+  attachments?: StoredAttachment[];
 };
 
 export default function EditInvoicePage() {
@@ -125,6 +127,8 @@ export default function EditInvoicePage() {
   const [deliveryCost, setDeliveryCost] = useState<number>(0);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [isDraft, setIsDraft] = useState(true);
+  const [storedAttachments, setStoredAttachments] = useState<StoredAttachment[]>([]);
+  const [newAttachments, setNewAttachments] = useState<File[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -143,6 +147,7 @@ export default function EditInvoicePage() {
           setProducts((prodRes.products as Product[]) || []);
         }
         const inv = invRes.invoice as FetchedInvoice;
+        setStoredAttachments((inv.attachments as StoredAttachment[] | undefined) || []);
         setCustomerName(inv.customerName || "");
         setCustomerPhone(inv.customerPhone || "");
         setCustomerEmail(inv.customerEmail || "");
@@ -385,7 +390,12 @@ export default function EditInvoicePage() {
           taxPercent: i.taxPercent ?? 10,
         }));
       }
-      await api.updateInvoice(invoiceId, payload);
+      await api.updateInvoice(
+        invoiceId,
+        payload,
+        newAttachments,
+        storedAttachments.map((attachment) => attachment._id)
+      );
       toast.success("Invoice updated");
       router.push(`/invoices/${invoiceId}`);
     } catch (err) {
@@ -771,6 +781,20 @@ export default function EditInvoicePage() {
             className="lg:col-span-1"
           >
             <div className="sticky top-24 space-y-6">
+              <RecordAttachmentsPanel
+                editable
+                storedAttachments={storedAttachments}
+                newAttachments={newAttachments}
+                onNewAttachmentsChange={setNewAttachments}
+                onRemoveStoredAttachment={(attachmentId) =>
+                  setStoredAttachments((current) =>
+                    current.filter((attachment) => attachment._id !== attachmentId)
+                  )
+                }
+                disabled={isSaving}
+                title="Attachments"
+              />
+
               <div className="rounded-2xl border border-neutral-200/60 bg-white p-6 dark:border-neutral-700/60 dark:bg-neutral-800">
                 <h3 className="font-semibold text-neutral-900 dark:text-white">Summary</h3>
                 <div className="mt-4 space-y-2 text-sm">

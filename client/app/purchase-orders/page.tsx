@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, Eye, CheckCircle, Plus, Filter, X, Trash2, ChevronDown, Download } from "lucide-react";
+import { ShoppingCart, Eye, CheckCircle, Plus, Filter, X, Trash2, ChevronDown, Download, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -76,6 +77,15 @@ type Stats = {
   sent?: number;
 };
 
+const PAGE_SIZE = 10;
+
+type PaginationState = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export default function PurchaseOrdersPage() {
   const router = useRouter();
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
@@ -95,21 +105,43 @@ export default function PurchaseOrdersPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [poToDelete, setPoToDelete] = useState<PurchaseOrder | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, supplierFilter, statusFilter]);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
       const [poResponse, suppliersResponse] = await Promise.all([
-        api.getPurchaseOrders(),
+        api.getPurchaseOrders({
+          supplier: supplierFilter === "all" ? undefined : supplierFilter,
+          status: statusFilter === "all" ? undefined : statusFilter,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+          page: currentPage,
+          limit: PAGE_SIZE,
+        }),
         api.getSuppliers(),
       ]);
 
       if (poResponse.success && poResponse.purchaseOrders) {
         setPurchaseOrders(poResponse.purchaseOrders as PurchaseOrder[]);
+        const responsePagination = poResponse.pagination as Partial<PaginationState> | undefined;
+        setPagination({
+          page: responsePagination?.page ?? currentPage,
+          limit: responsePagination?.limit ?? PAGE_SIZE,
+          total: responsePagination?.total ?? poResponse.total ?? poResponse.count ?? poResponse.purchaseOrders.length,
+          totalPages: responsePagination?.totalPages ?? 1,
+        });
         if (poResponse.stats) {
           setStats(poResponse.stats as Stats);
         }
@@ -128,15 +160,14 @@ export default function PurchaseOrdersPage() {
     }
   };
 
-  // Filter purchase orders
-  const filteredPurchaseOrders = purchaseOrders.filter((po) => {
-    const matchesSupplier = supplierFilter === "all" || po.supplier?._id === supplierFilter;
-    const matchesStatus = statusFilter === "all" || po.status === statusFilter;
-    return matchesSupplier && matchesStatus;
-  });
+  const filteredPurchaseOrders = purchaseOrders;
 
   const handleView = (id: string) => {
     router.push(`/purchase-orders/${id}`);
+  };
+
+  const handleEdit = (id: string) => {
+    router.push(`/purchase-orders/create?edit=${id}`);
   };
 
   const handleDownloadPDF = async (po: PurchaseOrder) => {
@@ -381,13 +412,19 @@ export default function PurchaseOrdersPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
-                <DropdownMenuItem onClick={() => setSupplierFilter("all")}>
+                <DropdownMenuItem onClick={() => {
+                  setCurrentPage(1);
+                  setSupplierFilter("all");
+                }}>
                   All Suppliers
                 </DropdownMenuItem>
                 {suppliers.map((supplier) => (
                   <DropdownMenuItem
                     key={supplier._id}
-                    onClick={() => setSupplierFilter(supplier._id)}
+                    onClick={() => {
+                      setCurrentPage(1);
+                      setSupplierFilter(supplier._id);
+                    }}
                   >
                     {supplier.name}
                   </DropdownMenuItem>
@@ -409,13 +446,13 @@ export default function PurchaseOrdersPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setStatusFilter("all")}>All Status</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("draft")}>Draft</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("sent_to_supplier")}>Sent to Supplier</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("confirmed")}>Confirmed</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("partially_received")}>Partially Received</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("received")}>Received</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter("cancelled")}>Cancelled</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setCurrentPage(1); setStatusFilter("all"); }}>All Status</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setCurrentPage(1); setStatusFilter("draft"); }}>Draft</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setCurrentPage(1); setStatusFilter("sent_to_supplier"); }}>Sent to Supplier</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setCurrentPage(1); setStatusFilter("confirmed"); }}>Confirmed</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setCurrentPage(1); setStatusFilter("partially_received"); }}>Partially Received</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setCurrentPage(1); setStatusFilter("received"); }}>Received</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setCurrentPage(1); setStatusFilter("cancelled"); }}>Cancelled</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -425,6 +462,7 @@ export default function PurchaseOrdersPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
+                  setCurrentPage(1);
                   setSupplierFilter("all");
                   setStatusFilter("all");
                 }}
@@ -438,7 +476,7 @@ export default function PurchaseOrdersPage() {
 
           {hasActiveFilters && (
             <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
-              Showing {filteredPurchaseOrders.length} of {purchaseOrders.length} purchase orders
+              Showing {filteredPurchaseOrders.length} of {pagination.total} purchase orders
             </p>
           )}
         </motion.div>
@@ -536,6 +574,29 @@ export default function PurchaseOrdersPage() {
                             </Button>
                           </motion.div>
 
+                          {/* Edit Button */}
+                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-8 w-8 rounded-full ${
+                                ["received", "cancelled"].includes(po.status)
+                                  ? "cursor-not-allowed opacity-50"
+                                  : "hover:bg-amber-100 dark:hover:bg-amber-900/20"
+                              }`}
+                              onClick={() => handleEdit(po._id)}
+                              disabled={["received", "cancelled"].includes(po.status)}
+                              aria-label={`Edit ${po.poNumber}`}
+                              title={
+                                ["received", "cancelled"].includes(po.status)
+                                  ? "Received and cancelled orders cannot be edited"
+                                  : "Edit Purchase Order"
+                              }
+                            >
+                              <Pencil className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            </Button>
+                          </motion.div>
+
                           {/* Download PDF Button */}
                           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                             <Button
@@ -609,20 +670,15 @@ export default function PurchaseOrdersPage() {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
-                          {/* Delete Button (backend allows only draft) */}
+                          {/* Delete Button */}
                           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className={`h-8 w-8 rounded-full ${
-                                po.status !== "draft"
-                                  ? "cursor-not-allowed opacity-50"
-                                  : "hover:bg-red-100 dark:hover:bg-red-900/20"
-                              }`}
+                              className="h-8 w-8 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20"
                               onClick={() => openDeleteModal(po)}
-                              disabled={po.status !== "draft"}
                               aria-label={`Delete ${po.poNumber}`}
-                              title={po.status === "draft" ? "Delete Purchase Order" : "Only draft orders can be deleted"}
+                              title="Delete Purchase Order"
                             >
                               <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                             </Button>
@@ -657,11 +713,21 @@ export default function PurchaseOrdersPage() {
               </div>
               <span className="font-bold text-neutral-900 dark:text-white">
                 Total: {filteredPurchaseOrders.length}{" "}
-                {hasActiveFilters ? `of ${purchaseOrders.length}` : ""} Purchase Orders
+                {hasActiveFilters ? `of ${pagination.total}` : ""} Purchase Orders
               </span>
             </div>
           </motion.div>
         )}
+        <PaginationControls
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          pageSize={pagination.limit}
+          currentCount={filteredPurchaseOrders.length}
+          itemLabel="purchase orders"
+          onPageChange={setCurrentPage}
+          disabled={isLoading}
+        />
       </motion.div>
 
       <DeleteConfirmDialog
@@ -673,7 +739,7 @@ export default function PurchaseOrdersPage() {
         title="Delete Purchase Order?"
         description={
           poToDelete
-            ? `Are you sure you want to delete ${poToDelete.poNumber}? This cannot be undone.`
+            ? `Are you sure you want to delete ${poToDelete.poNumber}? Stock quantities will not be changed. This cannot be undone.`
             : ""
         }
         onConfirm={handleConfirmDeletePurchaseOrder}

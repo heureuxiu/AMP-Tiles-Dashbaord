@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Package, Download, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -32,22 +33,56 @@ type Invoice = {
   }>;
 };
 
+const PAGE_SIZE = 10;
+
+type PaginationState = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export default function PackingSlipPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
 
   useEffect(() => {
-    fetchInvoices();
-  }, []);
+    const timeout = window.setTimeout(() => {
+      fetchInvoices();
+    }, searchQuery ? 300 : 0);
+
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchQuery]);
 
   const fetchInvoices = async () => {
     try {
       setIsLoading(true);
-      const response = await api.getInvoices({ sortBy: "createdAt", sortOrder: "desc" });
+      const response = await api.getInvoices({
+        search: searchQuery.trim() || undefined,
+        sortBy: "createdAt",
+        sortOrder: "desc",
+        page: currentPage,
+        limit: PAGE_SIZE,
+      });
       if (response.success && response.invoices) {
         setInvoices(response.invoices as Invoice[]);
+        const responsePagination = response.pagination as Partial<PaginationState> | undefined;
+        setPagination({
+          page: responsePagination?.page ?? currentPage,
+          limit: responsePagination?.limit ?? PAGE_SIZE,
+          total: responsePagination?.total ?? response.total ?? response.count ?? response.invoices.length,
+          totalPages: responsePagination?.totalPages ?? 1,
+        });
       }
     } catch {
       toast.error("Failed to load invoices");
@@ -56,13 +91,7 @@ export default function PackingSlipPage() {
     }
   };
 
-  const filteredInvoices = invoices.filter(
-    (inv) =>
-      searchQuery === "" ||
-      inv.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (inv.customerPhone && inv.customerPhone.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredInvoices = invoices;
 
   const formatDate = (dateString: string) =>
     new Date(dateString).toLocaleDateString("en-AU", {
@@ -136,13 +165,19 @@ export default function PackingSlipPage() {
               type="text"
               placeholder="Search by Invoice No or Customer Name..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setCurrentPage(1);
+                setSearchQuery(e.target.value);
+              }}
               className="pl-10"
             />
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setCurrentPage(1);
+                  setSearchQuery("");
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
               >
                 <X className="h-4 w-4" />
@@ -151,7 +186,7 @@ export default function PackingSlipPage() {
           </div>
           {searchQuery && (
             <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
-              Showing {filteredInvoices.length} of {invoices.length} invoices
+              Showing {filteredInvoices.length} of {pagination.total} invoices
             </p>
           )}
         </div>
@@ -241,6 +276,16 @@ export default function PackingSlipPage() {
             )}
           </div>
         </div>
+        <PaginationControls
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          pageSize={pagination.limit}
+          currentCount={filteredInvoices.length}
+          itemLabel="packing slips"
+          onPageChange={setCurrentPage}
+          disabled={isLoading}
+        />
       </motion.div>
     </div>
   );

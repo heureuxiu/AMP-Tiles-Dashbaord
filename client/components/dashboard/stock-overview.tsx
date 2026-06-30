@@ -54,15 +54,11 @@ export function StockOverview() {
   const fetchProducts = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await api.getProducts({
-        sortBy: "createdAt",
-        sortOrder: "desc",
-        limit: 5,
-      });
+      const response = await api.getDashboardOverview();
 
       setProducts(
-        response?.success && Array.isArray(response?.products)
-          ? (response.products as Product[]).slice(0, 5)
+        response?.success && Array.isArray(response?.recentProducts)
+          ? (response.recentProducts as Product[]).slice(0, 5)
           : []
       );
     } catch (error) {

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Plus, PencilIcon, FileText, Eye, ArrowRight, Search, X, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,6 +38,15 @@ type Quotation = {
   convertedToInvoice: boolean;
 };
 
+const PAGE_SIZE = 10;
+
+type PaginationState = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 const CONVERTIBLE_STATUSES: QuotationStatus[] = ["draft", "sent", "accepted"];
 
 const isAlreadyConverted = (quotation: Quotation) =>
@@ -59,20 +69,46 @@ export default function QuotationsPage() {
     converted: 0,
     expired: 0,
     cancelled: 0,
+    totalValue: 0,
   });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [quotationToDelete, setQuotationToDelete] = useState<Quotation | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
 
   useEffect(() => {
-    fetchQuotations();
-  }, []);
+    const timeout = window.setTimeout(() => {
+      fetchQuotations();
+    }, searchQuery ? 300 : 0);
+
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchQuery]);
 
   const fetchQuotations = async () => {
     try {
       setIsLoading(true);
-      const response = await api.getQuotations();
+      const response = await api.getQuotations({
+        search: searchQuery.trim() || undefined,
+        sortBy: "createdAt",
+        sortOrder: "desc",
+        page: currentPage,
+        limit: PAGE_SIZE,
+      });
       if (response.success && response.quotations) {
         setQuotations(response.quotations as Quotation[]);
+        const responsePagination = response.pagination as Partial<PaginationState> | undefined;
+        setPagination({
+          page: responsePagination?.page ?? currentPage,
+          limit: responsePagination?.limit ?? PAGE_SIZE,
+          total: responsePagination?.total ?? response.total ?? response.count ?? response.quotations.length,
+          totalPages: responsePagination?.totalPages ?? 1,
+        });
         if (response.stats) {
           const stats = response.stats as {
             draft?: number;
@@ -82,6 +118,7 @@ export default function QuotationsPage() {
             converted?: number;
             expired?: number;
             cancelled?: number;
+            totalValue?: number;
           };
           setStats({
             draft: stats.draft ?? 0,
@@ -91,6 +128,7 @@ export default function QuotationsPage() {
             converted: stats.converted ?? 0,
             expired: stats.expired ?? 0,
             cancelled: stats.cancelled ?? 0,
+            totalValue: stats.totalValue ?? 0,
           });
         }
       }
@@ -104,13 +142,7 @@ export default function QuotationsPage() {
     }
   };
 
-  // Filter quotations based on search
-  const filteredQuotations = quotations.filter(
-    (q) =>
-      searchQuery === "" ||
-      q.quotationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      q.customerName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredQuotations = quotations;
 
   const handleCreateQuotation = () => {
     router.push("/quotations/create");
@@ -208,46 +240,48 @@ export default function QuotationsPage() {
       return;
     }
 
-    try {
-      const response =
-        newStatus === "sent"
-          ? await api.sendQuotationByEmail(id)
-          : await api.updateQuotation(id, { status: newStatus });
-      if (response.success) {
-        if (newStatus === "sent") {
+    if (newStatus === "sent") {
+      try {
+        const response = await api.sendQuotationByEmail(id);
+        if (response.success) {
           toast.success("Quotation sent by email", {
             description:
               response.message ||
               "Quotation email has been sent and status updated to Sent.",
           });
+          fetchQuotations();
         } else {
-          toast.success("Status updated", {
-            description: `Quotation marked as ${getStatusLabel(newStatus)}`,
-          });
+          toast.error("Failed to send quotation email");
         }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to send quotation email";
+        toast.error("Failed to send quotation email", {
+          description: errorMessage,
+        });
+      } finally {
+      }
+      return;
+    }
+
+    try {
+      const response = await api.updateQuotation(id, { status: newStatus });
+      if (response.success) {
+        toast.success("Status updated", {
+          description: `Quotation marked as ${getStatusLabel(newStatus)}`,
+        });
         fetchQuotations();
       } else {
-        toast.error(
-          newStatus === "sent"
-            ? "Failed to send quotation email"
-            : "Failed to update quotation status"
-        );
+        toast.error("Failed to update quotation status");
       }
     } catch (error) {
       const errorMessage =
         error instanceof Error
           ? error.message
-          : newStatus === "sent"
-          ? "Failed to send quotation email"
           : "Failed to update quotation status";
-      toast.error(
-        newStatus === "sent"
-          ? "Failed to send quotation email"
-          : "Failed to update quotation status",
-        {
+      toast.error("Failed to update quotation status", {
         description: errorMessage,
-        }
-      );
+      });
     }
   };
 
@@ -349,12 +383,18 @@ export default function QuotationsPage() {
               type="text"
               placeholder="Search by Quote No or Customer Name..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setCurrentPage(1);
+                setSearchQuery(e.target.value);
+              }}
               className="pl-10"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setCurrentPage(1);
+                  setSearchQuery("");
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
               >
                 <X className="h-4 w-4" />
@@ -363,7 +403,7 @@ export default function QuotationsPage() {
           </div>
           {searchQuery && (
             <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
-              Showing {filteredQuotations.length} of {quotations.length} quotations
+              Showing {filteredQuotations.length} of {pagination.total} quotations
             </p>
           )}
         </motion.div>
@@ -644,17 +684,27 @@ export default function QuotationsPage() {
                 <span className="text-sm text-neutral-600 dark:text-neutral-400">
                   Total Value:{" "}
                   <span className="font-bold text-neutral-900 dark:text-white">
-                    {formatCurrency(quotations.reduce((sum, q) => sum + q.grandTotal, 0))}
+                    {formatCurrency(stats.totalValue)}
                   </span>
                 </span>
                 <span className="font-bold text-neutral-900 dark:text-white">
                   Total: {filteredQuotations.length}{" "}
-                  {searchQuery ? `of ${quotations.length}` : ""} Quotations
+                  {searchQuery ? `of ${pagination.total}` : ""} Quotations
                 </span>
               </div>
             </div>
           </motion.div>
         )}
+        <PaginationControls
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          pageSize={pagination.limit}
+          currentCount={filteredQuotations.length}
+          itemLabel="quotations"
+          onPageChange={setCurrentPage}
+          disabled={isLoading}
+        />
       </motion.div>
 
       <DeleteConfirmDialog

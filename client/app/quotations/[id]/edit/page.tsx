@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { RecordAttachmentsPanel, type StoredAttachment } from "@/components/record-attachments-panel";
 
 const UNIT_TYPES = ["Sq Meter", "LM", "Piece"] as const;
 type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
@@ -59,6 +60,7 @@ type Quotation = {
   customerName: string;
   customerPhone?: string;
   customerEmail?: string;
+  billingAddress?: string;
   customerAddress?: string;
   deliveryAddress?: string;
   reference?: string;
@@ -68,6 +70,7 @@ type Quotation = {
   terms?: string;
   deliveryCost?: number;
   status: QuotationStatus;
+  attachments?: StoredAttachment[];
   items: Array<{
     _id?: string;
     product:
@@ -405,6 +408,8 @@ export default function EditQuotationPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [useBillingAsDelivery, setUseBillingAsDelivery] = useState(true);
   const [reference, setReference] = useState("");
   const [quotationDate, setQuotationDate] = useState("");
   const [validUntil, setValidUntil] = useState("");
@@ -413,8 +418,16 @@ export default function EditQuotationPage() {
   const [deliveryCost, setDeliveryCost] = useState<number>(0);
   const [status, setStatus] = useState<QuotationStatus>("draft");
   const [items, setItems] = useState<QuotationItem[]>([]);
+  const [storedAttachments, setStoredAttachments] = useState<StoredAttachment[]>([]);
+  const [newAttachments, setNewAttachments] = useState<File[]>([]);
 
   const isReadOnly = status === "converted";
+
+  useEffect(() => {
+    if (useBillingAsDelivery) {
+      setDeliveryAddress(customerAddress);
+    }
+  }, [customerAddress, useBillingAsDelivery]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -447,11 +460,16 @@ export default function EditQuotationPage() {
 
         if (quotationResponse.success && quotationResponse.quotation) {
           const q = quotationResponse.quotation as Quotation;
+          setStoredAttachments((q.attachments as StoredAttachment[] | undefined) || []);
           setQuotationNumber(q.quotationNumber);
           setCustomerName(q.customerName || "");
           setCustomerPhone(q.customerPhone || "");
           setCustomerEmail(q.customerEmail || "");
-          setCustomerAddress(q.deliveryAddress || q.customerAddress || "");
+          const billing = q.billingAddress || q.customerAddress || "";
+          const delivery = q.deliveryAddress || billing;
+          setCustomerAddress(billing);
+          setDeliveryAddress(delivery);
+          setUseBillingAsDelivery(!delivery || delivery === billing);
           setReference(q.reference || "");
           setQuotationDate(
             q.quotationDate ? q.quotationDate.split("T")[0] : new Date().toISOString().split("T")[0]
@@ -777,8 +795,9 @@ export default function EditQuotationPage() {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
+        billingAddress: customerAddress.trim() || undefined,
         customerAddress: customerAddress.trim() || undefined,
-        deliveryAddress: customerAddress.trim() || undefined,
+        deliveryAddress: (useBillingAsDelivery ? customerAddress : deliveryAddress).trim() || undefined,
         reference: reference.trim() || undefined,
         quotationDate,
         validUntil: validUntil || undefined,
@@ -800,7 +819,12 @@ export default function EditQuotationPage() {
         }));
       }
 
-      const response = await api.updateQuotation(quotationId, quotationData);
+      const response = await api.updateQuotation(
+        quotationId,
+        quotationData,
+        newAttachments,
+        storedAttachments.map((attachment) => attachment._id)
+      );
 
       if (response.success) {
         toast.success("Quotation updated successfully", {
@@ -995,23 +1019,59 @@ export default function EditQuotationPage() {
                   </div>
                 </div>
 
-                {/* Address */}
+                {/* Billing Address */}
                 <div className="grid gap-2">
                   <label
                     htmlFor="customerAddress"
                     className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                   >
-                    Delivery Address{" "}
+                    Billing Address{" "}
                     <span className="text-neutral-400">(Optional)</span>
                   </label>
                   <Input
                     id="customerAddress"
-                    placeholder="Enter address"
+                    placeholder="Enter billing address"
                     value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
                     disabled={isReadOnly || isSaving}
                   />
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    id="useBillingAsDelivery"
+                    type="checkbox"
+                    checked={useBillingAsDelivery}
+                    onChange={(e) => setUseBillingAsDelivery(e.target.checked)}
+                    disabled={isReadOnly || isSaving}
+                    className="h-4 w-4 rounded border-neutral-300 text-amp-primary focus:ring-amp-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <label
+                    htmlFor="useBillingAsDelivery"
+                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                  >
+                    Use billing address as delivery address
+                  </label>
+                </div>
+
+                {!useBillingAsDelivery && (
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="deliveryAddress"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Delivery Address{" "}
+                      <span className="text-neutral-400">(Optional)</span>
+                    </label>
+                    <Input
+                      id="deliveryAddress"
+                      placeholder="Enter delivery address"
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      disabled={isReadOnly || isSaving}
+                    />
+                  </div>
+                )}
 
                 <div className="grid gap-2">
                   <label
@@ -1450,6 +1510,23 @@ export default function EditQuotationPage() {
               </div>
 
               {/* Action Buttons */}
+              <RecordAttachmentsPanel
+                editable={!isReadOnly}
+                storedAttachments={storedAttachments}
+                newAttachments={newAttachments}
+                onNewAttachmentsChange={setNewAttachments}
+                onRemoveStoredAttachment={
+                  !isReadOnly
+                    ? (attachmentId) =>
+                        setStoredAttachments((current) =>
+                          current.filter((attachment) => attachment._id !== attachmentId)
+                        )
+                    : undefined
+                }
+                disabled={isSaving}
+                title="Attachments"
+              />
+
               {!isReadOnly && (
                 <div className="space-y-3">
                   <Button type="submit" className="w-full gap-2" size="lg" disabled={isSaving}>

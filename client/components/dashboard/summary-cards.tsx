@@ -80,7 +80,7 @@ export function SummaryCards() {
   const fetchDashboardData = async () => {
     setIsLoading(true);
     try {
-      const response = await api.getDashboardSummary();
+      const response = await api.getDashboardOverview();
       const stats = (response.success ? response.stats : undefined) as DashboardSummaryStats | undefined;
 
       const totalProducts = stats?.totalProducts ?? 0;

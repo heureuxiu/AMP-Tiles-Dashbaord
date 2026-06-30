@@ -8,6 +8,7 @@ const API_URL =
 
 const TOKEN_STORAGE_KEY = 'amp_token';
 export const AUTH_EXPIRED_EVENT = 'amp:auth-expired';
+export const API_ASSET_BASE_URL = API_URL.replace(/\/api$/, '');
 
 type AuthExpiredReason = 'missing' | 'expired' | 'unauthorized';
 
@@ -38,6 +39,12 @@ export function isTokenExpired(token: string, skewSeconds = 30) {
 export function getTokenExpiresAt(token: string) {
   const payload = decodeJwtPayload(token);
   return payload?.exp ? payload.exp * 1000 : null;
+}
+
+export function resolveApiAssetUrl(relativeUrl?: string) {
+  if (!relativeUrl) return '';
+  if (/^https?:\/\//i.test(relativeUrl)) return relativeUrl;
+  return `${API_ASSET_BASE_URL}${relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`}`;
 }
 
 export function clearStoredAuth(reason: AuthExpiredReason = 'unauthorized', notify = true) {
@@ -130,8 +137,22 @@ interface ApiResponse<T = unknown> {
   products?: Product[];
   product?: Product;
   count?: number;
+  total?: number;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  facets?: {
+    categories?: string[];
+    finishes?: string[];
+  };
   // Generic stats payload used across dashboard, lists, and stock pages
   stats?: unknown;
+  recentProducts?: unknown[];
+  recentQuotations?: unknown[];
+  recentInvoices?: unknown[];
   // Quotation payloads (list + single)
   quotations?: unknown[];
   quotation?: unknown;
@@ -161,6 +182,8 @@ class ApiClient {
   private baseURL: string;
   private static pendingRequests = 0;
   private static readonly LOADING_EVENT = 'amp:global-loading';
+  private dashboardOverviewPromise: Promise<ApiResponse> | null = null;
+  private dashboardOverviewCache: { timestamp: number; response: ApiResponse } | null = null;
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
@@ -190,10 +213,13 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const token = getStoredToken();
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
+    const headers: Record<string, string> = isFormData
+      ? {}
+      : {
+          'Content-Type': 'application/json',
+        };
 
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -248,6 +274,16 @@ class ApiClient {
     }
   }
 
+  private buildMultipartPayload(
+    data: Record<string, unknown>,
+    attachments?: File[]
+  ) {
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(data));
+    (attachments || []).forEach((file) => formData.append('attachments', file));
+    return formData;
+  }
+
   // Auth endpoints
   async login(email: string, password: string) {
     return this.request('/auth/login', {
@@ -273,6 +309,31 @@ class ApiClient {
     return this.request('/dashboard/summary', {
       method: 'GET',
     });
+  }
+
+  async getDashboardOverview() {
+    const now = Date.now();
+    if (
+      this.dashboardOverviewCache &&
+      now - this.dashboardOverviewCache.timestamp < 30_000
+    ) {
+      return this.dashboardOverviewCache.response;
+    }
+
+    if (this.dashboardOverviewPromise) return this.dashboardOverviewPromise;
+
+    this.dashboardOverviewPromise = this.request('/dashboard/overview', {
+      method: 'GET',
+    })
+      .then((response) => {
+        this.dashboardOverviewCache = { timestamp: Date.now(), response };
+        return response;
+      })
+      .finally(() => {
+        this.dashboardOverviewPromise = null;
+      });
+
+    return this.dashboardOverviewPromise;
   }
 
   async updateDetails(name: string, email: string) {
@@ -306,6 +367,7 @@ class ApiClient {
     supplierType?: 'third-party' | 'own';
     sortBy?: string;
     sortOrder?: string;
+    page?: number;
     limit?: number;
   }) {
     const queryParams = new URLSearchParams();
@@ -318,6 +380,7 @@ class ApiClient {
     if (params?.supplierType) queryParams.append('supplierType', params.supplierType);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.page) queryParams.append('page', String(params.page));
     if (params?.limit) queryParams.append('limit', String(params.limit));
 
     const query = queryParams.toString();
@@ -515,6 +578,7 @@ class ApiClient {
     endDate?: string;
     sortBy?: string;
     sortOrder?: string;
+    page?: number;
     limit?: number;
   }) {
     const queryParams = new URLSearchParams();
@@ -524,6 +588,7 @@ class ApiClient {
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.page) queryParams.append('page', String(params.page));
     if (params?.limit) queryParams.append('limit', String(params.limit));
 
     const query = queryParams.toString();
@@ -580,9 +645,18 @@ class ApiClient {
     }
   }
 
-  async sendQuotationByEmail(id: string) {
+  async sendQuotationByEmail(id: string, attachments?: File[]) {
+    const body =
+      attachments && attachments.length > 0
+        ? attachments.reduce((formData, file) => {
+            formData.append('attachments', file);
+            return formData;
+          }, new FormData())
+        : undefined;
+
     return this.request(`/quotations/${id}/send`, {
       method: 'POST',
+      ...(body ? { body } : {}),
     });
   }
 
@@ -605,6 +679,7 @@ class ApiClient {
     customerEmail?: string;
     customerEmails?: string[];
     customerCcEmails?: string[];
+    billingAddress?: string;
     customerAddress?: string;
     deliveryAddress?: string;
     reference?: string;
@@ -627,10 +702,15 @@ class ApiClient {
     terms?: string;
     status?: string;
     sendEmail?: boolean;
-  }) {
+  }, attachments?: File[]) {
+    const body =
+      attachments && attachments.length > 0
+        ? this.buildMultipartPayload(data as Record<string, unknown>, attachments)
+        : JSON.stringify(data);
+
     return this.request('/quotations', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body,
     });
   }
 
@@ -639,6 +719,7 @@ class ApiClient {
     customerPhone?: string;
     customerEmail?: string;
     customerAddress?: string;
+    billingAddress?: string;
     deliveryAddress?: string;
     reference?: string;
     quotationDate?: string;
@@ -659,10 +740,16 @@ class ApiClient {
     notes?: string;
     terms?: string;
     status?: string;
-  }) {
+  }, attachments?: File[], retainedAttachmentIds?: string[]) {
+    const payload = retainedAttachmentIds ? { ...data, retainedAttachmentIds } : data;
+    const body =
+      (attachments && attachments.length > 0) || retainedAttachmentIds
+        ? this.buildMultipartPayload(payload as Record<string, unknown>, attachments)
+        : JSON.stringify(data);
+
     return this.request(`/quotations/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body,
     });
   }
 
@@ -690,6 +777,7 @@ class ApiClient {
     status?: string;
     sortBy?: string;
     sortOrder?: string;
+    page?: number;
     limit?: number;
   }) {
     const queryParams = new URLSearchParams();
@@ -697,6 +785,7 @@ class ApiClient {
     if (params?.status) queryParams.append('status', params.status);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
 
     const query = queryParams.toString();
@@ -776,6 +865,7 @@ class ApiClient {
     status?: string;
     sortBy?: string;
     sortOrder?: string;
+    page?: number;
     limit?: number;
   }) {
     const queryParams = new URLSearchParams();
@@ -783,6 +873,7 @@ class ApiClient {
     if (params?.status) queryParams.append('status', params.status);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
 
     const query = queryParams.toString();
@@ -903,6 +994,8 @@ class ApiClient {
     endDate?: string;
     sortBy?: string;
     sortOrder?: string;
+    page?: number;
+    limit?: number;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
@@ -912,6 +1005,8 @@ class ApiClient {
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
 
     const query = queryParams.toString();
     return this.request(`/purchase-orders${query ? `?${query}` : ''}`, {
@@ -1059,6 +1154,7 @@ class ApiClient {
     endDate?: string;
     sortBy?: string;
     sortOrder?: string;
+    page?: number;
     limit?: number;
   }) {
     const queryParams = new URLSearchParams();
@@ -1068,6 +1164,7 @@ class ApiClient {
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.page) queryParams.append('page', String(params.page));
     if (params?.limit) queryParams.append('limit', String(params.limit));
 
     const query = queryParams.toString();
@@ -1111,10 +1208,15 @@ class ApiClient {
     paymentMethod?: string;
     amountPaid?: number;
     sendEmail?: boolean;
-  }) {
+  }, attachments?: File[]) {
+    const body =
+      attachments && attachments.length > 0
+        ? this.buildMultipartPayload(data as Record<string, unknown>, attachments)
+        : JSON.stringify(data);
+
     return this.request('/invoices', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body,
     });
   }
 
@@ -1146,10 +1248,16 @@ class ApiClient {
     paymentMethod?: string;
     amountPaid?: number;
     sendEmail?: boolean;
-  }) {
+  }, attachments?: File[], retainedAttachmentIds?: string[]) {
+    const payload = retainedAttachmentIds ? { ...data, retainedAttachmentIds } : data;
+    const body =
+      (attachments && attachments.length > 0) || retainedAttachmentIds
+        ? this.buildMultipartPayload(payload as Record<string, unknown>, attachments)
+        : JSON.stringify(data);
+
     return this.request(`/invoices/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body,
     });
   }
 
@@ -1165,9 +1273,18 @@ class ApiClient {
     });
   }
 
-  async sendInvoiceByEmail(id: string) {
+  async sendInvoiceByEmail(id: string, attachments?: File[]) {
+    const body =
+      attachments && attachments.length > 0
+        ? attachments.reduce((formData, file) => {
+            formData.append('attachments', file);
+            return formData;
+          }, new FormData())
+        : undefined;
+
     return this.request(`/invoices/${id}/send`, {
       method: 'POST',
+      ...(body ? { body } : {}),
     });
   }
 

@@ -8,6 +8,7 @@
   import { toast } from "sonner";
   import { useRouter } from "next/navigation";
   import { api } from "@/lib/api";
+  import { RecordAttachmentsPanel } from "@/components/record-attachments-panel";
 
   const UNIT_TYPES = ["Sq Meter", "LM", "Piece"] as const;
   type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
@@ -388,11 +389,14 @@
     const [heldStockByProduct, setHeldStockByProduct] = useState<Record<string, number>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [saveMode, setSaveMode] = useState<SaveMode | null>(null);
+    const [attachments, setAttachments] = useState<File[]>([]);
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");
     const [customerPrimaryEmail, setCustomerPrimaryEmail] = useState("");
     const [customerCcEmails, setCustomerCcEmails] = useState("");
     const [customerAddress, setCustomerAddress] = useState("");
+    const [deliveryAddress, setDeliveryAddress] = useState("");
+    const [useBillingAsDelivery, setUseBillingAsDelivery] = useState(true);
     const [reference, setReference] = useState("");
     const [quotationDate, setQuotationDate] = useState(
       new Date().toISOString().split("T")[0]
@@ -411,6 +415,12 @@
       fetchSuppliers();
       fetchCustomers();
     }, []);
+
+    useEffect(() => {
+      if (useBillingAsDelivery) {
+        setDeliveryAddress(customerAddress);
+      }
+    }, [customerAddress, useBillingAsDelivery]);
 
     // Default: valid until = quotationDate + 7 days (can be overridden)
     useEffect(() => {
@@ -483,6 +493,8 @@
       setCustomerPrimaryEmail("");
       setCustomerCcEmails("");
       setCustomerAddress("");
+      setDeliveryAddress("");
+      setUseBillingAsDelivery(true);
     };
 
     const handleCustomerSelect = (customerId: string) => {
@@ -495,6 +507,7 @@
       setCustomerPrimaryEmail(customer.email || "");
       setCustomerCcEmails((customer.ccEmails || []).join(", "));
       setCustomerAddress(formatAddress(customer.address));
+      setUseBillingAsDelivery(true);
     };
 
     const handleRecipientSupplierSelect = (supplierId: string) => {
@@ -507,6 +520,7 @@
       setCustomerPrimaryEmail(supplier.email || "");
       setCustomerCcEmails("");
       setCustomerAddress(formatAddress(supplier.address));
+      setUseBillingAsDelivery(true);
     };
 
     const fetchProducts = async (supplierId: string) => {
@@ -878,8 +892,9 @@
           customerEmails:
             normalizedCustomerEmails.length > 0 ? normalizedCustomerEmails : undefined,
           customerCcEmails: ccEmails.length > 0 ? ccEmails : undefined,
+          billingAddress: customerAddress.trim() || undefined,
           customerAddress: customerAddress.trim() || undefined,
-          deliveryAddress: customerAddress.trim() || undefined,
+          deliveryAddress: (useBillingAsDelivery ? customerAddress : deliveryAddress).trim() || undefined,
           reference: reference.trim() || undefined,
           quotationDate,
           validUntil,
@@ -896,10 +911,13 @@
             coverageSqm: getCoverageSqmForPayload(item, getProduct(item.product)),
           })),
           status: "draft",
-          sendEmail: mode === "send",
+          sendEmail: mode === "send" && attachments.length === 0,
         };
 
-        const response = await api.createQuotation(quotationData);
+        const response = await api.createQuotation(
+          quotationData,
+          attachments.length > 0 ? attachments : undefined
+        );
 
         if (response.success) {
           const createdQuotation = response.quotation as
@@ -907,7 +925,20 @@
             | undefined;
 
           if (mode === "send") {
-            if (response.emailSent) {
+            if (attachments.length > 0 && createdQuotation?._id) {
+              const sendResponse = await api.sendQuotationByEmail(createdQuotation._id);
+              if (sendResponse.success) {
+                toast.success("Quotation sent by email", {
+                  description: `Quote for ${customerName} has been emailed`,
+                });
+              } else {
+                toast.error("Quotation saved but email not sent", {
+                  description:
+                    sendResponse.message ||
+                    "Please check SMTP settings and try again.",
+                });
+              }
+            } else if (response.emailSent) {
               toast.success("Quotation sent by email", {
                 description: `Quote for ${customerName} has been emailed`,
               });
@@ -1164,22 +1195,56 @@
                       />
                     </div>
 
-                  {/* Address */}
+                  {/* Billing Address */}
                   <div className="grid gap-2">
                     <label
                       htmlFor="customerAddress"
                       className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                     >
-                      Delivery Address{" "}
+                      Billing Address{" "}
                       <span className="text-neutral-400">(Optional)</span>
                     </label>
                     <Input
                       id="customerAddress"
-                      placeholder="Enter address"
+                      placeholder="Enter billing address"
                       value={customerAddress}
                       onChange={(e) => setCustomerAddress(e.target.value)}
+                      />
+                    </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="useBillingAsDelivery"
+                      type="checkbox"
+                      checked={useBillingAsDelivery}
+                      onChange={(e) => setUseBillingAsDelivery(e.target.checked)}
+                      className="h-4 w-4 rounded border-neutral-300 text-amp-primary focus:ring-amp-primary"
                     />
+                    <label
+                      htmlFor="useBillingAsDelivery"
+                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                    >
+                      Use billing address as delivery address
+                    </label>
                   </div>
+
+                  {!useBillingAsDelivery && (
+                    <div className="grid gap-2">
+                      <label
+                        htmlFor="deliveryAddress"
+                        className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                      >
+                        Delivery Address{" "}
+                        <span className="text-neutral-400">(Optional)</span>
+                      </label>
+                      <Input
+                        id="deliveryAddress"
+                        placeholder="Enter delivery address"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                      />
+                    </div>
+                  )}
 
                   <div className="grid gap-2">
                     <label
@@ -1641,6 +1706,26 @@
                 </div>
 
                 {/* Action Buttons */}
+                <div className="rounded-xl border border-neutral-200/70 p-4 dark:border-neutral-700/70">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
+                      Email Attachments
+                    </h3>
+                    <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                      Optional. These files will be attached only when you use Save &amp; Send Email.
+                    </p>
+                  </div>
+                  <RecordAttachmentsPanel
+                    editable
+                    storedAttachments={[]}
+                    newAttachments={attachments}
+                    onNewAttachmentsChange={setAttachments}
+                    disabled={isSaving || isLoadingProducts}
+                    title="Attachments"
+                    description="Optional. Saved with the quotation and included automatically when the quotation is emailed."
+                  />
+                </div>
+
                 <div className="space-y-3">
                   <Button type="submit" className="w-full gap-2" size="lg" disabled={isSaving || isLoadingProducts}>
                     <Save className="h-4 w-4" />

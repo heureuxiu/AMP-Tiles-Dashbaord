@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 
 const UNIT_TYPES = ["Sqm", "LM", "Piece"] as const;
@@ -48,6 +48,34 @@ type Product = {
   supplierType?: "third-party" | "own";
 };
 
+type PurchaseOrderDetail = {
+  _id: string;
+  poNumber: string;
+  supplier?: { _id: string; name: string } | null;
+  supplierName: string;
+  poDate: string;
+  expectedDeliveryDate?: string | null;
+  warehouseLocation?: string;
+  currency?: string;
+  paymentTerms?: string;
+  deliveryAddress?: string;
+  notes?: string;
+  terms?: string;
+  status: string;
+  items: Array<{
+    _id?: string;
+    product: string | { _id: string; name?: string };
+    productName?: string;
+    unitType?: string;
+    quantityOrdered: number;
+    rate: number;
+    discountPercent?: number;
+    taxPercent?: number;
+    lineTotal?: number;
+    coverageSqm?: number;
+  }>;
+};
+
 const normalizeUnitLabel = (unit?: string) => {
   const normalized = String(unit || "").trim().toLowerCase();
   if (normalized === "lm" || normalized.includes("linear")) return "LM";
@@ -65,7 +93,12 @@ const getUnitTypeLabel = (unitType: (typeof UNIT_TYPES)[number]) =>
 
 export default function CreatePurchaseOrderPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = Boolean(editId);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingPurchaseOrder, setIsLoadingPurchaseOrder] = useState(Boolean(editId));
+  const [poNumber, setPoNumber] = useState("");
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -78,7 +111,7 @@ export default function CreatePurchaseOrderPage() {
   const [paymentTerms, setPaymentTerms] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
-  const [terms] = useState("");
+  const [terms, setTerms] = useState("");
   const createEmptyItem = () => ({
     id: Date.now().toString(),
     product: "",
@@ -95,6 +128,83 @@ export default function CreatePurchaseOrderPage() {
   useEffect(() => {
     fetchSuppliers();
   }, []);
+
+  useEffect(() => {
+    if (!editId) return;
+
+    const toDateInputValue = (value?: string | null) => {
+      if (!value) return "";
+      return new Date(value).toISOString().split("T")[0];
+    };
+
+    const fetchPurchaseOrder = async () => {
+      try {
+        setIsLoadingPurchaseOrder(true);
+        const response = await api.getPurchaseOrder(editId);
+        if (!response.success || !response.purchaseOrder) {
+          toast.error("Purchase order not found");
+          router.push("/purchase-orders");
+          return;
+        }
+
+        const purchaseOrder = response.purchaseOrder as PurchaseOrderDetail;
+        if (["received", "cancelled"].includes(purchaseOrder.status)) {
+          toast.error("This purchase order cannot be edited", {
+            description: `Cannot update ${purchaseOrder.status} purchase order`,
+          });
+          router.push("/purchase-orders");
+          return;
+        }
+
+        const isOwnProductsPo =
+          !purchaseOrder.supplier &&
+          ["amp products", "own products"].includes(
+            String(purchaseOrder.supplierName || "").trim().toLowerCase()
+          );
+
+        setPoNumber(purchaseOrder.poNumber || "");
+        setSupplier(isOwnProductsPo ? OWN_PRODUCTS_KEY : purchaseOrder.supplier?._id || "");
+        setPoDate(toDateInputValue(purchaseOrder.poDate) || new Date().toISOString().split("T")[0]);
+        setExpectedDeliveryDate(toDateInputValue(purchaseOrder.expectedDeliveryDate));
+        setWarehouseLocation(purchaseOrder.warehouseLocation || "");
+        setCurrency(purchaseOrder.currency || "AUD");
+        setPaymentTerms(purchaseOrder.paymentTerms || "");
+        setDeliveryAddress(purchaseOrder.deliveryAddress || "");
+        setNotes(purchaseOrder.notes || "");
+        setTerms(purchaseOrder.terms || "");
+        setItems(
+          purchaseOrder.items.map((item, index) => {
+            const productId =
+              typeof item.product === "string" ? item.product : item.product?._id || "";
+            return {
+              id: item._id || `${Date.now()}-${index}`,
+              product: productId,
+              productName:
+                item.productName ||
+                (typeof item.product === "object" ? item.product?.name || "" : ""),
+              unitType: item.unitType || "Sqm",
+              quantityOrdered: Number(item.quantityOrdered) || 0,
+              rate: Number(item.rate) || 0,
+              discountPercent: Number(item.discountPercent) || 0,
+              taxPercent: Number.isFinite(Number(item.taxPercent)) ? Number(item.taxPercent) : 10,
+              lineTotal: Number(item.lineTotal) || 0,
+              coverageSqm: item.coverageSqm,
+            };
+          })
+        );
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Failed to load purchase order";
+        toast.error("Failed to load purchase order", {
+          description: errorMessage,
+        });
+        router.push("/purchase-orders");
+      } finally {
+        setIsLoadingPurchaseOrder(false);
+      }
+    };
+
+    fetchPurchaseOrder();
+  }, [editId, router]);
 
   useEffect(() => {
     const loadSupplierProducts = async () => {
@@ -264,20 +374,25 @@ export default function CreatePurchaseOrderPage() {
         notes: notes || undefined,
         terms: terms || undefined,
       };
-      const response = await api.createPurchaseOrder(poData);
+      const response =
+        isEditMode && editId
+          ? await api.updatePurchaseOrder(editId, poData)
+          : await api.createPurchaseOrder(poData);
 
       if (response.success) {
-        const createdPO = response.purchaseOrder as { poNumber: string } | undefined;
-        toast.success("Purchase order created successfully", {
-          description: createdPO
-            ? `PO ${createdPO.poNumber} has been created`
-            : "Purchase order has been created",
+        const savedPO = response.purchaseOrder as { poNumber: string } | undefined;
+        toast.success(
+          isEditMode ? "Purchase order updated successfully" : "Purchase order created successfully",
+          {
+          description: savedPO
+            ? `PO ${savedPO.poNumber} has been ${isEditMode ? "updated" : "created"}`
+            : `Purchase order has been ${isEditMode ? "updated" : "created"}`,
         });
         router.push("/purchase-orders");
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to create purchase order";
-      toast.error("Failed to create purchase order", {
+      const errorMessage = error instanceof Error ? error.message : `Failed to ${isEditMode ? "update" : "create"} purchase order`;
+      toast.error(`Failed to ${isEditMode ? "update" : "create"} purchase order`, {
         description: errorMessage,
       });
     } finally {
@@ -306,13 +421,23 @@ export default function CreatePurchaseOrderPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-            Create Purchase Order
+            {isEditMode ? "Edit Purchase Order" : "Create Purchase Order"}
           </h1>
           <p className="mt-1 text-neutral-600 dark:text-neutral-400">
-            Create a new purchase order for supplier
+            {isEditMode ? "Update purchase order details" : "Create a new purchase order for supplier"}
           </p>
         </div>
       </div>
+
+      {isLoadingPurchaseOrder ? (
+        <div className="flex h-64 items-center justify-center rounded-2xl border border-neutral-200/60 bg-white shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-900 dark:border-neutral-700 dark:border-t-white" />
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading purchase order...</p>
+          </div>
+        </div>
+      ) : (
+        <>
 
       {/* PO Header Card */}
       <motion.div
@@ -359,7 +484,7 @@ export default function CreatePurchaseOrderPage() {
                 <Label>PO Number (Auto Generated)</Label>
                 <Input
                   readOnly
-                  value=""
+                  value={poNumber}
                   placeholder="e.g. PO-2026-0012 (generated when saved)"
                   className="bg-neutral-50 dark:bg-neutral-900 font-mono text-neutral-500"
                 />
@@ -693,7 +818,7 @@ export default function CreatePurchaseOrderPage() {
             disabled={isSaving || isLoadingSuppliers || isLoadingProducts}
             className="flex-1 bg-purple-600 hover:bg-purple-700"
           >
-            {isSaving ? "Saving..." : "Create Purchase Order"}
+            {isSaving ? "Saving..." : isEditMode ? "Update Purchase Order" : "Create Purchase Order"}
           </Button>
           <Button
             variant="outline"
@@ -705,6 +830,8 @@ export default function CreatePurchaseOrderPage() {
           </Button>
         </div>
       </motion.div>
+      </>
+      )}
 
     </div>
   );

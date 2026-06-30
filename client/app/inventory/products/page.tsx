@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ChangeEvent } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
@@ -18,6 +18,7 @@ import {
   Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Table,
   TableBody,
@@ -77,6 +78,15 @@ type Product = {
   taxPercent?: number | null;
   costPrice?: number;
   profitMargin?: number | null;
+};
+
+const PAGE_SIZE = 10;
+
+type PaginationState = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 };
 
 const normalizeUnitLabel = (unit?: string) => {
@@ -166,6 +176,15 @@ export default function ProductsPage() {
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
   const [selectedSupplierTypes, setSelectedSupplierTypes] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<{ _id: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [finishes, setFinishes] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -225,8 +244,13 @@ export default function ProductsPage() {
 
   // Load products and suppliers from API
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    const timeout = window.setTimeout(() => {
+      fetchProducts();
+    }, searchQuery ? 300 : 0);
+
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchQuery, selectedCategories, selectedFinishes, selectedStatus, selectedSupplierTypes]);
 
   useEffect(() => {
     const loadSuppliers = async () => {
@@ -245,9 +269,31 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     try {
       setIsLoading(true);
-      const response = await api.getProducts();
+      const response = await api.getProducts({
+        search: searchQuery.trim() || undefined,
+        category: selectedCategories.length ? selectedCategories.join(",") : undefined,
+        finish: selectedFinishes.length ? selectedFinishes.join(",") : undefined,
+        status: selectedStatus.length ? selectedStatus.join(",") : undefined,
+        supplierType: selectedSupplierTypes.length
+          ? (selectedSupplierTypes.join(",") as "third-party" | "own")
+          : undefined,
+        sortBy: "createdAt",
+        sortOrder: "desc",
+        page: currentPage,
+        limit: PAGE_SIZE,
+      });
       if (response.success && response.products) {
         setProducts(response.products);
+        const responsePagination = response.pagination as Partial<PaginationState> | undefined;
+        setPagination({
+          page: responsePagination?.page ?? currentPage,
+          limit: responsePagination?.limit ?? PAGE_SIZE,
+          total: responsePagination?.total ?? response.total ?? response.count ?? response.products.length,
+          totalPages: responsePagination?.totalPages ?? 1,
+        });
+        const facets = response.facets as { categories?: string[]; finishes?: string[] } | undefined;
+        if (facets?.categories) setCategories(facets.categories);
+        if (facets?.finishes) setFinishes(facets.finishes);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to fetch products";
@@ -259,75 +305,42 @@ export default function ProductsPage() {
     }
   };
 
-  // Extract unique categories and finishes from products
-  const categories = useMemo(() => {
-    const uniqueCategories = [...new Set(products.map((p) => p.category))];
-    return uniqueCategories.filter(Boolean).sort();
-  }, [products]);
-
-  const finishes = useMemo(() => {
-    const uniqueFinishes = [...new Set(products.map((p) => p.finish))];
-    return uniqueFinishes.filter(Boolean).sort();
-  }, [products]);
-
-  // Filter logic
-  const filteredData = products.filter((item) => {
-    const matchesSearch =
-      searchQuery === "" ||
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesCategory =
-      selectedCategories.length === 0 || selectedCategories.includes(item.category);
-
-    const matchesFinish =
-      selectedFinishes.length === 0 || selectedFinishes.includes(item.finish);
-
-    const stockStatus = item.stock === 0 ? "out" : item.stock <= 30 ? "low" : "good";
-    const matchesStatus =
-      selectedStatus.length === 0 ||
-      (selectedStatus.includes("in-stock") && stockStatus === "good") ||
-      (selectedStatus.includes("low-stock") && stockStatus === "low") ||
-      (selectedStatus.includes("out-of-stock") && stockStatus === "out");
-
-    const itemSupplierType = item.supplierType ?? "own";
-    const matchesSupplierType =
-      selectedSupplierTypes.length === 0 ||
-      selectedSupplierTypes.includes(itemSupplierType);
-
-    return matchesSearch && matchesCategory && matchesFinish && matchesStatus && matchesSupplierType;
-  });
+  const filteredData = products;
 
   const inStock = filteredData.filter((item) => item.stock > 30).length;
   const lowStock = filteredData.filter((item) => item.stock > 0 && item.stock <= 30).length;
   const outOfStock = filteredData.filter((item) => item.stock === 0).length;
 
   const toggleCategory = (category: string) => {
+    setCurrentPage(1);
     setSelectedCategories((prev) =>
       prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
     );
   };
 
   const toggleFinish = (finish: string) => {
+    setCurrentPage(1);
     setSelectedFinishes((prev) =>
       prev.includes(finish) ? prev.filter((f) => f !== finish) : [...prev, finish]
     );
   };
 
   const toggleStatus = (status: string) => {
+    setCurrentPage(1);
     setSelectedStatus((prev) =>
       prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
     );
   };
 
   const toggleSupplierType = (type: string) => {
+    setCurrentPage(1);
     setSelectedSupplierTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
   };
 
   const clearAllFilters = () => {
+    setCurrentPage(1);
     setSearchQuery("");
     setSelectedCategories([]);
     setSelectedFinishes([]);
@@ -687,12 +700,18 @@ export default function ProductsPage() {
                 type="text"
                 placeholder="Search products..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setSearchQuery(e.target.value);
+                }}
                 className="h-9 w-full pl-8 pr-9 text-xs sm:h-10 sm:pl-10 sm:pr-10 sm:text-sm"
               />
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => {
+                    setCurrentPage(1);
+                    setSearchQuery("");
+                  }}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 sm:right-3"
                 >
                   <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -968,7 +987,7 @@ export default function ProductsPage() {
               transition={{ duration: 0.3 }}
               className="mt-4 text-sm text-neutral-600 dark:text-neutral-400"
             >
-              Showing {filteredData.length} of {products.length} products
+              Showing {filteredData.length} of {pagination.total} products
             </motion.div>
           )}
         </motion.div>
@@ -1149,10 +1168,20 @@ export default function ProductsPage() {
             </div>
             <span className="text-xs font-bold text-neutral-900 dark:text-white sm:text-sm">
               Total: {filteredData.length}{" "}
-              {activeFiltersCount > 0 ? `of ${products.length}` : ""} Products
+              {activeFiltersCount > 0 ? `of ${pagination.total}` : ""} Products
             </span>
           </div>
         </motion.div>
+        <PaginationControls
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          pageSize={pagination.limit}
+          currentCount={filteredData.length}
+          itemLabel="products"
+          onPageChange={setCurrentPage}
+          disabled={isLoading}
+        />
       </motion.div>
 
       {/* Add/Edit Product Dialog */}

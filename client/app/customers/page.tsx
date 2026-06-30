@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Edit, Plus, Search, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -35,6 +36,15 @@ type Stats = {
   inactive: number;
 };
 
+const PAGE_SIZE = 10;
+
+type PaginationState = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -43,18 +53,43 @@ export default function CustomersPage() {
   const [stats, setStats] = useState<Stats>({ total: 0, active: 0, inactive: 0 });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
 
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    const timeout = window.setTimeout(() => {
+      fetchCustomers();
+    }, searchQuery ? 300 : 0);
+
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchQuery]);
 
   const fetchCustomers = async () => {
     try {
       setIsLoading(true);
-      const response = await api.getCustomers();
+      const response = await api.getCustomers({
+        search: searchQuery.trim() || undefined,
+        sortBy: "createdAt",
+        sortOrder: "desc",
+        page: currentPage,
+        limit: PAGE_SIZE,
+      });
 
       if (response.success && response.customers) {
         setCustomers(response.customers as Customer[]);
+        const responsePagination = response.pagination as Partial<PaginationState> | undefined;
+        setPagination({
+          page: responsePagination?.page ?? currentPage,
+          limit: responsePagination?.limit ?? PAGE_SIZE,
+          total: responsePagination?.total ?? response.total ?? response.count ?? response.customers.length,
+          totalPages: responsePagination?.totalPages ?? 1,
+        });
         if (response.stats) setStats(response.stats as Stats);
       }
     } catch (error) {
@@ -65,18 +100,7 @@ export default function CustomersPage() {
     }
   };
 
-  const filteredCustomers = customers.filter(
-    (customer) =>
-      searchQuery === "" ||
-      customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.customerNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.phone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (customer.ccEmails || []).some((email) =>
-        email.toLowerCase().includes(searchQuery.toLowerCase())
-      ) ||
-      (customer.abn && customer.abn.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredCustomers = customers;
 
   const handleConfirmDeleteCustomer = async () => {
     if (!customerToDelete) return;
@@ -157,12 +181,18 @@ export default function CustomersPage() {
               type="text"
               placeholder="Search by customer name, phone, email, or ABN..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setCurrentPage(1);
+                setSearchQuery(e.target.value);
+              }}
               className="pl-10"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setCurrentPage(1);
+                  setSearchQuery("");
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
               >
                 <X className="h-4 w-4" />
@@ -171,7 +201,7 @@ export default function CustomersPage() {
           </div>
           {searchQuery && (
             <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
-              Showing {filteredCustomers.length} of {customers.length} customers
+              Showing {filteredCustomers.length} of {pagination.total} customers
             </p>
           )}
         </motion.div>
@@ -318,11 +348,21 @@ export default function CustomersPage() {
                 <span>Inactive: <span className="font-bold text-neutral-600 dark:text-neutral-400">{stats.inactive}</span></span>
               </div>
               <span className="font-bold text-neutral-900 dark:text-white">
-                Showing: {filteredCustomers.length} {searchQuery ? `of ${customers.length}` : ""} Customers
+                Showing: {filteredCustomers.length} {searchQuery ? `of ${pagination.total}` : ""} Customers
               </span>
             </div>
           </motion.div>
         )}
+        <PaginationControls
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          pageSize={pagination.limit}
+          currentCount={filteredCustomers.length}
+          itemLabel="customers"
+          onPageChange={setCurrentPage}
+          disabled={isLoading}
+        />
       </motion.div>
 
       <DeleteConfirmDialog

@@ -7,6 +7,7 @@ import { Receipt, Download, Printer, ArrowLeft, DollarSign, Mail } from "lucide-
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { RecordAttachmentsPanel, type StoredAttachment } from "@/components/record-attachments-panel";
 
 type InvoiceItem = {
   _id?: string;
@@ -50,6 +51,7 @@ type InvoiceData = {
   amountPaid?: number;
   remainingBalance?: number;
   paymentStatus?: string;
+  attachments?: StoredAttachment[];
 };
 
 function calcLineTotalExGst(item: InvoiceItem): number {
@@ -603,6 +605,14 @@ export default function InvoiceDetailPage() {
                   </span>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-8">
+              <RecordAttachmentsPanel
+                storedAttachments={invoice.attachments || []}
+                newAttachments={[]}
+                title="Attachments"
+              />
             </div>
 
             {/* Payment & Status */}

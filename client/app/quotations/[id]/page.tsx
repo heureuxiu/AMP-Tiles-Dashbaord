@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { RecordAttachmentsPanel, type StoredAttachment } from "@/components/record-attachments-panel";
 
 type QuotationStatus =
   | "draft"
@@ -60,6 +61,7 @@ type QuotationData = {
   customerName: string;
   customerPhone?: string;
   customerEmail?: string;
+  billingAddress?: string;
   customerAddress?: string;
   deliveryAddress?: string;
   reference?: string;
@@ -78,6 +80,7 @@ type QuotationData = {
   convertedToInvoice?: boolean;
   clientResponseRemarks?: string;
   clientRespondedAt?: string;
+  attachments?: StoredAttachment[];
 };
 
 function calcLineTotalExGst(item: QuotationItem): number {
@@ -469,10 +472,18 @@ export default function ViewQuotationPage() {
                   </div>
                   <div className="sm:col-span-2">
                     <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                      Billing Address
+                    </label>
+                    <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
+                      {quotation.billingAddress || quotation.customerAddress || "N/A"}
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
                       Delivery Address
                     </label>
                     <p className="mt-1 text-base font-semibold text-neutral-900 dark:text-white">
-                      {quotation.deliveryAddress || quotation.customerAddress || "N/A"}
+                      {quotation.deliveryAddress || quotation.billingAddress || quotation.customerAddress || "N/A"}
                     </p>
                   </div>
                   <div>
@@ -544,6 +555,11 @@ export default function ViewQuotationPage() {
                   </p>
                 </div>
               )}
+              <RecordAttachmentsPanel
+                storedAttachments={quotation.attachments || []}
+                newAttachments={[]}
+                title="Attachments"
+              />
             </div>
           </motion.div>
 

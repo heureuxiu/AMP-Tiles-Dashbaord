@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Users, Edit, Search, X, Plus, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -34,6 +35,15 @@ type Stats = {
   inactive: number;
 };
 
+const PAGE_SIZE = 10;
+
+type PaginationState = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export default function SuppliersPage() {
   const router = useRouter();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -46,18 +56,43 @@ export default function SuppliersPage() {
   });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
 
   useEffect(() => {
-    fetchSuppliers();
-  }, []);
+    const timeout = window.setTimeout(() => {
+      fetchSuppliers();
+    }, searchQuery ? 300 : 0);
+
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchQuery]);
 
   const fetchSuppliers = async () => {
     try {
       setIsLoading(true);
-      const response = await api.getSuppliers();
+      const response = await api.getSuppliers({
+        search: searchQuery.trim() || undefined,
+        sortBy: "createdAt",
+        sortOrder: "desc",
+        page: currentPage,
+        limit: PAGE_SIZE,
+      });
       
       if (response.success && response.suppliers) {
         setSuppliers(response.suppliers as Supplier[]);
+        const responsePagination = response.pagination as Partial<PaginationState> | undefined;
+        setPagination({
+          page: responsePagination?.page ?? currentPage,
+          limit: responsePagination?.limit ?? PAGE_SIZE,
+          total: responsePagination?.total ?? response.total ?? response.count ?? response.suppliers.length,
+          totalPages: responsePagination?.totalPages ?? 1,
+        });
         if (response.stats) {
           setStats(response.stats as Stats);
         }
@@ -72,15 +107,7 @@ export default function SuppliersPage() {
     }
   };
 
-  // Filter suppliers based on search
-  const filteredSuppliers = suppliers.filter(
-    (supplier) =>
-      searchQuery === "" ||
-      supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      supplier.supplierNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (supplier.phone && supplier.phone.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (supplier.email && supplier.email.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredSuppliers = suppliers;
 
   const handleView = (id: string) => {
     router.push(`/suppliers/${id}`);
@@ -183,12 +210,18 @@ export default function SuppliersPage() {
               type="text"
               placeholder="Search by supplier name, phone, or email..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setCurrentPage(1);
+                setSearchQuery(e.target.value);
+              }}
               className="pl-10"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setCurrentPage(1);
+                  setSearchQuery("");
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
               >
                 <X className="h-4 w-4" />
@@ -197,7 +230,7 @@ export default function SuppliersPage() {
           </div>
           {searchQuery && (
             <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
-              Showing {filteredSuppliers.length} of {suppliers.length} suppliers
+              Showing {filteredSuppliers.length} of {pagination.total} suppliers
             </p>
           )}
         </motion.div>
@@ -359,11 +392,21 @@ export default function SuppliersPage() {
               </div>
               <span className="font-bold text-neutral-900 dark:text-white">
                 Showing: {filteredSuppliers.length}{" "}
-                {searchQuery ? `of ${suppliers.length}` : ""} Suppliers
+                {searchQuery ? `of ${pagination.total}` : ""} Suppliers
               </span>
             </div>
           </motion.div>
         )}
+        <PaginationControls
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          pageSize={pagination.limit}
+          currentCount={filteredSuppliers.length}
+          itemLabel="suppliers"
+          onPageChange={setCurrentPage}
+          disabled={isLoading}
+        />
       </motion.div>
 
       <DeleteConfirmDialog

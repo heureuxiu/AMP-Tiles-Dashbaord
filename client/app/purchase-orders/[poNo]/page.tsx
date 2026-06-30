@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, CheckCircle, ArrowLeft, AlertCircle, Download } from "lucide-react";
+import { ShoppingCart, CheckCircle, ArrowLeft, AlertCircle, Download, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -168,6 +168,11 @@ export default function PurchaseOrderDetailPage() {
     router.push("/purchase-orders");
   };
 
+  const handleEdit = () => {
+    if (!poData) return;
+    router.push(`/purchase-orders/create?edit=${poData._id}`);
+  };
+
   const getStatusBadge = (status: POStatus) => {
     const map: Record<POStatus, { label: string; className: string }> = {
       draft: { label: "Draft", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
@@ -284,6 +289,14 @@ export default function PurchaseOrderDetailPage() {
 
           {!["received", "cancelled"].includes(poData.status) && (
             <>
+              <Button
+                variant="outline"
+                onClick={handleEdit}
+                className="flex items-center gap-2"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit
+              </Button>
               <Button
                 onClick={() => handleMarkReceived(true)}
                 disabled={receiveMode !== null}

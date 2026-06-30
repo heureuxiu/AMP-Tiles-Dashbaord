@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Receipt, Eye, Download, Search, X, Trash2, Pencil, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -64,6 +65,15 @@ type Stats = {
   pendingAmount: number;
 };
 
+const PAGE_SIZE = 10;
+
+type PaginationState = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export default function InvoicesPage() {
   const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -84,18 +94,43 @@ export default function InvoicesPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationState>({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
 
   useEffect(() => {
-    fetchInvoices();
-  }, []);
+    const timeout = window.setTimeout(() => {
+      fetchInvoices();
+    }, searchQuery ? 300 : 0);
+
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchQuery]);
 
   const fetchInvoices = async () => {
     try {
       setIsLoading(true);
-      const response = await api.getInvoices({ sortBy: 'createdAt', sortOrder: 'desc' });
+      const response = await api.getInvoices({
+        search: searchQuery.trim() || undefined,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+        page: currentPage,
+        limit: PAGE_SIZE,
+      });
       
       if (response.success && response.invoices) {
         setInvoices(response.invoices as Invoice[]);
+        const responsePagination = response.pagination as Partial<PaginationState> | undefined;
+        setPagination({
+          page: responsePagination?.page ?? currentPage,
+          limit: responsePagination?.limit ?? PAGE_SIZE,
+          total: responsePagination?.total ?? response.total ?? response.count ?? response.invoices.length,
+          totalPages: responsePagination?.totalPages ?? 1,
+        });
         if (response.stats) {
           setStats(response.stats as Stats);
         }
@@ -108,15 +143,7 @@ export default function InvoicesPage() {
     }
   };
 
-  // Filter invoices based on search
-  const filteredInvoices = invoices.filter(
-    (inv) =>
-      searchQuery === "" ||
-      inv.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (inv.customerPhone && inv.customerPhone.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (inv.customerEmail && inv.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredInvoices = invoices;
 
   const handleViewInvoice = (id: string) => {
     router.push(`/invoices/${id}`);
@@ -158,18 +185,20 @@ export default function InvoicesPage() {
         toast.success("Invoice deleted", {
           description: `${invoiceToDelete.invoiceNumber} has been removed`,
         });
+        setInvoiceToDelete(null);
         fetchInvoices();
-      } else {
-        toast.error("Failed to delete invoice");
-        throw new Error();
+        return;
       }
+      throw new Error(response.message || "Failed to delete invoice");
     } catch (error) {
-      if (error instanceof Error && error.message !== "") {
-        toast.error("Failed to delete invoice", {
-          description: error.message,
-        });
-      }
-      throw error;
+      const message =
+        error instanceof Error && error.message !== ""
+          ? error.message
+          : "Failed to delete invoice";
+      toast.error("Failed to delete invoice", {
+        description: message,
+      });
+      throw error instanceof Error ? error : new Error(message);
     }
   };
 
@@ -274,12 +303,18 @@ export default function InvoicesPage() {
               type="text"
               placeholder="Search by Invoice No or Customer Name..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setCurrentPage(1);
+                setSearchQuery(e.target.value);
+              }}
               className="pl-10"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setCurrentPage(1);
+                  setSearchQuery("");
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
               >
                 <X className="h-4 w-4" />
@@ -288,7 +323,7 @@ export default function InvoicesPage() {
           </div>
           {searchQuery && (
             <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
-              Showing {filteredInvoices.length} of {invoices.length} invoices
+              Showing {filteredInvoices.length} of {pagination.total} invoices
             </p>
           )}
         </motion.div>
@@ -532,11 +567,21 @@ export default function InvoicesPage() {
               </div>
               <span className="font-bold text-neutral-900 dark:text-white">
                 Total: {filteredInvoices.length}{" "}
-                {searchQuery ? `of ${invoices.length}` : ""} Invoices
+                {searchQuery ? `of ${pagination.total}` : ""} Invoices
               </span>
             </div>
           </motion.div>
         )}
+        <PaginationControls
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          pageSize={pagination.limit}
+          currentCount={filteredInvoices.length}
+          itemLabel="invoices"
+          onPageChange={setCurrentPage}
+          disabled={isLoading}
+        />
       </motion.div>
 
       <DeleteConfirmDialog

@@ -30,17 +30,14 @@ export function RecentActivity() {
 
   const fetchRecentData = useCallback(async () => {
     try {
-      const [quotationsResponse, invoicesResponse] = await Promise.all([
-        api.getQuotations({ sortBy: 'createdAt', sortOrder: 'desc', limit: 5 }),
-        api.getInvoices({ sortBy: 'createdAt', sortOrder: 'desc', limit: 5 }),
-      ]);
+      const response = await api.getDashboardOverview();
       
-      if (quotationsResponse.success && quotationsResponse.quotations) {
-        setRecentQuotations(quotationsResponse.quotations as Quotation[]);
+      if (response.success && response.recentQuotations) {
+        setRecentQuotations(response.recentQuotations as Quotation[]);
       }
       
-      if (invoicesResponse.success && invoicesResponse.invoices) {
-        setRecentInvoices(invoicesResponse.invoices as Invoice[]);
+      if (response.success && response.recentInvoices) {
+        setRecentInvoices(response.recentInvoices as Invoice[]);
       }
     } catch (error) {
       console.error("Failed to fetch recent data:", error);
