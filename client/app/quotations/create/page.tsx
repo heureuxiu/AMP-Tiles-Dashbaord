@@ -614,7 +614,9 @@
       return "Sq Meter";
     };
     const getStockUnitLabel = (product?: Product) => product?.unit || "boxes";
-    const isStockRestrictedProduct = (product?: Product) => Boolean(product);
+    const isStockRestrictedProduct = () => false;
+    const hasUnavailableSupplierStock = (product?: Product) =>
+      product?.supplierType === "third-party" && Number(product.stock ?? 0) <= 0;
 
     const getMaxQuantityForItem = (
       currentItems: QuotationItem[],
@@ -702,6 +704,21 @@
       }
 
       return null;
+    };
+
+    const getSupplierStockWarningMessage = (candidateItems: QuotationItem[]) => {
+      const productNames = Array.from(
+        new Set(
+          candidateItems
+            .map((item) => getProduct(item.product))
+            .filter((product): product is Product => Boolean(product && hasUnavailableSupplierStock(product)))
+            .map((product) => product.name)
+        )
+      );
+
+      if (productNames.length === 0) return null;
+
+      return `${productNames.join(", ")} currently has no available supplier stock. Quote can still be created.`;
     };
 
     const handleAddItem = () => {
@@ -879,6 +896,13 @@
           description: stockValidationMessage,
         });
         return;
+      }
+
+      const supplierStockWarningMessage = getSupplierStockWarningMessage(validItems);
+      if (supplierStockWarningMessage) {
+        toast.warning("Supplier stock unavailable", {
+          description: supplierStockWarningMessage,
+        });
       }
 
       try {
@@ -1406,11 +1430,13 @@
                       item.product && Number.isFinite(maxQuantityForItem)
                         ? maxQuantityForItem
                         : undefined;
+                    const showSupplierStockWarning = hasUnavailableSupplierStock(product);
                     const hasTileInfo =
                       product &&
                       ((product.tilesPerBox ?? 0) > 0 ||
                         (product.coveragePerBox ?? 0) > 0 ||
-                        product.stock != null);
+                        product.stock != null ||
+                        showSupplierStockWarning);
                     const estimatedBoxes = getBoxesFromSqm(item.quantity, product);
                     const rowProducts = getProductsForSupplier(item.supplierId);
                     const isCurrentSupplierLoading = Boolean(
@@ -1630,7 +1656,12 @@
                               <span>Available to quote: <strong className="text-neutral-700 dark:text-neutral-300">{formatStockQty(maxQuantityForItem)}</strong> sqm</span>
                             )}
                             {!isStockRestricted && item.product && (
-                              <span>Stock check: <strong className="text-neutral-700 dark:text-neutral-300">{product?.supplierType === "own" ? "Enabled" : "Skipped (third-party)"}</strong></span>
+                              <span>Stock check: <strong className="text-neutral-700 dark:text-neutral-300">Skipped at quote stage</strong></span>
+                            )}
+                            {showSupplierStockWarning && (
+                              <span className="text-amber-600 dark:text-amber-400">
+                                Supplier stock: <strong>No available stock</strong>
+                              </span>
                             )}
                           </div>
                         )}

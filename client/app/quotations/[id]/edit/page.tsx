@@ -544,7 +544,9 @@ export default function EditQuotationPage() {
     return "Sq Meter";
   };
   const getStockUnitLabel = (product?: Product) => product?.unit || "boxes";
-  const isStockRestrictedProduct = (product?: Product) => Boolean(product);
+  const isStockRestrictedProduct = () => false;
+  const hasUnavailableSupplierStock = (product?: Product) =>
+    product?.supplierType === "third-party" && Number(product.stock ?? 0) <= 0;
 
   const getMaxQuantityForItem = (
     currentItems: QuotationItem[],
@@ -632,6 +634,21 @@ export default function EditQuotationPage() {
     }
 
     return null;
+  };
+
+  const getSupplierStockWarningMessage = (candidateItems: QuotationItem[]) => {
+    const productNames = Array.from(
+      new Set(
+        candidateItems
+          .map((item) => getProduct(item.product))
+          .filter((product): product is Product => Boolean(product && hasUnavailableSupplierStock(product)))
+          .map((product) => product.name)
+      )
+    );
+
+    if (productNames.length === 0) return null;
+
+    return `${productNames.join(", ")} currently has no available supplier stock. Quote can still be updated.`;
   };
 
   const handleAddItem = () => {
@@ -786,6 +803,13 @@ export default function EditQuotationPage() {
         description: stockValidationMessage,
       });
       return;
+    }
+
+    const supplierStockWarningMessage = getSupplierStockWarningMessage(validItems);
+    if (supplierStockWarningMessage) {
+      toast.warning("Supplier stock unavailable", {
+        description: supplierStockWarningMessage,
+      });
     }
 
     try {
@@ -1242,11 +1266,13 @@ export default function EditQuotationPage() {
                           item.product && Number.isFinite(maxQuantityForItem)
                             ? maxQuantityForItem
                             : undefined;
+                        const showSupplierStockWarning = hasUnavailableSupplierStock(product);
                         const hasTileInfo =
                           product &&
                           ((product.tilesPerBox ?? 0) > 0 ||
                             (product.coveragePerBox ?? 0) > 0 ||
-                            (product.stock ?? 0) > 0);
+                            product.stock != null ||
+                            showSupplierStockWarning);
                         const estimatedBoxes = getBoxesFromSqm(item.quantity, product);
                         return (
                           <Fragment key={item.id}>
@@ -1429,7 +1455,12 @@ export default function EditQuotationPage() {
                                   )}
                                   {!isStockRestricted && item.product && (
                                     <span className="mr-4">
-                                      Stock check: <strong>Skipped (third-party)</strong>
+                                      Stock check: <strong>Skipped at quote stage</strong>
+                                    </span>
+                                  )}
+                                  {showSupplierStockWarning && (
+                                    <span className="mr-4 text-amber-600 dark:text-amber-400">
+                                      Supplier stock: <strong>No available stock</strong>
                                     </span>
                                   )}
                                 </td>
