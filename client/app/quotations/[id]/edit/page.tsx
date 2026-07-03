@@ -544,7 +544,10 @@ export default function EditQuotationPage() {
     return "Sq Meter";
   };
   const getStockUnitLabel = (product?: Product) => product?.unit || "boxes";
-  const isStockRestrictedProduct = () => false;
+  const isStockRestrictedProduct = (product?: Product) => {
+    void product;
+    return false;
+  };
   const hasUnavailableSupplierStock = (product?: Product) =>
     product?.supplierType === "third-party" && Number(product.stock ?? 0) <= 0;
 
