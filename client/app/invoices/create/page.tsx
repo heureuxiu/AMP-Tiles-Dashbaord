@@ -10,7 +10,9 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { RecordAttachmentsPanel } from "@/components/record-attachments-panel";
 
-const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece", "LM"] as const;
+const UNIT_TYPES = ["Sq Meter", "LM", "Piece"] as const;
+type PricingUnit = "per_box" | "per_sqft" | "per_sqm" | "per_piece";
+const SQFT_PER_SQM = 10.764;
 const PAYMENT_METHODS = [
   { value: "", label: "— Select —" },
   { value: "cash", label: "Cash" },
@@ -32,8 +34,10 @@ type Product = {
   name: string;
   price?: number;
   retailPrice?: number;
+  pricingUnit?: PricingUnit;
   sku: string;
   stock: number;
+  tilesPerBox?: number | null;
   coveragePerBox?: number | null;
   coveragePerBoxUnit?: string;
   taxPercent?: number | null;
@@ -73,8 +77,7 @@ const normalizeUnitTypeFromProduct = (unit?: string) => {
   const normalized = String(unit || "").trim().toLowerCase();
   if (normalized === "lm" || normalized.includes("linear")) return "LM";
   if (normalized.includes("piece") || normalized === "pcs" || normalized === "pc") return "Piece";
-  if (normalized.includes("sqm")) return "Sq Meter";
-  return "Box";
+  return "Sq Meter";
 };
 
 type InvoiceItem = {
@@ -87,7 +90,7 @@ type InvoiceItem = {
   discountPercent: number;
   taxPercent: number;
   lineTotal: number;
-  coverageInput: string; // for tiles: user enters coverage (sqm or sq ft), we compute quantity
+  coverageInput: string;
 };
 
 function calcLineTotal(item: InvoiceItem): number {
@@ -96,18 +99,124 @@ function calcLineTotal(item: InvoiceItem): number {
   return Math.round(afterDisc * 100) / 100;
 }
 
-function getBoxesFromCoverage(
-  coverageValue: number,
-  unitType: string,
-  product: Product
-): number {
-  const cov = product.coveragePerBox;
-  const covUnit = (product.coveragePerBoxUnit || "sqft").toLowerCase();
-  if (!cov || cov <= 0) return 0;
-  let coverageInSqm = coverageValue;
-  if (unitType === "Sq Ft") coverageInSqm = coverageValue / 10.764;
-  const sqmPerBox = covUnit === "sqm" ? cov : cov / 10.764;
-  return Math.ceil(coverageInSqm / sqmPerBox) || 0;
+function roundQty(value: number): number {
+  return Math.round((Number(value) || 0) * 1000) / 1000;
+}
+
+function normalizeCoverageUnit(
+  rawUnit?: string | null,
+  pricingUnit?: PricingUnit
+): "sqm" | "sqft" {
+  const normalized = String(rawUnit || "")
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "");
+
+  if (
+    normalized.includes("sqm") ||
+    normalized.includes("sqmeter") ||
+    normalized.includes("sqmetre") ||
+    normalized.includes("m2") ||
+    normalized.includes("m²")
+  ) {
+    return "sqm";
+  }
+
+  if (
+    normalized.includes("sqft") ||
+    normalized.includes("sqfeet") ||
+    normalized.includes("ft2") ||
+    normalized.includes("ft²")
+  ) {
+    return "sqft";
+  }
+
+  if (pricingUnit === "per_sqm") return "sqm";
+  if (pricingUnit === "per_sqft") return "sqft";
+  return "sqft";
+}
+
+function getSqmPerBox(product?: Product): number {
+  if (!product) return 0;
+  const cov = Number(product.coveragePerBox) || 0;
+  if (cov <= 0) return 0;
+  const covUnit = normalizeCoverageUnit(product.coveragePerBoxUnit, product.pricingUnit);
+  return covUnit === "sqm" ? cov : cov / SQFT_PER_SQM;
+}
+
+function getTilesPerBox(product?: Product): number {
+  if (!product) return 0;
+  const tilesPerBox = Number(product.tilesPerBox) || 0;
+  return tilesPerBox > 0 ? tilesPerBox : 0;
+}
+
+function getSqmPerPiece(product?: Product): number {
+  const sqmPerBox = getSqmPerBox(product);
+  const tilesPerBox = getTilesPerBox(product);
+  if (sqmPerBox <= 0 || tilesPerBox <= 0) return 0;
+  return sqmPerBox / tilesPerBox;
+}
+
+function getRatePerSqm(product?: Product): number {
+  if (!product) return 0;
+
+  const baseRate = Number(product.retailPrice ?? product.price) || 0;
+  if (baseRate <= 0) return 0;
+
+  const pricingUnit = product.pricingUnit || "per_box";
+  if (pricingUnit === "per_sqm") return baseRate;
+  if (pricingUnit === "per_sqft") return baseRate * SQFT_PER_SQM;
+
+  const sqmPerBox = getSqmPerBox(product);
+  if (pricingUnit === "per_box") {
+    return sqmPerBox > 0 ? baseRate / sqmPerBox : baseRate;
+  }
+
+  const sqmPerPiece = getSqmPerPiece(product);
+  if (pricingUnit === "per_piece") {
+    return sqmPerPiece > 0 ? baseRate / sqmPerPiece : baseRate;
+  }
+
+  return baseRate;
+}
+
+function getBoxesFromSqm(sqmValue: number, product?: Product): number | null {
+  const sqmPerBox = getSqmPerBox(product);
+  if (sqmPerBox <= 0) return null;
+  if (!Number.isFinite(sqmValue) || sqmValue <= 0) return null;
+  return sqmValue / sqmPerBox;
+}
+
+function formatQty(value: number): string {
+  const rounded = roundQty(value);
+  if (!Number.isFinite(rounded) || rounded <= 0) return "";
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(3).replace(/\.?0+$/, "");
+}
+
+function normalizeItemUnitType(rawUnitType?: string): "sqm" | "piece" | "lm" {
+  const normalized = String(rawUnitType || "sqm")
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "");
+
+  if (normalized.includes("piece")) return "piece";
+  if (normalized === "lm" || normalized.includes("linearmeter") || normalized.includes("linearmetre")) return "lm";
+  return "sqm";
+}
+
+function getCoverageSqmForPayload(
+  item: InvoiceItem,
+  product?: Product
+): number | undefined {
+  if (!product) return undefined;
+  const quantity = Number(item.quantity) || 0;
+  if (quantity <= 0) return undefined;
+  const itemUnit = normalizeItemUnitType(item.unitType);
+  if (itemUnit === "lm") return undefined;
+  if (itemUnit === "piece") {
+    const sqmPerPiece = getSqmPerPiece(product);
+    return sqmPerPiece > 0 ? roundQty(quantity * sqmPerPiece) : undefined;
+  }
+  return roundQty(quantity);
 }
 
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
@@ -159,7 +268,7 @@ export default function CreateInvoicePage() {
       id: "1",
       product: "",
       productName: "",
-      unitType: "Box",
+      unitType: "Sq Meter",
       quantity: 0,
       rate: 0,
       discountPercent: 0,
@@ -233,7 +342,7 @@ export default function CreateInvoicePage() {
         id: Date.now().toString(),
         product: "",
         productName: "",
-        unitType: "Box",
+        unitType: "Sq Meter",
         quantity: 0,
         rate: 0,
         discountPercent: 0,
@@ -255,7 +364,7 @@ export default function CreateInvoicePage() {
   const handleProductChange = (itemId: string, productId: string) => {
     const product = products.find((p) => p._id === productId);
     if (!product) return;
-    const rate = product.retailPrice ?? product.price ?? 0;
+    const rate = getRatePerSqm(product);
     const taxPercent = product.taxPercent ?? 10;
     setItems(
       items.map((item) =>
@@ -265,6 +374,7 @@ export default function CreateInvoicePage() {
               product: product._id,
               productName: product.name,
               unitType: normalizeUnitTypeFromProduct(product.unit),
+              coverageInput: "",
               rate,
               taxPercent,
               lineTotal: calcLineTotal({
@@ -296,45 +406,8 @@ export default function CreateInvoicePage() {
         ) {
           next.lineTotal = calcLineTotal(next);
         }
-        if (field === "coverageInput" && typeof value === "string") {
-          const num = parseFloat(value) || 0;
-          const product = getProduct(item.product);
-          if (
-            product &&
-            (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") &&
-            num > 0
-          ) {
-            next.quantity = getBoxesFromCoverage(num, item.unitType, product);
-            next.lineTotal = calcLineTotal({ ...next, quantity: next.quantity });
-          }
-        }
         return next;
       })
-    );
-  };
-
-  const handleCoverageBlur = (itemId: string) => {
-    const item = items.find((i) => i.id === itemId);
-    if (!item || !item.coverageInput) return;
-    const product = getProduct(item.product);
-    if (
-      !product ||
-      (item.unitType !== "Sq Meter" && item.unitType !== "Sq Ft")
-    )
-      return;
-    const num = parseFloat(item.coverageInput) || 0;
-    if (num <= 0) return;
-    const boxes = getBoxesFromCoverage(num, item.unitType, product);
-    setItems(
-      items.map((i) =>
-        i.id === itemId
-          ? {
-              ...i,
-              quantity: boxes,
-              lineTotal: calcLineTotal({ ...i, quantity: boxes }),
-            }
-          : i
-      )
     );
   };
 
@@ -390,6 +463,7 @@ export default function CreateInvoicePage() {
           rate: i.rate,
           discountPercent: i.discountPercent || 0,
           taxPercent: i.taxPercent ?? 10,
+          coverageSqm: getCoverageSqmForPayload(i, getProduct(i.product)),
         })),
         notes: notes.trim() || undefined,
         terms: terms.trim() || undefined,
@@ -659,7 +733,6 @@ export default function CreateInvoicePage() {
                   </h3>
                   <p className="text-sm text-neutral-500 dark:text-neutral-400">
                     Product, Unit Type, Qty, Rate, Disc %, GST, Total ex GST.
-                    Enter coverage (sqm/sq ft) to auto-calc boxes.
                   </p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={handleAddItem} className="gap-2">
@@ -676,10 +749,8 @@ export default function CreateInvoicePage() {
                   <div className="space-y-3">
                     {items.map((item, idx) => {
                       const product = getProduct(item.product);
-                      const showCoverage =
-                        (item.unitType === "Sq Meter" || item.unitType === "Sq Ft") &&
-                        product &&
-                        (product.coveragePerBox ?? 0) > 0;
+                      const estimatedBoxes =
+                        item.unitType === "Sq Meter" ? getBoxesFromSqm(item.quantity, product) : null;
 
                       const fieldCls =
                         "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white dark:focus:border-amp-primary";
@@ -750,29 +821,11 @@ export default function CreateInvoicePage() {
                               <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
                                 Qty <span className="text-red-500">*</span>
                               </label>
-                              {showCoverage ? (
-                                <div className="space-y-1">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    placeholder={item.unitType === "Sq Meter" ? "e.g. 20" : "e.g. 215"}
-                                    value={item.coverageInput}
-                                    onChange={(e) => handleItemChange(item.id, "coverageInput", e.target.value)}
-                                    onBlur={() => handleCoverageBlur(item.id)}
-                                    disabled={isSaving}
-                                    className={fieldCls}
-                                    style={{ MozAppearance: "textfield" } as React.CSSProperties}
-                                  />
-                                  <span className="block text-xs text-neutral-500 dark:text-neutral-400">
-                                    → {item.quantity} box{item.quantity !== 1 ? "es" : ""}
-                                  </span>
-                                </div>
-                              ) : (
+                              <div className="space-y-1">
                                 <input
                                   type="number"
                                   min="0"
-                                  step={item.unitType === "Piece" ? "1" : "0.01"}
+                                  step={item.unitType === "Piece" ? "1" : "0.001"}
                                   placeholder="0"
                                   value={item.quantity || ""}
                                   onChange={(e) => handleItemChange(item.id, "quantity", parseFloat(e.target.value) || 0)}
@@ -781,7 +834,12 @@ export default function CreateInvoicePage() {
                                   style={{ MozAppearance: "textfield" } as React.CSSProperties}
                                   required
                                 />
-                              )}
+                                {estimatedBoxes != null && (
+                                  <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                                    ≈ {formatQty(estimatedBoxes) || "0"} boxes
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             <div className="space-y-1">
                               <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
