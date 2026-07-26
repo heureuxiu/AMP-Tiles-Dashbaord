@@ -1036,6 +1036,7 @@ class ApiClient {
       rate: number;
       discountPercent?: number;
       taxPercent?: number;
+      boxesOrdered?: number;
     }>;
     notes?: string;
     terms?: string;
@@ -1062,6 +1063,7 @@ class ApiClient {
       rate: number;
       discountPercent?: number;
       taxPercent?: number;
+      boxesOrdered?: number;
     }>;
     notes?: string;
     terms?: string;

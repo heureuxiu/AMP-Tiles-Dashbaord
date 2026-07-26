@@ -39,6 +39,7 @@ type POItem = {
   taxPercent?: number;
   lineTotal: number;
   coverageSqm?: number;
+  boxesOrdered?: number;
   quantityReceived?: number;
   damagedQuantity?: number;
   batchNumber?: string;
@@ -225,6 +226,9 @@ export default function PurchaseOrderDetailPage() {
   };
 
   const getDisplayBoxes = (item: POItem, qtyOrdered: number) => {
+    const boxesOrdered = Number(item.boxesOrdered);
+    if (Number.isFinite(boxesOrdered) && boxesOrdered > 0) return formatQty(boxesOrdered);
+
     const normalizedUnit = String(item.unitType || "").trim().toLowerCase();
     if (normalizedUnit.includes("box")) return formatQty(qtyOrdered);
 

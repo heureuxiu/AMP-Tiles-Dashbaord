@@ -179,13 +179,6 @@ function getRatePerSqm(product?: Product): number {
   return baseRate;
 }
 
-function getBoxesFromSqm(sqmValue: number, product?: Product): number | null {
-  const sqmPerBox = getSqmPerBox(product);
-  if (sqmPerBox <= 0) return null;
-  if (!Number.isFinite(sqmValue) || sqmValue <= 0) return null;
-  return sqmValue / sqmPerBox;
-}
-
 function formatQty(value: number): string {
   const rounded = roundQty(value);
   if (!Number.isFinite(rounded) || rounded <= 0) return "";
@@ -201,6 +194,25 @@ function normalizeItemUnitType(rawUnitType?: string): "sqm" | "piece" | "lm" {
   if (normalized.includes("piece")) return "piece";
   if (normalized === "lm" || normalized.includes("linearmeter") || normalized.includes("linearmetre")) return "lm";
   return "sqm";
+}
+
+function getBoxesFromQuantity(
+  quantityValue: number,
+  unitType: string,
+  product?: Product
+): number | null {
+  if (!Number.isFinite(quantityValue) || quantityValue <= 0) return null;
+
+  const itemUnit = normalizeItemUnitType(unitType);
+  if (itemUnit === "piece") {
+    const tilesPerBox = getTilesPerBox(product);
+    return tilesPerBox > 0 ? Math.ceil(quantityValue / tilesPerBox) : null;
+  }
+  if (itemUnit === "lm") return null;
+
+  const sqmPerBox = getSqmPerBox(product);
+  if (sqmPerBox <= 0) return null;
+  return Math.ceil(quantityValue / sqmPerBox);
 }
 
 function getCoverageSqmForPayload(
@@ -749,8 +761,7 @@ export default function CreateInvoicePage() {
                   <div className="space-y-3">
                     {items.map((item, idx) => {
                       const product = getProduct(item.product);
-                      const estimatedBoxes =
-                        item.unitType === "Sq Meter" ? getBoxesFromSqm(item.quantity, product) : null;
+                      const estimatedBoxes = getBoxesFromQuantity(item.quantity, item.unitType, product);
 
                       const fieldCls =
                         "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white dark:focus:border-amp-primary";
@@ -836,7 +847,7 @@ export default function CreateInvoicePage() {
                                 />
                                 {estimatedBoxes != null && (
                                   <span className="block text-xs text-neutral-500 dark:text-neutral-400">
-                                    ≈ {formatQty(estimatedBoxes) || "0"} boxes
+                                    No. of boxes: {formatQty(estimatedBoxes) || "0"}
                                   </span>
                                 )}
                               </div>

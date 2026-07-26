@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 
-const UNIT_TYPES = ["Sqm", "LM", "Piece"] as const;
+const UNIT_TYPES = ["Sqm", "Box", "LM", "Piece"] as const;
 const PAYMENT_TERMS = ["", "COD", "Net 7", "Net 15", "Net 30", "Net 60"];
 const CURRENCIES = ["AUD", "USD", "EUR", "GBP"];
 const OWN_PRODUCTS_KEY = "__own_products__";
@@ -26,6 +26,7 @@ type POItem = {
   taxPercent: number;
   lineTotal: number;
   coverageSqm?: number;
+  boxesOrdered?: number;
 };
 
 type Supplier = {
@@ -73,11 +74,13 @@ type PurchaseOrderDetail = {
     taxPercent?: number;
     lineTotal?: number;
     coverageSqm?: number;
+    boxesOrdered?: number;
   }>;
 };
 
 const normalizeUnitLabel = (unit?: string) => {
   const normalized = String(unit || "").trim().toLowerCase();
+  if (normalized.includes("box")) return "Box";
   if (normalized === "lm" || normalized.includes("linear")) return "LM";
   if (normalized.includes("piece") || normalized === "pcs" || normalized === "pc") return "Piece";
   return "Sqm";
@@ -189,6 +192,7 @@ export default function CreatePurchaseOrderPage() {
               taxPercent: Number.isFinite(Number(item.taxPercent)) ? Number(item.taxPercent) : 10,
               lineTotal: Number(item.lineTotal) || 0,
               coverageSqm: item.coverageSqm,
+              boxesOrdered: Number.isFinite(Number(item.boxesOrdered)) ? Number(item.boxesOrdered) : undefined,
             };
           })
         );
@@ -302,6 +306,31 @@ export default function CreatePurchaseOrderPage() {
     return undefined;
   };
 
+  const calcBoxesOrdered = (item: POItem): number | undefined => {
+    const p = getProduct(item.product);
+    const qty = Number(item.quantityOrdered) || 0;
+    if (!p || qty <= 0) return undefined;
+
+    if (item.unitType === "Box") return Math.round(qty * 1000) / 1000;
+
+    if (item.unitType === "Piece") {
+      const tilesPerBox = Number(p.tilesPerBox) || 0;
+      return tilesPerBox > 0 ? Math.ceil(qty / tilesPerBox) : undefined;
+    }
+
+    const coveragePerBox = Number(p.coveragePerBox) || 0;
+    if (coveragePerBox <= 0) return undefined;
+
+    const coverageUnit = String(p.coveragePerBoxUnit || "sqm").toLowerCase();
+    const sqmPerBox = coverageUnit === "sqm" ? coveragePerBox : coveragePerBox * 0.092903;
+    if (sqmPerBox <= 0) return undefined;
+
+    if (item.unitType === "Sqm") return Math.ceil(qty / sqmPerBox);
+    if (item.unitType === "Sq Ft") return Math.ceil((qty * 0.092903) / sqmPerBox);
+
+    return undefined;
+  };
+
   const handleRemoveItem = (id: string) => {
     if (items.length === 1) {
       toast.error("At least one item is required");
@@ -330,6 +359,7 @@ export default function CreatePurchaseOrderPage() {
         }
         updatedItem.lineTotal = calcLineTotal(updatedItem);
         updatedItem.coverageSqm = calcCoverageSqm(updatedItem);
+        updatedItem.boxesOrdered = calcBoxesOrdered(updatedItem);
         return updatedItem;
       })
     );
@@ -370,6 +400,7 @@ export default function CreatePurchaseOrderPage() {
           rate: item.rate,
           discountPercent: item.discountPercent,
           taxPercent: item.taxPercent,
+          boxesOrdered: item.boxesOrdered,
         })),
         notes: notes || undefined,
         terms: terms || undefined,
@@ -413,6 +444,14 @@ export default function CreatePurchaseOrderPage() {
       style: "currency",
       currency: "AUD",
     }).format(amount);
+  };
+
+  const formatQty = (value?: number) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) return "—";
+    const rounded = Math.round(numeric * 1000) / 1000;
+    if (Number.isInteger(rounded)) return String(rounded);
+    return rounded.toFixed(3).replace(/\.?0+$/, "");
   };
 
   return (
@@ -704,8 +743,8 @@ export default function CreatePurchaseOrderPage() {
                   </div>
                 </div>
 
-                {/* Row 2: Qty / Unit Price / Disc% / Tax% / Coverage / Line Total */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {/* Row 2: Qty / Unit Price / Disc% / Tax% / Boxes / Coverage / Line Total */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
                       Quantity Ordered <span className="text-red-500">*</span>
@@ -778,6 +817,14 @@ export default function CreatePurchaseOrderPage() {
                     </label>
                     <div className="flex h-9.5 items-center rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-600 dark:border-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
                       {item.coverageSqm != null ? `${item.coverageSqm} sqm` : "—"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                      No. of Boxes
+                    </label>
+                    <div className="flex h-9.5 items-center rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-900 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white">
+                      {formatQty(item.boxesOrdered)}
                     </div>
                   </div>
                   <div className="space-y-1">

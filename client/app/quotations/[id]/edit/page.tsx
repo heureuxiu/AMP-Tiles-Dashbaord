@@ -274,18 +274,32 @@ function calcLineTotal(item: QuotationItem): number {
   return Math.round(discountedBase * 100) / 100;
 }
 
-function getBoxesFromSqm(sqmValue: number, product?: Product): number | null {
-  const sqmPerBox = getSqmPerBox(product);
-  if (sqmPerBox <= 0) return null;
-  if (!Number.isFinite(sqmValue) || sqmValue <= 0) return null;
-  return sqmValue / sqmPerBox;
-}
-
 function formatQty(value: number): string {
   const rounded = roundQty(value);
   if (!Number.isFinite(rounded) || rounded <= 0) return "";
   if (Number.isInteger(rounded)) return String(rounded);
   return rounded.toFixed(3).replace(/\.?0+$/, "");
+}
+
+function getBoxesFromQuantity(
+  quantityValue: number,
+  unitType: string,
+  product?: Product
+): number | null {
+  if (!Number.isFinite(quantityValue) || quantityValue <= 0) return null;
+
+  const itemUnit = normalizeItemUnitType(unitType);
+  if (itemUnit === "box") return Math.ceil(quantityValue);
+  if (itemUnit === "piece") {
+    const tilesPerBox = getTilesPerBox(product);
+    return tilesPerBox > 0 ? Math.ceil(quantityValue / tilesPerBox) : null;
+  }
+  if (itemUnit === "lm") return null;
+
+  const sqmPerBox = getSqmPerBox(product);
+  if (sqmPerBox <= 0) return null;
+  const sqmValue = itemUnit === "sqft" ? quantityValue / SQFT_PER_SQM : quantityValue;
+  return Math.ceil(sqmValue / sqmPerBox);
 }
 
 function getItemCoverageSqm(product: Product, item: QuotationItem): number | null {
@@ -1276,7 +1290,7 @@ export default function EditQuotationPage() {
                             (product.coveragePerBox ?? 0) > 0 ||
                             product.stock != null ||
                             showSupplierStockWarning);
-                        const estimatedBoxes = getBoxesFromSqm(item.quantity, product);
+                        const estimatedBoxes = getBoxesFromQuantity(item.quantity, item.unitType, product);
                         return (
                           <Fragment key={item.id}>
                             <tr className="border-b border-neutral-100 dark:border-neutral-800">
@@ -1338,7 +1352,7 @@ export default function EditQuotationPage() {
                                   />
                                   {estimatedBoxes != null && (
                                     <span className="text-xs text-neutral-500">
-                                      ≈ {formatQty(estimatedBoxes) || "0"} boxes
+                                      No. of boxes: {formatQty(estimatedBoxes) || "0"}
                                     </span>
                                   )}
                                 </div>
