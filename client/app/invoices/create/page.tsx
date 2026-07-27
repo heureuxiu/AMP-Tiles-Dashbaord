@@ -206,13 +206,13 @@ function getBoxesFromQuantity(
   const itemUnit = normalizeItemUnitType(unitType);
   if (itemUnit === "piece") {
     const tilesPerBox = getTilesPerBox(product);
-    return tilesPerBox > 0 ? Math.ceil(quantityValue / tilesPerBox) : null;
+    return tilesPerBox > 0 ? Math.ceil(quantityValue / tilesPerBox - 1e-9) : null;
   }
   if (itemUnit === "lm") return null;
 
   const sqmPerBox = getSqmPerBox(product);
   if (sqmPerBox <= 0) return null;
-  return Math.ceil(quantityValue / sqmPerBox);
+  return Math.ceil(quantityValue / sqmPerBox - 1e-9);
 }
 
 function getCoverageSqmForPayload(

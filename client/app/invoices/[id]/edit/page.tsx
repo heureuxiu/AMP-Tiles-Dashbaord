@@ -68,7 +68,7 @@ function getBoxesFromCoverage(
   let coverageInSqm = coverageValue;
   if (unitType === "Sq Ft") coverageInSqm = coverageValue / 10.764;
   const sqmPerBox = covUnit === "sqm" ? cov : cov / 10.764;
-  return Math.ceil(coverageInSqm / sqmPerBox) || 0;
+  return Math.ceil(coverageInSqm / sqmPerBox - 1e-9) || 0;
 }
 
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);

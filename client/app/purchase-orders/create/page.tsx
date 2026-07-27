@@ -315,7 +315,7 @@ export default function CreatePurchaseOrderPage() {
 
     if (item.unitType === "Piece") {
       const tilesPerBox = Number(p.tilesPerBox) || 0;
-      return tilesPerBox > 0 ? Math.ceil(qty / tilesPerBox) : undefined;
+      return tilesPerBox > 0 ? Math.ceil(qty / tilesPerBox - 1e-9) : undefined;
     }
 
     const coveragePerBox = Number(p.coveragePerBox) || 0;
@@ -325,8 +325,8 @@ export default function CreatePurchaseOrderPage() {
     const sqmPerBox = coverageUnit === "sqm" ? coveragePerBox : coveragePerBox * 0.092903;
     if (sqmPerBox <= 0) return undefined;
 
-    if (item.unitType === "Sqm") return Math.ceil(qty / sqmPerBox);
-    if (item.unitType === "Sq Ft") return Math.ceil((qty * 0.092903) / sqmPerBox);
+    if (item.unitType === "Sqm") return Math.ceil(qty / sqmPerBox - 1e-9);
+    if (item.unitType === "Sq Ft") return Math.ceil((qty * 0.092903) / sqmPerBox - 1e-9);
 
     return undefined;
   };

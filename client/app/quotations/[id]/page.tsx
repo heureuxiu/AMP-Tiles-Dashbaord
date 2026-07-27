@@ -143,7 +143,7 @@ const getDisplayBoxes = (item: QuotationItem) => {
 
   const coverageUnit = String(item.product?.coveragePerBoxUnit || "").toLowerCase();
   const perBoxSqm = coverageUnit === "sqm" ? coveragePerBox : coveragePerBox / SQFT_PER_SQM;
-  return perBoxSqm > 0 ? formatQty(Math.ceil(coverageSqm / perBoxSqm)) : "-";
+  return perBoxSqm > 0 ? formatQty(Math.ceil(coverageSqm / perBoxSqm - 1e-9)) : "-";
 };
 
   const getItemSku = (item: QuotationItem) => {

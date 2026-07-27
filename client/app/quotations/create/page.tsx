@@ -239,17 +239,17 @@
     if (!Number.isFinite(quantityValue) || quantityValue <= 0) return null;
 
     const itemUnit = normalizeItemUnitType(unitType);
-    if (itemUnit === "box") return Math.ceil(quantityValue);
+    if (itemUnit === "box") return Math.ceil(quantityValue - 1e-9);
     if (itemUnit === "piece") {
       const tilesPerBox = getTilesPerBox(product);
-      return tilesPerBox > 0 ? Math.ceil(quantityValue / tilesPerBox) : null;
+      return tilesPerBox > 0 ? Math.ceil(quantityValue / tilesPerBox - 1e-9) : null;
     }
     if (itemUnit === "lm") return null;
 
     const sqmPerBox = getSqmPerBox(product);
     if (sqmPerBox <= 0) return null;
     const sqmValue = itemUnit === "sqft" ? quantityValue / SQFT_PER_SQM : quantityValue;
-    return Math.ceil(sqmValue / sqmPerBox);
+    return Math.ceil(sqmValue / sqmPerBox - 1e-9);
   }
 
   function getItemCoverageSqm(product: Product, item: QuotationItem): number | null {
