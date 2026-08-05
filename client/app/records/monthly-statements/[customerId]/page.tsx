@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Download, FileText, Receipt, RefreshCcw, UserRound } from "lucide-react";
+import { ArrowLeft, Download, FileText, Mail, Receipt, RefreshCcw, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 type Customer = {
@@ -97,9 +97,21 @@ const companyInfo = {
   accountNumber: "26-722-1347",
 };
 
-function getCurrentMonth() {
+function getCurrentMonthRange() {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0);
+
+  return {
+    startDate: formatDateInput(start),
+    endDate: formatDateInput(end),
+  };
+}
+
+function formatDateInput(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function formatCurrency(value: number) {
@@ -163,13 +175,19 @@ function buildActivityRows(statement: MonthlyStatement): ActivityRow[] {
 export default function MonthlyStatementsPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const customerId = params.customerId as string;
+  const initialRange = getCurrentMonthRange();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [month, setMonth] = useState(getCurrentMonth());
+  const [dateRange, setDateRange] = useState({
+    startDate: searchParams.get("startDate") || initialRange.startDate,
+    endDate: searchParams.get("endDate") || initialRange.endDate,
+  });
   const [statement, setStatement] = useState<MonthlyStatement | null>(null);
   const [isCustomerLoading, setIsCustomerLoading] = useState(true);
   const [isStatementLoading, setIsStatementLoading] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [statementError, setStatementError] = useState("");
 
   useEffect(() => {
@@ -193,15 +211,16 @@ export default function MonthlyStatementsPage() {
   }, [customerId, router]);
 
   const fetchStatement = useCallback(async () => {
-    if (!customerId || !month) {
+    if (!customerId || !dateRange.startDate || !dateRange.endDate) {
       setStatement(null);
+      setStatementError("Select both start and end dates to generate the statement.");
       return;
     }
 
     try {
       setIsStatementLoading(true);
       setStatementError("");
-      const response = await api.getCustomerMonthlyStatement(customerId, month);
+      const response = await api.getCustomerMonthlyStatement(customerId, dateRange);
 
       if (response.success && response.monthlyStatement) {
         setStatement(response.monthlyStatement as MonthlyStatement);
@@ -218,7 +237,7 @@ export default function MonthlyStatementsPage() {
     } finally {
       setIsStatementLoading(false);
     }
-  }, [customerId, month, router]);
+  }, [customerId, dateRange, router]);
 
   useEffect(() => {
     fetchStatement();
@@ -229,11 +248,11 @@ export default function MonthlyStatementsPage() {
 
     try {
       setIsDownloadingPdf(true);
-      const blob = await api.getCustomerMonthlyStatementPdfBlob(customerId, month);
+      const blob = await api.getCustomerMonthlyStatementPdfBlob(customerId, dateRange);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `activity-statement-${selectedCustomer?.name || "customer"}-${month}.pdf`;
+      link.download = `activity-statement-${selectedCustomer?.name || "customer"}-${dateRange.startDate}-to-${dateRange.endDate}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -244,6 +263,31 @@ export default function MonthlyStatementsPage() {
       toast.error("Failed to download PDF", { description: errorMessage });
     } finally {
       setIsDownloadingPdf(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!customerId) return;
+    if (!String(selectedCustomer?.email || "").trim()) {
+      toast.error("Customer email is required to send monthly statement");
+      return;
+    }
+
+    try {
+      setIsSendingEmail(true);
+      const response = await api.sendCustomerMonthlyStatementByEmail(customerId, dateRange);
+      if (response.success && response.emailSent) {
+        toast.success("Monthly statement emailed", {
+          description: response.message || `Statement sent to ${selectedCustomer?.email || "customer"}`,
+        });
+      } else {
+        toast.error("Failed to send monthly statement email");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to send monthly statement email";
+      toast.error("Failed to send email", { description: errorMessage });
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -275,14 +319,35 @@ export default function MonthlyStatementsPage() {
           </p>
         </div>
 
-        <Button
-          onClick={handleDownloadPdf}
-          disabled={!statement || isStatementLoading || isDownloadingPdf}
-          className="shrink-0 gap-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
-        >
-          <Download className="h-4 w-4" />
-          {isDownloadingPdf ? "Downloading..." : "Download PDF"}
-        </Button>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+          <Button
+            onClick={handleSendEmail}
+            disabled={
+              !statement ||
+              isStatementLoading ||
+              isSendingEmail ||
+              !String(selectedCustomer?.email || "").trim()
+            }
+            title={
+              selectedCustomer?.email
+                ? "Send monthly statement by email"
+                : "Add customer email before sending"
+            }
+            className="gap-2 bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+          >
+            <Mail className="h-4 w-4" />
+            {isSendingEmail ? "Sending..." : "Send Email"}
+          </Button>
+
+          <Button
+            onClick={handleDownloadPdf}
+            disabled={!statement || isStatementLoading || isDownloadingPdf}
+            className="gap-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
+          >
+            <Download className="h-4 w-4" />
+            {isDownloadingPdf ? "Downloading..." : "Download PDF"}
+          </Button>
+        </div>
       </div>
 
       <motion.div
@@ -311,14 +376,39 @@ export default function MonthlyStatementsPage() {
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="space-y-2">
-                <Label htmlFor="statementMonth" className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                  Statement Month
+                <Label htmlFor="statementStartDate" className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                  From Date
                 </Label>
                 <Input
-                  id="statementMonth"
-                  type="month"
-                  value={month}
-                  onChange={(event) => setMonth(event.target.value)}
+                  id="statementStartDate"
+                  type="date"
+                  value={dateRange.startDate}
+                  max={dateRange.endDate || undefined}
+                  onChange={(event) =>
+                    setDateRange((currentRange) => ({
+                      ...currentRange,
+                      startDate: event.target.value,
+                    }))
+                  }
+                  className="rounded-lg border-neutral-200 dark:border-neutral-700"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="statementEndDate" className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                  To Date
+                </Label>
+                <Input
+                  id="statementEndDate"
+                  type="date"
+                  value={dateRange.endDate}
+                  min={dateRange.startDate || undefined}
+                  onChange={(event) =>
+                    setDateRange((currentRange) => ({
+                      ...currentRange,
+                      endDate: event.target.value,
+                    }))
+                  }
                   className="rounded-lg border-neutral-200 dark:border-neutral-700"
                 />
               </div>
@@ -449,7 +539,7 @@ function ActivityTable({ rows }: { rows: ActivityRow[] }) {
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-24 text-center text-neutral-500 dark:text-neutral-400">
-                  No transaction activity found for this month.
+                  No transaction activity found for this date range.
                 </TableCell>
               </TableRow>
             ) : (

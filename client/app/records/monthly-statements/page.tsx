@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Eye, FileText, Search, UserRound } from "lucide-react";
+import { Eye, FileText, Mail, Search, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,11 +27,17 @@ type Customer = {
   status?: string;
 };
 
+function getCurrentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export default function MonthlyStatementsCustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [sendingCustomerId, setSendingCustomerId] = useState("");
 
   useEffect(() => {
     const loadCustomers = async () => {
@@ -66,6 +72,30 @@ export default function MonthlyStatementsCustomersPage() {
       );
     });
   }, [customers, searchQuery]);
+
+  const handleSendEmail = async (customer: Customer) => {
+    if (!String(customer.email || "").trim()) {
+      toast.error("Customer email is required to send monthly statement");
+      return;
+    }
+
+    try {
+      setSendingCustomerId(customer._id);
+      const response = await api.sendCustomerMonthlyStatementByEmail(customer._id, getCurrentMonth());
+      if (response.success && response.emailSent) {
+        toast.success("Monthly statement emailed", {
+          description: response.message || `Statement sent to ${customer.email}`,
+        });
+      } else {
+        toast.error("Failed to send monthly statement email");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to send monthly statement email";
+      toast.error("Failed to send email", { description: errorMessage });
+    } finally {
+      setSendingCustomerId("");
+    }
+  };
 
   return (
     <div className="min-w-0 space-y-5 p-3 sm:p-6 lg:p-8">
@@ -169,14 +199,35 @@ export default function MonthlyStatementsCustomersPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        type="button"
-                        onClick={() => router.push(`/records/monthly-statements/${customer._id}`)}
-                        className="gap-2 bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
-                      >
-                        <Eye className="h-4 w-4" />
-                        View Record
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleSendEmail(customer)}
+                          disabled={
+                            sendingCustomerId === customer._id ||
+                            !String(customer.email || "").trim()
+                          }
+                          title={
+                            customer.email
+                              ? "Send monthly statement by email"
+                              : "Add customer email before sending"
+                          }
+                          className="gap-2 whitespace-nowrap"
+                        >
+                          <Mail className="h-4 w-4" />
+                          {sendingCustomerId === customer._id ? "Sending..." : "Send Email"}
+                        </Button>
+
+                        <Button
+                          type="button"
+                          onClick={() => router.push(`/records/monthly-statements/${customer._id}`)}
+                          className="gap-2 whitespace-nowrap bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+                        >
+                          <Eye className="h-4 w-4" />
+                          View Record
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -188,5 +239,3 @@ export default function MonthlyStatementsCustomersPage() {
     </div>
   );
 }
-
-

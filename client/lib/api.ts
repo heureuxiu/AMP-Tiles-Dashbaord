@@ -943,18 +943,34 @@ class ApiClient {
     });
   }
 
-  async getCustomerMonthlyStatement(id: string, month: string) {
-    const query = new URLSearchParams({ month }).toString();
+  private buildCustomerStatementQuery(period: string | { month?: string; startDate?: string; endDate?: string }) {
+    const queryParams = new URLSearchParams();
+    if (typeof period === 'string') {
+      queryParams.append('month', period);
+    } else {
+      if (period.month) queryParams.append('month', period.month);
+      if (period.startDate) queryParams.append('startDate', period.startDate);
+      if (period.endDate) queryParams.append('endDate', period.endDate);
+    }
+
+    return queryParams.toString();
+  }
+
+  async getCustomerMonthlyStatement(id: string, period: string | { month?: string; startDate?: string; endDate?: string }) {
+    const query = this.buildCustomerStatementQuery(period);
     return this.request(`/customers/${id}/monthly-statement?${query}`, {
       method: 'GET',
     });
   }
 
-  async getCustomerMonthlyStatementPdfBlob(id: string, month: string): Promise<Blob> {
+  async getCustomerMonthlyStatementPdfBlob(
+    id: string,
+    period: string | { month?: string; startDate?: string; endDate?: string }
+  ): Promise<Blob> {
     const token = getStoredToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const query = new URLSearchParams({ month }).toString();
+    const query = this.buildCustomerStatementQuery(period);
 
     this.beginLoading();
     try {
@@ -983,6 +999,16 @@ class ApiClient {
     } finally {
       this.endLoading();
     }
+  }
+
+  async sendCustomerMonthlyStatementByEmail(
+    id: string,
+    period: string | { month?: string; startDate?: string; endDate?: string }
+  ) {
+    const query = this.buildCustomerStatementQuery(period);
+    return this.request(`/customers/${id}/monthly-statement/send${query ? `?${query}` : ''}`, {
+      method: 'POST',
+    });
   }
 
   // Purchase Order Management endpoints
