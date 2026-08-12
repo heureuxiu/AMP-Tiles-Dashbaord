@@ -42,6 +42,9 @@ type Product = {
   coveragePerBoxUnit?: string;
   taxPercent?: number | null;
   unit?: string;
+  supplier?: { _id: string; name: string; supplierNumber?: string } | string | null;
+  supplierType?: "third-party" | "own";
+  supplierName?: string;
 };
 
 type Address = {
@@ -82,6 +85,7 @@ const normalizeUnitTypeFromProduct = (unit?: string) => {
 
 type InvoiceItem = {
   id: string;
+  supplierId: string;
   product: string;
   productName: string;
   unitType: string;
@@ -232,6 +236,7 @@ function getCoverageSqmForPayload(
 }
 
 const toCents = (value: number) => Math.round((Number(value) || 0) * 100);
+const OWN_PRODUCTS_KEY = "__own_products__";
 
 function formatAddress(address?: Address): string {
   if (!address) return "";
@@ -252,6 +257,8 @@ export default function CreateInvoicePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [productsBySupplier, setProductsBySupplier] = useState<Record<string, Product[]>>({});
+  const [isLoadingProductsBySupplier, setIsLoadingProductsBySupplier] = useState<Record<string, boolean>>({});
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMode, setSaveMode] = useState<SaveMode>("save");
@@ -278,6 +285,7 @@ export default function CreateInvoicePage() {
   const [items, setItems] = useState<InvoiceItem[]>([
     {
       id: "1",
+      supplierId: "",
       product: "",
       productName: "",
       unitType: "Sq Meter",
@@ -305,6 +313,9 @@ export default function CreateInvoicePage() {
       if (productsRes.success && productsRes.products) setProducts(productsRes.products as Product[]);
       if (customersRes.success && customersRes.customers) setCustomers(customersRes.customers as Customer[]);
       if (suppliersRes.success && suppliersRes.suppliers) setSuppliers(suppliersRes.suppliers as Supplier[]);
+      if (productsRes.success && productsRes.products) {
+        seedProductsBySupplier(productsRes.products as Product[]);
+      }
     } catch (e) {
       console.error(e);
       toast.error("Failed to load form data");
@@ -345,13 +356,106 @@ export default function CreateInvoicePage() {
     setCustomerAddress(formatAddress(supplier.address));
   };
 
-  const getProduct = (id: string) => products.find((p) => p._id === id);
+  const getSupplierKeyForProduct = (product: Product) => {
+    if (product.supplierType === "own") return OWN_PRODUCTS_KEY;
+    if (typeof product.supplier === "string") return product.supplier;
+    if (product.supplier && typeof product.supplier === "object") return product.supplier._id;
+    return product.supplierName || "";
+  };
+
+  const seedProductsBySupplier = (loadedProducts: Product[]) => {
+    const grouped: Record<string, Product[]> = {};
+    for (const product of loadedProducts) {
+      const supplierKey = getSupplierKeyForProduct(product);
+      if (!supplierKey) continue;
+      grouped[supplierKey] = [...(grouped[supplierKey] || []), product];
+    }
+    setProductsBySupplier(grouped);
+  };
+
+  const fetchProductsForSupplier = async (supplierId: string) => {
+    if (!supplierId || productsBySupplier[supplierId]) return;
+    try {
+      setIsLoadingProductsBySupplier((prev) => ({ ...prev, [supplierId]: true }));
+      const response =
+        supplierId === OWN_PRODUCTS_KEY
+          ? await api.getProducts({ status: "active", supplierType: "own" })
+          : await api.getProducts({ status: "active", supplier: supplierId });
+      const supplierProducts =
+        response.success && response.products ? (response.products as Product[]) : [];
+      setProductsBySupplier((prev) => ({ ...prev, [supplierId]: supplierProducts }));
+      setProducts((prev) => {
+        const byId = new Map(prev.map((product) => [product._id, product]));
+        for (const product of supplierProducts) byId.set(product._id, product);
+        return Array.from(byId.values());
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load supplier products";
+      toast.error("Failed to load supplier products", { description: message });
+      setProductsBySupplier((prev) => ({ ...prev, [supplierId]: [] }));
+    } finally {
+      setIsLoadingProductsBySupplier((prev) => ({ ...prev, [supplierId]: false }));
+    }
+  };
+
+  const getProductsForSupplier = (supplierId: string) => {
+    if (!supplierId) return [];
+    return productsBySupplier[supplierId] || [];
+  };
+
+  const mergeProductIntoSupplierCache = (supplierId: string, product: Product) => {
+    if (!supplierId || !product?._id) return;
+    setProductsBySupplier((prev) => {
+      const currentProducts = prev[supplierId] || [];
+      const exists = currentProducts.some((p) => p._id === product._id);
+      return {
+        ...prev,
+        [supplierId]: exists
+          ? currentProducts.map((p) => (p._id === product._id ? product : p))
+          : [...currentProducts, product],
+      };
+    });
+  };
+
+  const getProduct = (id: string) => {
+    if (!id) return undefined;
+    for (const supplierProducts of Object.values(productsBySupplier)) {
+      const found = supplierProducts.find((p) => p._id === id);
+      if (found) return found;
+    }
+    return products.find((p) => p._id === id);
+  };
+
+  const handleItemSupplierChange = (itemId: string, supplierId: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id !== itemId
+          ? item
+          : {
+              ...item,
+              supplierId,
+              product: "",
+              productName: "",
+              unitType: "Sq Meter",
+              quantity: 0,
+              rate: 0,
+              discountPercent: 0,
+              taxPercent: 10,
+              lineTotal: 0,
+              coverageInput: "",
+            }
+      )
+    );
+
+    if (supplierId) fetchProductsForSupplier(supplierId);
+  };
 
   const handleAddItem = () => {
     setItems([
       ...items,
       {
         id: Date.now().toString(),
+        supplierId: "",
         product: "",
         productName: "",
         unitType: "Sq Meter",
@@ -373,8 +477,43 @@ export default function CreateInvoicePage() {
     setItems(items.filter((i) => i.id !== id));
   };
 
-  const handleProductChange = (itemId: string, productId: string) => {
-    const product = products.find((p) => p._id === productId);
+  const handleProductChange = async (itemId: string, productId: string) => {
+    if (!productId) {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id !== itemId
+            ? item
+            : {
+                ...item,
+                product: "",
+                productName: "",
+                coverageInput: "",
+                quantity: 0,
+                rate: 0,
+                taxPercent: 10,
+                lineTotal: 0,
+              }
+        )
+      );
+      return;
+    }
+
+    const currentItem = items.find((item) => item.id === itemId);
+    const supplierProducts = getProductsForSupplier(currentItem?.supplierId || "");
+    const cachedProduct = supplierProducts.find((p) => p._id === productId) || getProduct(productId);
+    let product = cachedProduct;
+    try {
+      const response = await api.getProduct(productId);
+      if (response.success && response.product) {
+        product = response.product as Product;
+        mergeProductIntoSupplierCache(currentItem?.supplierId || "", product);
+      }
+    } catch {
+      if (!cachedProduct) {
+        toast.error("Failed to load selected product");
+        return;
+      }
+    }
     if (!product) return;
     const rate = getRatePerSqm(product);
     const taxPercent = product.taxPercent ?? 10;
@@ -762,6 +901,10 @@ export default function CreateInvoicePage() {
                     {items.map((item, idx) => {
                       const product = getProduct(item.product);
                       const estimatedBoxes = getBoxesFromQuantity(item.quantity, item.unitType, product);
+                      const rowProducts = getProductsForSupplier(item.supplierId);
+                      const isCurrentSupplierLoading = Boolean(
+                        item.supplierId && isLoadingProductsBySupplier[item.supplierId]
+                      );
 
                       const fieldCls =
                         "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none transition-colors focus:border-amp-primary focus:ring-2 focus:ring-amp-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:bg-neutral-700 dark:text-white dark:focus:border-amp-primary";
@@ -788,8 +931,32 @@ export default function CreateInvoicePage() {
                             </Button>
                           </div>
 
-                          {/* Row 1: Product / Unit */}
-                          <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                          {/* Row 1: Supplier / Product / Unit */}
+                          <div className="mb-3 grid gap-3 sm:grid-cols-3">
+                            <div className="space-y-1">
+                              <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                                Supplier
+                              </label>
+                              <select
+                                value={item.supplierId}
+                                onChange={(e) => handleItemSupplierChange(item.id, e.target.value)}
+                                disabled={isSaving || isLoadingData}
+                                className={fieldCls}
+                                required
+                              >
+                                <option value="">
+                                  {isLoadingData ? "Loading..." : "Select supplier"}
+                                </option>
+                                <option value={OWN_PRODUCTS_KEY}>AMP Products</option>
+                                {suppliers.map((supplier) => (
+                                  <option key={supplier._id} value={supplier._id}>
+                                    {supplier.name}
+                                    {supplier.supplierNumber ? ` (${supplier.supplierNumber})` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
                             <div className="space-y-1">
                               <label className="block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
                                 Product <span className="text-red-500">*</span>
@@ -797,14 +964,22 @@ export default function CreateInvoicePage() {
                               <select
                                 value={item.product}
                                 onChange={(e) => handleProductChange(item.id, e.target.value)}
-                                disabled={isSaving}
+                                disabled={isSaving || !item.supplierId || isCurrentSupplierLoading}
                                 className={fieldCls}
                                 required
                               >
-                                <option value="">Select product</option>
-                                {products.map((p) => (
+                                <option value="">
+                                  {!item.supplierId
+                                    ? "Select supplier / AMP products first"
+                                    : isCurrentSupplierLoading
+                                      ? "Loading..."
+                                      : rowProducts.length === 0
+                                        ? "No products available"
+                                        : "Select product"}
+                                </option>
+                                {rowProducts.map((p) => (
                                   <option key={p._id} value={p._id}>
-                                    {p.name} ({p.sku}) — Stock: {p.stock} {p.unit || ""}
+                                    {p.name} ({p.sku})
                                   </option>
                                 ))}
                               </select>
