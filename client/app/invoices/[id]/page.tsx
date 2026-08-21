@@ -7,6 +7,7 @@ import { Receipt, Download, Printer, ArrowLeft, DollarSign, Mail } from "lucide-
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
 import { RecordAttachmentsPanel, type StoredAttachment } from "@/components/record-attachments-panel";
 
 type InvoiceItem = {
@@ -130,6 +131,8 @@ const getDisplayBoxes = (item: InvoiceItem) => {
 export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const isEmployee = user?.role === "employee";
   const invoiceId = params.id as string;
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -623,25 +626,29 @@ export default function InvoiceDetailPage() {
                   <DollarSign className="h-4 w-4" />
                   Payment record
                 </h4>
-                <div className="grid gap-4 sm:grid-cols-4 text-sm">
+                <div className={`grid gap-4 ${isEmployee ? "sm:grid-cols-2" : "sm:grid-cols-4"} text-sm`}>
                   <div>
                     <p className="text-neutral-500 dark:text-neutral-400">Total amount</p>
                     <p className="text-lg font-bold text-neutral-900 dark:text-white">
                       {formatCurrency(grandTotal)}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-neutral-500 dark:text-neutral-400">Amount received</p>
-                    <p className="text-lg font-semibold text-green-600 dark:text-green-400">
-                      {formatCurrency(invoice.amountPaid ?? 0)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-neutral-500 dark:text-neutral-400">Remaining</p>
-                    <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">
-                      {formatCurrency(remainingBalance)}
-                    </p>
-                  </div>
+                  {!isEmployee && (
+                    <div>
+                      <p className="text-neutral-500 dark:text-neutral-400">Amount received</p>
+                      <p className="text-lg font-semibold text-green-600 dark:text-green-400">
+                        {formatCurrency(invoice.amountPaid ?? 0)}
+                      </p>
+                    </div>
+                  )}
+                  {!isEmployee && (
+                    <div>
+                      <p className="text-neutral-500 dark:text-neutral-400">Remaining</p>
+                      <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">
+                        {formatCurrency(remainingBalance)}
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-neutral-500 dark:text-neutral-400">Payment status</p>
                     <p className="capitalize font-medium text-neutral-900 dark:text-white">
@@ -656,8 +663,8 @@ export default function InvoiceDetailPage() {
                 )}
               </div>
 
-              {/* Record new payment - when there is remaining balance and not cancelled */}
-              {toCents(remainingBalance) > 0 && invoice.status !== "cancelled" && (
+              {/* Record new payment - when there is remaining balance and not cancelled, restricted to non-employees */}
+              {!isEmployee && toCents(remainingBalance) > 0 && invoice.status !== "cancelled" && (
                 <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-600 dark:bg-neutral-800/30 print:hidden">
                   <h4 className="mb-3 text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                     Record new payment

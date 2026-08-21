@@ -1,42 +1,76 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileText, Receipt, Package, RefreshCw } from "lucide-react";
+import { FileText, Receipt, Package, RefreshCw, ShoppingCart, ClipboardList } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
 
 export function QuickActions() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isEmployee = user?.role === "employee";
 
-  const actions = [
-    {
-      title: "Add Product",
-      description: "Create new product",
-      icon: Package,
-      color: "#c7a864",
-      action: () => router.push("/inventory/products"),
-    },
-    {
-      title: "New Quotation",
-      description: "Create quote",
-      icon: FileText,
-      color: "#3b82f6",
-      action: () => router.push("/quotations/create"),
-    },
-    {
-      title: "New Invoice",
-      description: "Generate invoice",
-      icon: Receipt,
-      color: "#8b5cf6",
-      action: () => router.push("/invoices/create"),
-    },
-    {
-      title: "Update Stock",
-      description: "Manage inventory",
-      icon: RefreshCw,
-      color: "#10b981",
-      action: () => router.push("/inventory/stock"),
-    },
-  ];
+  const actions = isEmployee
+    ? [
+        {
+          title: "New PO",
+          description: "Create purchase order",
+          icon: ShoppingCart,
+          color: "#c7a864",
+          action: () => router.push("/purchase-orders/create"),
+        },
+        {
+          title: "New Quotation",
+          description: "Create quote",
+          icon: FileText,
+          color: "#3b82f6",
+          action: () => router.push("/quotations/create"),
+        },
+        {
+          title: "New Invoice",
+          description: "Generate invoice",
+          icon: Receipt,
+          color: "#8b5cf6",
+          action: () => router.push("/invoices/create"),
+        },
+        {
+          title: "Packing Slips",
+          description: "View packing slips",
+          icon: ClipboardList,
+          color: "#10b981",
+          action: () => router.push("/packing-slips"),
+        },
+      ]
+    : [
+        {
+          title: "Add Product",
+          description: "Create new product",
+          icon: Package,
+          color: "#c7a864",
+          action: () => router.push("/inventory/products"),
+        },
+        {
+          title: "New Quotation",
+          description: "Create quote",
+          icon: FileText,
+          color: "#3b82f6",
+          action: () => router.push("/quotations/create"),
+        },
+        {
+          title: "New Invoice",
+          description: "Generate invoice",
+          icon: Receipt,
+          color: "#8b5cf6",
+          action: () => router.push("/invoices/create"),
+        },
+        {
+          title: "Update Stock",
+          description: "Manage inventory",
+          icon: RefreshCw,
+          color: "#10b981",
+          action: () => router.push("/inventory/stock"),
+        },
+      ];
 
   return (
     <div className="w-full min-w-0 rounded-xl border border-neutral-200/60 bg-white p-3 shadow-sm dark:border-neutral-700/60 dark:bg-neutral-800 sm:p-5 lg:rounded-2xl lg:p-6">

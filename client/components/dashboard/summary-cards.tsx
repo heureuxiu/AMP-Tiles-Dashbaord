@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
 
 // Generate sample data for each stat with realistic trend
 const generateData = (baseValue: number, trend: "up" | "down") => {
@@ -191,11 +192,24 @@ export function SummaryCards() {
     }
   };
 
+  const { user } = useAuth();
+  const isEmployee = user?.role === "employee";
+  const visibleSummary = isEmployee
+    ? summary.filter((item) =>
+        ["Quotations", "Invoices", "Purchase Orders"].includes(item.name)
+      )
+    : summary;
+
   return (
-    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5 lg:gap-6">
+    <div
+      className={cn(
+        "grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:gap-6",
+        isEmployee ? "lg:grid-cols-3" : "lg:grid-cols-5"
+      )}
+    >
       {isLoading ? (
         // Loading skeletons
-        Array.from({ length: 5 }).map((_, index) => (
+        Array.from({ length: isEmployee ? 3 : 5 }).map((_, index) => (
           <motion.div
             key={`skeleton-${index}`}
             initial={{ opacity: 0, y: 20 }}
@@ -231,7 +245,7 @@ export function SummaryCards() {
           </motion.div>
         ))
       ) : (
-        summary.map((item, index) => {
+        visibleSummary.map((item, index) => {
         const sanitizedName = sanitizeName(item.name);
         const gradientId = `gradient-${sanitizedName}`;
 

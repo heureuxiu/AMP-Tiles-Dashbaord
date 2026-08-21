@@ -33,6 +33,7 @@ type Supplier = {
   contactPerson?: string;
   phone: string;
   email?: string;
+  ccEmails?: string[];
   website?: string;
   abn?: string;
   address?: {
@@ -245,6 +246,17 @@ export default function SupplierDetailPage() {
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">Email</p>
                   <p className="mt-0.5 text-sm font-medium text-neutral-900 dark:text-white">
                     {supplier.email}
+                  </p>
+                </div>
+              </div>
+            )}
+            {(supplier.ccEmails || []).length > 0 && (
+              <div className="flex items-start gap-2">
+                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" />
+                <div>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">CC Emails</p>
+                  <p className="mt-0.5 text-sm font-medium text-neutral-900 dark:text-white">
+                    {(supplier.ccEmails || []).join(", ")}
                   </p>
                 </div>
               </div>

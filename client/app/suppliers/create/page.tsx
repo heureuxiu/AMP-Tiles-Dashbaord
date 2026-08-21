@@ -18,6 +18,7 @@ export default function CreateSupplierPage() {
     contactPerson: "",
     phone: "",
     email: "",
+    ccEmails: "",
     website: "",
     abn: "",
     street: "",
@@ -34,6 +35,19 @@ export default function CreateSupplierPage() {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const parseEmailList = (value: string) => {
+    const seen = new Set<string>();
+    return String(value || "")
+      .split(/[,\n;\s]+/g)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((email) => {
+        if (seen.has(email)) return false;
+        seen.add(email);
+        return true;
+      });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,6 +72,9 @@ export default function CreateSupplierPage() {
         contactPerson: formData.contactPerson || undefined,
         phone: formData.phone,
         email: formData.email || undefined,
+        ccEmails: parseEmailList(formData.ccEmails).filter(
+          (email) => email !== formData.email.trim().toLowerCase()
+        ),
         website: formData.website || undefined,
         abn: formData.abn || undefined,
         address: {
@@ -215,6 +232,20 @@ export default function CreateSupplierPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="Enter email address"
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* CC Emails */}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="ccEmails">CC Emails</Label>
+              <Input
+                id="ccEmails"
+                name="ccEmails"
+                type="text"
+                value={formData.ccEmails}
+                onChange={handleChange}
+                placeholder="cc1@example.com, cc2@example.com"
                 disabled={isSaving}
               />
             </div>

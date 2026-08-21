@@ -805,6 +805,7 @@ class ApiClient {
     contactPerson?: string;
     phone: string;
     email?: string;
+    ccEmails?: string[];
     address?: {
       street?: string;
       city?: string;
@@ -828,6 +829,7 @@ class ApiClient {
     contactPerson?: string;
     phone?: string;
     email?: string;
+    ccEmails?: string[];
     address?: {
       street?: string;
       city?: string;
@@ -894,6 +896,8 @@ class ApiClient {
     email?: string;
     ccEmails?: string[];
     abn?: string;
+    paymentTerms?: string;
+    deliveryMethod?: string;
     address?: {
       street?: string;
       city?: string;
@@ -915,6 +919,8 @@ class ApiClient {
     email?: string;
     ccEmails?: string[];
     abn?: string;
+    paymentTerms?: string;
+    deliveryMethod?: string;
     address?: {
       street?: string;
       city?: string;
@@ -1301,13 +1307,17 @@ class ApiClient {
     });
   }
 
-  async sendInvoiceByEmail(id: string, attachments?: File[]) {
+  async sendInvoiceByEmail(id: string, attachments?: File[], ccEmails?: string[]) {
     const body =
-      attachments && attachments.length > 0
-        ? attachments.reduce((formData, file) => {
-            formData.append('attachments', file);
+      (attachments && attachments.length > 0) || (ccEmails && ccEmails.length > 0)
+        ? (() => {
+            const formData = new FormData();
+            for (const file of attachments || []) formData.append('attachments', file);
+            if (ccEmails && ccEmails.length > 0) {
+              formData.append('ccEmails', ccEmails.join(','));
+            }
             return formData;
-          }, new FormData())
+          })()
         : undefined;
 
     return this.request(`/invoices/${id}/send`, {

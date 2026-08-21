@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
 import { RecordAttachmentsPanel, type StoredAttachment } from "@/components/record-attachments-panel";
 
 const UNIT_TYPES = ["Box", "Sq Ft", "Sq Meter", "Piece"] as const;
@@ -79,8 +80,10 @@ type FetchedInvoice = {
   customerName: string;
   customerPhone?: string;
   customerEmail?: string;
+  customerCcEmails?: string[];
   customerAddress?: string;
   deliveryAddress?: string;
+  reference?: string;
   invoiceDate: string;
   dueDate?: string;
   items: Array<{
@@ -106,6 +109,8 @@ type FetchedInvoice = {
 export default function EditInvoicePage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const isEmployee = user?.role === "employee";
   const invoiceId = params.id as string;
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -116,7 +121,9 @@ export default function EditInvoicePage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerCcEmails, setCustomerCcEmails] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [reference, setReference] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -151,7 +158,9 @@ export default function EditInvoicePage() {
         setCustomerName(inv.customerName || "");
         setCustomerPhone(inv.customerPhone || "");
         setCustomerEmail(inv.customerEmail || "");
+        setCustomerCcEmails((inv.customerCcEmails || []).join(", "));
         setCustomerAddress(inv.deliveryAddress || inv.customerAddress || "");
+        setReference(inv.reference || "");
         setInvoiceDate(
           inv.invoiceDate
             ? new Date(inv.invoiceDate).toISOString().split("T")[0]
@@ -366,9 +375,13 @@ export default function EditInvoicePage() {
     try {
       setIsSaving(true);
       const payload: Parameters<typeof api.updateInvoice>[1] = {
+        reference: reference.trim() || undefined,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
+        customerCcEmails: parseEmailList(customerCcEmails).filter(
+          (email) => email !== customerEmail.trim().toLowerCase()
+        ),
         customerAddress: customerAddress.trim() || undefined,
         deliveryAddress: customerAddress.trim() || undefined,
         invoiceDate,
@@ -411,6 +424,19 @@ export default function EditInvoicePage() {
       style: "currency",
       currency: "AUD",
     }).format(amount);
+
+  const parseEmailList = (value: string) => {
+    const seen = new Set<string>();
+    return String(value || "")
+      .split(/[,\n;\s]+/g)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((email) => {
+        if (seen.has(email)) return false;
+        seen.add(email);
+        return true;
+      });
+  };
 
   if (notFound) {
     return (
@@ -490,6 +516,16 @@ export default function EditInvoicePage() {
                     className="mt-1"
                   />
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Reference</label>
+                  <Input
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    disabled={isSaving}
+                    placeholder="Client reference"
+                    className="mt-1"
+                  />
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone</label>
@@ -511,6 +547,17 @@ export default function EditInvoicePage() {
                       className="mt-1"
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">CC Emails</label>
+                  <Input
+                    type="text"
+                    value={customerCcEmails}
+                    onChange={(e) => setCustomerCcEmails(e.target.value)}
+                    disabled={isSaving}
+                    placeholder="cc1@example.com, cc2@example.com"
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Delivery Address</label>
@@ -843,22 +890,26 @@ export default function EditInvoicePage() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Amount Paid</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={amountPaid || ""}
-                      onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
-                      disabled={isSaving}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-neutral-600 dark:text-neutral-400">Remaining</span>
-                    <span className="font-semibold">{formatCurrency(remaining)}</span>
-                  </div>
+                  {!isEmployee && (
+                    <div>
+                      <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Amount Paid</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={amountPaid || ""}
+                        onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
+                        disabled={isSaving}
+                        className="mt-1"
+                      />
+                    </div>
+                  )}
+                  {!isEmployee && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-600 dark:text-neutral-400">Remaining</span>
+                      <span className="font-semibold">{formatCurrency(remaining)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-600 dark:text-neutral-400">Status</span>
                     <span>{paymentStatus}</span>

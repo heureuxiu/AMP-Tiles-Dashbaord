@@ -60,6 +60,9 @@ export default function QuotationsPage() {
   const router = useRouter();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     draft: 0,
@@ -88,13 +91,16 @@ export default function QuotationsPage() {
 
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchQuery]);
+  }, [currentPage, searchQuery, statusFilter, startDate, endDate]);
 
   const fetchQuotations = async () => {
     try {
       setIsLoading(true);
       const response = await api.getQuotations({
         search: searchQuery.trim() || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
         sortBy: "createdAt",
         sortOrder: "desc",
         page: currentPage,
@@ -377,6 +383,7 @@ export default function QuotationsPage() {
           transition={{ duration: 0.4, delay: 0.1 }}
           className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6"
         >
+          <div className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_160px_160px_160px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
             <Input
@@ -401,7 +408,41 @@ export default function QuotationsPage() {
               </button>
             )}
           </div>
-          {searchQuery && (
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setStatusFilter(e.target.value);
+            }}
+            className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
+          >
+            <option value="all">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="sent">Sent</option>
+            <option value="accepted">Accepted</option>
+            <option value="rejected">Rejected</option>
+            <option value="expired">Expired</option>
+            <option value="converted">Converted</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setStartDate(e.target.value);
+            }}
+          />
+          <Input
+            type="date"
+            value={endDate}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setEndDate(e.target.value);
+            }}
+          />
+          </div>
+          {(searchQuery || statusFilter !== "all" || startDate || endDate) && (
             <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
               Showing {filteredQuotations.length} of {pagination.total} quotations
             </p>

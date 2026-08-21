@@ -18,6 +18,8 @@ type Customer = {
   email?: string;
   ccEmails?: string[];
   abn?: string;
+  paymentTerms?: string;
+  deliveryMethod?: string;
   status?: string;
   address?: {
     street?: string;
@@ -41,6 +43,8 @@ export default function EditCustomerPage() {
     email: "",
     ccEmails: "",
     abn: "",
+    paymentTerms: "",
+    deliveryMethod: "",
     status: "active",
     street: "",
     city: "",
@@ -63,6 +67,8 @@ export default function EditCustomerPage() {
           email: customer.email || "",
           ccEmails: (customer.ccEmails || []).join(", "),
           abn: customer.abn || "",
+          paymentTerms: customer.paymentTerms || "",
+          deliveryMethod: customer.deliveryMethod || "",
           status: customer.status || "active",
           street: customer.address?.street || "",
           city: customer.address?.city || "",
@@ -125,6 +131,8 @@ export default function EditCustomerPage() {
         email: formData.email || undefined,
         ccEmails: parseEmailList(formData.ccEmails),
         abn: formData.abn || undefined,
+        paymentTerms: formData.paymentTerms || undefined,
+        deliveryMethod: formData.deliveryMethod || undefined,
         status: formData.status,
         address: {
           street: formData.street || undefined,
@@ -227,6 +235,42 @@ export default function EditCustomerPage() {
             <div className="space-y-2">
               <Label htmlFor="abn">ABN</Label>
               <Input id="abn" name="abn" type="text" value={formData.abn} onChange={handleChange} disabled={isSaving} placeholder="Enter ABN" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="paymentTerms">Payment Terms</Label>
+              <select
+                id="paymentTerms"
+                name="paymentTerms"
+                value={formData.paymentTerms}
+                onChange={handleChange}
+                disabled={isSaving}
+                className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+              >
+                <option value="">Select payment terms</option>
+                <option value="COD">COD</option>
+                <option value="Net 7">Net 7</option>
+                <option value="Net 15">Net 15</option>
+                <option value="Net 30">Net 30</option>
+                <option value="Net 60">Net 60</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="deliveryMethod">Delivery Method</Label>
+              <select
+                id="deliveryMethod"
+                name="deliveryMethod"
+                value={formData.deliveryMethod}
+                onChange={handleChange}
+                disabled={isSaving}
+                className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+              >
+                <option value="">Select delivery method</option>
+                <option value="Supplier Delivery">Supplier Delivery</option>
+                <option value="Pickup">Pickup</option>
+                <option value="Freight">Freight</option>
+              </select>
             </div>
 
             <div className="space-y-2 md:col-span-2">

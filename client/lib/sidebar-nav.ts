@@ -78,3 +78,11 @@ export const sidebarNav: SidebarNavSection[] = [
     ],
   },
 ];
+
+export function getSidebarNavForRole(role?: string): SidebarNavSection[] {
+  if (role === "employee") {
+    const allowedLabels = new Set(["Dashboard", "Quotations", "Invoices", "Packing Slips", "Purchase Orders"]);
+    return sidebarNav.filter((section) => allowedLabels.has(section.label));
+  }
+  return sidebarNav;
+}

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
 import { RecordAttachmentsPanel } from "@/components/record-attachments-panel";
 
 const UNIT_TYPES = ["Sq Meter", "LM", "Piece"] as const;
@@ -62,6 +63,7 @@ type Customer = {
   phone?: string;
   email?: string;
   ccEmails?: string[];
+  paymentTerms?: string;
   address?: Address;
 };
 
@@ -254,6 +256,8 @@ function formatAddress(address?: Address): string {
 
 export default function CreateInvoicePage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isEmployee = user?.role === "employee";
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -269,7 +273,9 @@ export default function CreateInvoicePage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerCcEmails, setCustomerCcEmails] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [reference, setReference] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -331,6 +337,7 @@ export default function CreateInvoicePage() {
     setCustomerName("");
     setCustomerPhone("");
     setCustomerEmail("");
+    setCustomerCcEmails("");
     setCustomerAddress("");
   };
 
@@ -342,7 +349,9 @@ export default function CreateInvoicePage() {
     setCustomerName(customer.name || "");
     setCustomerPhone(customer.phone || "");
     setCustomerEmail(customer.email || "");
+    setCustomerCcEmails((customer.ccEmails || []).join(", "));
     setCustomerAddress(formatAddress(customer.address));
+    setTerms(customer.paymentTerms || "");
   };
 
   const handleSupplierSelect = (supplierId: string) => {
@@ -353,6 +362,7 @@ export default function CreateInvoicePage() {
     setCustomerName(supplier.name || "");
     setCustomerPhone(supplier.phone || "");
     setCustomerEmail(supplier.email || "");
+    setCustomerCcEmails("");
     setCustomerAddress(formatAddress(supplier.address));
   };
 
@@ -600,9 +610,13 @@ export default function CreateInvoicePage() {
       setSaveMode(mode);
       setIsSaving(true);
       const payload = {
+        reference: reference.trim() || undefined,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
+        customerCcEmails: parseEmailList(customerCcEmails).filter(
+          (email) => email !== customerEmail.trim().toLowerCase()
+        ),
         customerAddress: customerAddress.trim() || undefined,
         deliveryAddress: customerAddress.trim() || undefined,
         invoiceDate,
@@ -676,6 +690,19 @@ export default function CreateInvoicePage() {
 
   const handleSaveAndSend = async () => {
     await saveInvoice("save_send");
+  };
+
+  const parseEmailList = (value: string) => {
+    const seen = new Set<string>();
+    return String(value || "")
+      .split(/[,\n;\s]+/g)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((email) => {
+        if (seen.has(email)) return false;
+        seen.add(email);
+        return true;
+      });
   };
 
   const formatCurrency = (amount: number) =>
@@ -801,6 +828,18 @@ export default function CreateInvoicePage() {
                     className="mt-1"
                   />
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    Reference
+                  </label>
+                  <Input
+                    placeholder="Client reference"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    disabled={isSaving}
+                    className="mt-1"
+                  />
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
@@ -828,6 +867,19 @@ export default function CreateInvoicePage() {
                       className="mt-1"
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    CC Emails
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="cc1@example.com, cc2@example.com"
+                    value={customerCcEmails}
+                    onChange={(e) => setCustomerCcEmails(e.target.value)}
+                    disabled={isSaving}
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
@@ -1209,30 +1261,34 @@ export default function CreateInvoicePage() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      Amount Paid
-                    </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={amountPaid || ""}
-                      onChange={(e) =>
-                        setAmountPaid(parseFloat(e.target.value) || 0)
-                      }
-                      disabled={isSaving}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-neutral-600 dark:text-neutral-400">
-                      Remaining Balance
-                    </span>
-                    <span className="font-semibold">
-                      {formatCurrency(remaining)}
-                    </span>
-                  </div>
+                  {!isEmployee && (
+                    <div>
+                      <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                        Amount Paid
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={amountPaid || ""}
+                        onChange={(e) =>
+                          setAmountPaid(parseFloat(e.target.value) || 0)
+                        }
+                        disabled={isSaving}
+                        className="mt-1"
+                      />
+                    </div>
+                  )}
+                  {!isEmployee && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-600 dark:text-neutral-400">
+                        Remaining Balance
+                      </span>
+                      <span className="font-semibold">
+                        {formatCurrency(remaining)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-600 dark:text-neutral-400">
                       Payment Status

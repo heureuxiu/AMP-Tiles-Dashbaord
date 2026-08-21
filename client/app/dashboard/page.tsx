@@ -1,9 +1,15 @@
+"use client";
+
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { QuickActions } from "@/components/dashboard/quick-actions";
 import { StockOverview } from "@/components/dashboard/stock-overview";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const isEmployee = user?.role === "employee";
+
   return (
     <div className="min-w-0 w-full space-y-4 p-3 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
       {/* Header - responsive typography */}
@@ -26,10 +32,12 @@ export default function DashboardPage() {
         <QuickActions />
       </section>
 
-      {/* Stock Overview */}
-      <section aria-label="Stock overview" className="w-full">
-        <StockOverview />
-      </section>
+      {/* Stock Overview (Admin only) */}
+      {!isEmployee && (
+        <section aria-label="Stock overview" className="w-full">
+          <StockOverview />
+        </section>
+      )}
 
       {/* Recent Activity */}
       <section aria-label="Recent activity" className="w-full">

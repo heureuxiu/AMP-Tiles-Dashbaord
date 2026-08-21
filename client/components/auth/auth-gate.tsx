@@ -17,6 +17,20 @@ function getCurrentPath(pathname: string) {
   return `${pathname}${window.location.search}`;
 }
 
+const RESTRICTED_EMPLOYEE_ROUTES = [
+  "/inventory",
+  "/customers",
+  "/records",
+  "/suppliers",
+  "/settings",
+];
+
+function isEmployeeRestrictedRoute(pathname: string) {
+  return RESTRICTED_EMPLOYEE_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
+}
+
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -54,6 +68,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
 
     if (user && pathname === "/login") {
+      router.replace("/dashboard");
+      return;
+    }
+
+    if (user && user.role === "employee" && isEmployeeRestrictedRoute(pathname)) {
+      toast.error("Access denied", {
+        description: "Employees do not have access to this section.",
+      });
       router.replace("/dashboard");
     }
   }, [loading, pathname, publicRoute, router, user]);

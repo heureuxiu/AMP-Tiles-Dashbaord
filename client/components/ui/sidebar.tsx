@@ -22,7 +22,7 @@ import {
   Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sidebarNav, type SidebarNavSection } from "@/lib/sidebar-nav";
+import { sidebarNav, getSidebarNavForRole, type SidebarNavSection } from "@/lib/sidebar-nav";
 import { useAuth } from "@/contexts/auth-context";
 
 const sectionIcons: Record<
@@ -128,7 +128,7 @@ export function Sidebar({ open, setOpen, className, children }: SidebarProps) {
             {/* Navigation - overflow for small screens */}
             <nav className="scrollbar-hide flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-4 lg:px-4 lg:py-5">
               <ul className="space-y-1">
-                {sidebarNav.map((section) => (
+                {getSidebarNavForRole(user?.role).map((section) => (
                   <SidebarSection
                     key={section.label}
                     section={section}
@@ -222,10 +222,11 @@ export function SidebarNavSections({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const { user } = useAuth();
   return (
     <nav className="scrollbar-hide mt-8 flex-1 overflow-y-auto">
       <ul className="space-y-1">
-        {sidebarNav.map((section) => (
+        {getSidebarNavForRole(user?.role).map((section) => (
           <SidebarSection
             key={section.label}
             section={section}

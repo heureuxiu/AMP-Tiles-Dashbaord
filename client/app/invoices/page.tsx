@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
 type InvoiceStatus = "draft" | "confirmed" | "delivered" | "cancelled" | "sent" | "paid" | "overdue";
@@ -25,6 +26,7 @@ type InvoiceStatus = "draft" | "confirmed" | "delivered" | "cancelled" | "sent" 
 type Invoice = {
   _id: string;
   invoiceNumber: string;
+  reference?: string;
   quotation?: {
     _id: string;
     quotationNumber: string;
@@ -32,18 +34,26 @@ type Invoice = {
   customerName: string;
   customerPhone?: string;
   customerEmail?: string;
+  customerAddress?: string;
+  deliveryAddress?: string;
   invoiceDate: string;
   dueDate?: string;
+  subtotal?: number;
+  discountAmount?: number;
+  tax?: number;
+  deliveryCost?: number;
   grandTotal: number;
   status: InvoiceStatus;
   paymentStatus?: string;
+  paymentMethod?: string;
   amountPaid?: number;
   remainingBalance?: number;
   emailSent?: boolean;
   lastEmailedAt?: string;
+  notes?: string;
   items: Array<{
-    _id: string;
-    product: string;
+    _id?: string;
+    product?: string;
     productName: string;
     unitType?: string;
     quantity: number;
@@ -76,9 +86,14 @@ type PaginationState = {
 
 export default function InvoicesPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isEmployee = user?.role === "employee";
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [stats, setStats] = useState<Stats>({
     total: 0,
     draft: 0,
@@ -109,15 +124,18 @@ export default function InvoicesPage() {
 
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchQuery]);
+  }, [currentPage, searchQuery, statusFilter, startDate, endDate]);
 
   const fetchInvoices = async () => {
     try {
       setIsLoading(true);
       const response = await api.getInvoices({
         search: searchQuery.trim() || undefined,
-        sortBy: 'createdAt',
-        sortOrder: 'desc',
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        sortBy: "createdAt",
+        sortOrder: "desc",
         page: currentPage,
         limit: PAGE_SIZE,
       });
@@ -144,6 +162,102 @@ export default function InvoicesPage() {
   };
 
   const filteredInvoices = invoices;
+
+  const escapeCsvValue = (value: string | number) => {
+    const text = String(value ?? "");
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const response = await api.getInvoices({
+        search: searchQuery.trim() || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        sortBy: "createdAt",
+        sortOrder: "desc",
+      });
+      const rows = (response.invoices || []) as Invoice[];
+      const headers = [
+        "Invoice No",
+        "Reference",
+        "Customer Name",
+        "Customer Phone",
+        "Customer Email",
+        "Customer Address",
+        "Delivery Address",
+        "Invoice Date",
+        "Due Date",
+        "Invoice Status",
+        "Payment Status",
+        "Payment Method",
+        "Items Summary",
+        "Subtotal",
+        "Discount",
+        "GST / Tax",
+        "Delivery Cost",
+        "Total Amount",
+        ...(isEmployee ? [] : ["Amount Received", "Remaining Balance"]),
+        "Email Status",
+        "Notes",
+      ];
+      const csv = [
+        headers.join(","),
+        ...rows.map((invoice) => {
+          const itemsSummary = (invoice.items || [])
+            .map(
+              (item) =>
+                `${item.productName} (${item.quantity} ${item.unitType || "unit"} @ $${item.rate} = $${item.lineTotal})`
+            )
+            .join("; ");
+          return [
+            invoice.invoiceNumber || "",
+            invoice.reference || "",
+            invoice.customerName || "",
+            invoice.customerPhone || "",
+            invoice.customerEmail || "",
+            invoice.customerAddress || "",
+            invoice.deliveryAddress || "",
+            invoice.invoiceDate ? formatDate(invoice.invoiceDate) : "",
+            invoice.dueDate ? formatDate(invoice.dueDate) : "",
+            invoice.status || "",
+            formatPaymentStatus(invoice.paymentStatus),
+            invoice.paymentMethod ? String(invoice.paymentMethod).replace(/_/g, " ") : "",
+            itemsSummary,
+            invoice.subtotal ?? 0,
+            invoice.discountAmount ?? 0,
+            invoice.tax ?? 0,
+            invoice.deliveryCost ?? 0,
+            invoice.grandTotal ?? 0,
+            ...(isEmployee
+              ? []
+              : [
+                  invoice.amountPaid ?? 0,
+                  invoice.remainingBalance ?? (invoice.grandTotal ?? 0),
+                ]),
+            invoice.emailSent ? "Emailed" : "Not emailed",
+            invoice.notes || "",
+          ]
+            .map(escapeCsvValue)
+            .join(",");
+        }),
+      ].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "invoices.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("CSV exported", {
+        description: `${rows.length} invoice${rows.length === 1 ? "" : "s"} exported`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to export CSV";
+      toast.error("Failed to export CSV", { description: message });
+    }
+  };
 
   const handleViewInvoice = (id: string) => {
     router.push(`/invoices/${id}`);
@@ -297,6 +411,7 @@ export default function InvoicesPage() {
           transition={{ duration: 0.4, delay: 0.1 }}
           className="border-b border-neutral-200/60 p-4 dark:border-neutral-700/60 sm:p-6"
         >
+          <div className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_160px_160px_160px_auto]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
             <Input
@@ -321,7 +436,47 @@ export default function InvoicesPage() {
               </button>
             )}
           </div>
-          {searchQuery && (
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setStatusFilter(e.target.value);
+            }}
+            className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
+          >
+            <option value="all">All</option>
+            <option value="paid">Paid</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="partially_paid">Partially Paid</option>
+            <option value="draft">Draft</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="delivered">Delivered</option>
+            <option value="sent">Sent</option>
+            <option value="overdue">Overdue</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setStartDate(e.target.value);
+            }}
+          />
+          <Input
+            type="date"
+            value={endDate}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setEndDate(e.target.value);
+            }}
+          />
+          <Button type="button" variant="outline" onClick={handleExportCsv} className="gap-2">
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+          </div>
+          {(searchQuery || statusFilter !== "all" || startDate || endDate) && (
             <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
               Showing {filteredInvoices.length} of {pagination.total} invoices
             </p>
@@ -341,13 +496,14 @@ export default function InvoicesPage() {
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Invoice No</TableHead>
+                    <TableHead>Reference</TableHead>
                     <TableHead>Customer Name</TableHead>
                     <TableHead>Email Status</TableHead>
                     <TableHead>Invoice Date</TableHead>
                     <TableHead>Due Date</TableHead>
                     <TableHead>Total Amount</TableHead>
-                    <TableHead>Amount received</TableHead>
-                    <TableHead>Remaining</TableHead>
+                    {!isEmployee && <TableHead>Amount received</TableHead>}
+                    {!isEmployee && <TableHead>Remaining</TableHead>}
                     <TableHead>Payment status</TableHead>
                     <TableHead className="w-0">Actions</TableHead>
                   </TableRow>
@@ -355,7 +511,7 @@ export default function InvoicesPage() {
                 <TableBody>
                   {filteredInvoices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="h-32 text-center">
+                      <TableCell colSpan={isEmployee ? 9 : 11} className="h-32 text-center">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <Receipt
                             className="h-12 w-12 text-neutral-300 dark:text-neutral-600"
@@ -384,6 +540,9 @@ export default function InvoicesPage() {
                         <TableCell className="font-mono text-sm font-semibold text-neutral-900 dark:text-white">
                           {invoice.invoiceNumber}
                         </TableCell>
+                        <TableCell className="text-neutral-600 dark:text-neutral-400">
+                          {invoice.reference || "-"}
+                        </TableCell>
                         <TableCell className="font-medium text-neutral-900 dark:text-white">
                           {invoice.customerName}
                         </TableCell>
@@ -407,16 +566,20 @@ export default function InvoicesPage() {
                         <TableCell className="font-semibold text-neutral-900 dark:text-white">
                           {formatCurrency(invoice.grandTotal)}
                         </TableCell>
-                        <TableCell>
-                          <span className="font-semibold text-green-600 dark:text-green-400">
-                            {formatCurrency(invoice.amountPaid ?? 0)}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-semibold text-amber-600 dark:text-amber-400">
-                            {formatCurrency(invoice.remainingBalance ?? (invoice.grandTotal ?? 0))}
-                          </span>
-                        </TableCell>
+                        {!isEmployee && (
+                          <TableCell>
+                            <span className="font-semibold text-green-600 dark:text-green-400">
+                              {formatCurrency(invoice.amountPaid ?? 0)}
+                            </span>
+                          </TableCell>
+                        )}
+                        {!isEmployee && (
+                          <TableCell>
+                            <span className="font-semibold text-amber-600 dark:text-amber-400">
+                              {formatCurrency(invoice.remainingBalance ?? (invoice.grandTotal ?? 0))}
+                            </span>
+                          </TableCell>
+                        )}
                         <TableCell className="capitalize text-neutral-900 dark:text-white">
                           {formatPaymentStatus(invoice.paymentStatus)}
                         </TableCell>
@@ -488,20 +651,21 @@ export default function InvoicesPage() {
                             </Button>
                           </motion.div>
 
-                          {/* Delete Button (only draft) */}
-                          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={`h-8 w-8 rounded-full ${invoice.status !== "draft" ? "cursor-not-allowed opacity-50" : "hover:bg-red-100 dark:hover:bg-red-900/20"}`}
-                              onClick={() => invoice.status === "draft" && openDeleteModal(invoice)}
-                              disabled={invoice.status !== "draft"}
-                              aria-label={`Delete ${invoice.invoiceNumber}`}
-                              title={invoice.status === "draft" ? "Delete Invoice" : "Only draft invoices can be deleted"}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
-                            </Button>
-                          </motion.div>
+                          {/* Delete Button */}
+                          {!isEmployee && (
+                            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20"
+                                onClick={() => openDeleteModal(invoice)}
+                                aria-label={`Delete ${invoice.invoiceNumber}`}
+                                title="Delete Invoice"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                              </Button>
+                            </motion.div>
+                          )}
                         </TableCell>
                       </motion.tr>
                     ))

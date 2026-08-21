@@ -25,6 +25,7 @@ type Supplier = {
   name: string;
   phone: string;
   email?: string;
+  ccEmails?: string[];
   status: string;
   notes?: string;
 };
@@ -254,6 +255,7 @@ export default function SuppliersPage() {
                     <TableHead>Supplier Name</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>CC Emails</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-0">Actions</TableHead>
                   </TableRow>
@@ -261,7 +263,7 @@ export default function SuppliersPage() {
                 <TableBody>
                   {filteredSuppliers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-32 text-center">
+                      <TableCell colSpan={7} className="h-32 text-center">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <Users
                             className="h-12 w-12 text-neutral-300 dark:text-neutral-600"
@@ -307,6 +309,11 @@ export default function SuppliersPage() {
                         </TableCell>
                         <TableCell className="text-neutral-600 dark:text-neutral-400">
                           {supplier.email || "N/A"}
+                        </TableCell>
+                        <TableCell className="max-w-[240px] truncate text-neutral-600 dark:text-neutral-400">
+                          {(supplier.ccEmails || []).length > 0
+                            ? (supplier.ccEmails || []).join(", ")
+                            : "N/A"}
                         </TableCell>
                         <TableCell>
                           <span

@@ -26,6 +26,7 @@ export default function EditSupplierPage() {
     contactPerson: "",
     phone: "",
     email: "",
+    ccEmails: "",
     website: "",
     abn: "",
     street: "",
@@ -50,6 +51,7 @@ export default function EditSupplierPage() {
           contactPerson?: string;
           phone?: string;
           email?: string;
+          ccEmails?: string[];
           website?: string;
           abn?: string;
           address?: {
@@ -69,6 +71,7 @@ export default function EditSupplierPage() {
           contactPerson: supplier.contactPerson || "",
           phone: supplier.phone || "",
           email: supplier.email || "",
+          ccEmails: (supplier.ccEmails || []).join(", "),
           website: supplier.website || "",
           abn: supplier.abn || "",
           street: supplier.address?.street || "",
@@ -104,6 +107,19 @@ export default function EditSupplierPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const parseEmailList = (value: string) => {
+    const seen = new Set<string>();
+    return String(value || "")
+      .split(/[,\n;\s]+/g)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((email) => {
+        if (seen.has(email)) return false;
+        seen.add(email);
+        return true;
+      });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -126,6 +142,9 @@ export default function EditSupplierPage() {
         contactPerson: formData.contactPerson || undefined,
         phone: formData.phone,
         email: formData.email || undefined,
+        ccEmails: parseEmailList(formData.ccEmails).filter(
+          (email) => email !== formData.email.trim().toLowerCase()
+        ),
         website: formData.website || undefined,
         abn: formData.abn || undefined,
         address: {
@@ -316,6 +335,20 @@ export default function EditSupplierPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="Enter email address"
+                disabled={isSaving || isDeleting}
+              />
+            </div>
+
+            {/* CC Emails */}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="ccEmails">CC Emails</Label>
+              <Input
+                id="ccEmails"
+                name="ccEmails"
+                type="text"
+                value={formData.ccEmails}
+                onChange={handleChange}
+                placeholder="cc1@example.com, cc2@example.com"
                 disabled={isSaving || isDeleting}
               />
             </div>

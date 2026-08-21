@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import Image from "next/image";
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
@@ -64,7 +65,9 @@ type MonthlyStatement = {
   };
   transactionCount: number;
   totalInvoiceCount: number;
+  totalQuotationCount?: number;
   invoices: StatementInvoice[];
+  quotations?: StatementQuotation[];
   totals: {
     subtotalBeforeGst: number;
     gstTotal: number;
@@ -76,11 +79,23 @@ type MonthlyStatement = {
   };
 };
 
+type StatementQuotation = {
+  _id: string;
+  quotationNumber: string;
+  reference?: string;
+  date: string;
+  validUntil?: string;
+  status: string;
+  total: number;
+};
+
 type ActivityRow = {
   id: string;
   date: string;
   activity: string;
   reference?: string;
+  activityHref?: string;
+  referenceHref?: string;
   dueDate?: string;
   invoiceAmount?: number;
   paymentAmount?: number;
@@ -150,6 +165,8 @@ function buildActivityRows(statement: MonthlyStatement): ActivityRow[] {
       date: invoice.date,
       activity: `Invoice # ${invoice.invoiceNumber}`,
       reference: invoice.reference || statement.customer.name,
+      activityHref: `/invoices/${invoice._id}`,
+      referenceHref: `/invoices/${invoice._id}`,
       dueDate: invoice.dueDate,
       invoiceAmount: invoice.total,
       balance,
@@ -163,11 +180,30 @@ function buildActivityRows(statement: MonthlyStatement): ActivityRow[] {
         date: invoice.paidDate || invoice.date,
         activity: `Payment on Invoice # ${invoice.invoiceNumber}`,
         reference: invoice.invoiceNumber,
+        activityHref: `/invoices/${invoice._id}`,
+        referenceHref: `/invoices/${invoice._id}`,
         paymentAmount: invoice.paid,
         balance,
       });
     }
   });
+
+  if (rows.length === 0 && (statement.quotations || []).length > 0) {
+    (statement.quotations || []).forEach((quotation) => {
+      rows.push({
+        id: `${quotation._id}-quotation`,
+        date: quotation.date,
+        activity: `Quotation # ${quotation.quotationNumber}`,
+        reference: quotation.reference || quotation.status,
+        activityHref: `/quotations/${quotation._id}`,
+        referenceHref: `/quotations/${quotation._id}`,
+        dueDate: quotation.validUntil,
+        invoiceAmount: 0,
+        paymentAmount: 0,
+        balance,
+      });
+    });
+  }
 
   return rows.sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
 }
@@ -547,13 +583,35 @@ function ActivityTable({ rows }: { rows: ActivityRow[] }) {
                 <TableRow key={row.id}>
                   <TableCell className="whitespace-nowrap">{formatDate(row.date)}</TableCell>
                   <TableCell className="min-w-[220px]">
-                    {row.isInvoice ? (
-                      <span className="font-medium text-sky-700 underline dark:text-sky-400">{row.activity}</span>
+                    {row.activityHref ? (
+                      <Link
+                        href={row.activityHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-sky-700 underline underline-offset-2 hover:text-sky-900 dark:text-sky-400 dark:hover:text-sky-300"
+                        title="Preview related record"
+                      >
+                        {row.activity}
+                      </Link>
                     ) : (
                       row.activity
                     )}
                   </TableCell>
-                  <TableCell className="max-w-[180px] truncate">{row.reference || ""}</TableCell>
+                  <TableCell className="max-w-[180px] truncate">
+                    {row.referenceHref && row.reference ? (
+                      <Link
+                        href={row.referenceHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sky-700 underline underline-offset-2 hover:text-sky-900 dark:text-sky-400 dark:hover:text-sky-300"
+                        title="Preview related record"
+                      >
+                        {row.reference}
+                      </Link>
+                    ) : (
+                      row.reference || ""
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">{row.dueDate ? formatDate(row.dueDate) : ""}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {row.invoiceAmount ? formatAmount(row.invoiceAmount) : ""}
